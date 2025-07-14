@@ -212,12 +212,20 @@ $suppliers = $conn->query("SELECT * FROM suppliers");
     <div class="flex flex-col md:flex-row md:justify-between md:items-center mb-4 gap-4 md:gap-0">
      <div class="flex items-center gap-2 text-sm text-gray-700">
      </div>
-     <div class="flex items-center gap-2 text-sm text-gray-700">
-      <label class="whitespace-nowrap" for="search">
-       Search:
-      </label>
-      <input class="border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" id="search" name="search" type="search"/>
-     </div>
+     <div class="flex justify-start">
+  <div class="flex items-center gap-2 text-sm text-gray-700">
+    <label class="whitespace-nowrap" for="search">
+      Search:
+    </label>
+    <input
+      class="border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+      id="search"
+      name="search"
+      type="search"
+    />
+  </div>
+</div>
+
     </div>
     <div class="overflow-x-auto">
      <table class="min-w-full text-left text-sm text-gray-700 border-separate border-spacing-y-2">

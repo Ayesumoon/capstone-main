@@ -30,19 +30,33 @@ if ($admin_id) {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Customers</title>
+  <title>Payment & Transactions</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            poppins: ['Poppins', 'sans-serif'],
+          },
+          colors: {
+            primary: '#ec4899', // pink-500
+          }
+        }
+      }
+    };
+  </script>
   <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet" />
 </head>
-<body class="bg-gray-100">
+<body class="bg-gray-100 text-sm">
   <div class="flex h-screen">
 
  <!-- Sidebar -->
 <div class="w-64 bg-white shadow-md min-h-screen" x-data="{ userMenu: false, productMenu: false }">
   <div class="p-4">
     <div class="flex items-center space-x-4">
-      <img alt="Logo" class="rounded-full" height="50" src="logo.png" width="50" />
+      <img alt="Logo" class="rounded-full" height="50" src="logo2.png" width="50" />
       <div>
         <h2 class="text-lg font-semibold">SevenDwarfs</h2>
       </div>
@@ -136,7 +150,7 @@ if ($admin_id) {
 
     <!-- Main Content -->
     <div class="flex-1 p-6 overflow-auto">
-      <div class="bg-pink-600 text-white p-4 rounded-t">
+    <div class="bg-pink-300 text-white p-4 rounded-t-2xl shadow-sm">
         <h1 class="text-xl font-bold">Payment & Transactions</h1>
       </div>
 

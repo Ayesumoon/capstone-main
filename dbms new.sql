@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: May 06, 2025 at 06:20 PM
+-- Generation Time: Jul 11, 2025 at 06:25 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -46,7 +46,7 @@ CREATE TABLE `adminusers` (
 --
 
 INSERT INTO `adminusers` (`admin_id`, `username`, `admin_email`, `password_hash`, `role_id`, `status_id`, `created_at`, `first_name`, `last_name`, `last_logged_in`, `last_logged_out`) VALUES
-(1, 'Ayesu', 'nicholedeguzman@yahoo.com', '$2y$10$ENseQNg1WhLbfCjBEi3P4ezFAjuxciD8TWR/KoKqSUAKRJAR8HiKu', 2, 1, '2025-03-30 04:35:12', 'Nichole', 'De Guzman', '2025-05-07 00:13:59', '2025-05-07 00:13:50'),
+(1, 'Ayesu', 'nicholedeguzman@yahoo.com', '$2y$10$ENseQNg1WhLbfCjBEi3P4ezFAjuxciD8TWR/KoKqSUAKRJAR8HiKu', 2, 1, '2025-03-30 04:35:12', 'Nichole', 'De Guzman', '2025-07-11 12:23:53', '2025-07-09 14:04:51'),
 (2, 'admin1', 'johndoe@email.com', '$2y$10$QJ9ELWmPTRfTDLE7BB2s1eoSioYsT2bvwuprqmQW9tQZlzAq1MNkm', 1, 1, '2025-04-13 22:22:07', 'John', 'Doe', '2025-04-14 18:27:15', '2025-04-14 18:46:37');
 
 -- --------------------------------------------------------
@@ -118,7 +118,8 @@ INSERT INTO `categories` (`category_id`, `category_code`, `category_name`) VALUE
 (8, '008', 'Shoes'),
 (9, '009', 'Perfume'),
 (10, '0010', 'Test1'),
-(11, '0011', 'Bags');
+(11, '0011', 'Bags'),
+(12, '012', 'Test 2');
 
 -- --------------------------------------------------------
 
@@ -236,22 +237,25 @@ CREATE TABLE `products` (
   `price_id` int(11) DEFAULT NULL,
   `stocks` int(11) DEFAULT NULL,
   `category_id` int(11) DEFAULT NULL,
-  `image_url` varchar(255) DEFAULT NULL,
+  `image_url` text DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `supplier_id` int(11) DEFAULT NULL,
   `supplier_price` decimal(10,2) NOT NULL,
-  `revenue` decimal(10,2) GENERATED ALWAYS AS (`price_id` - `supplier_price`) STORED
+  `revenue` decimal(10,2) GENERATED ALWAYS AS (`price_id` - `supplier_price`) STORED,
+  `sizes` varchar(255) DEFAULT NULL,
+  `colors` varchar(255) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `products`
 --
 
-INSERT INTO `products` (`product_id`, `product_name`, `description`, `price_id`, `stocks`, `category_id`, `image_url`, `created_at`, `supplier_id`, `supplier_price`) VALUES
-(1, '001', 'S - M', 380, 30, 2, 'uploads/dress1.jpg', '2025-04-30 14:14:42', 1, 240.00),
-(2, '002', 'S - L', 500, 20, 10, 'uploads/whiteblouse1.jpg', '2025-05-01 13:25:54', 2, 250.00),
-(3, '021', 'Au de Parfum', 3500, 30, 9, 'uploads/jpgparfum.jpg', '2025-05-01 13:50:35', 2, 3000.00),
-(4, '013', 'Kate Spade', 550, 30, 11, 'uploads/katespade.jpg', '2025-05-05 14:11:33', 1, 450.00);
+INSERT INTO `products` (`product_id`, `product_name`, `description`, `price_id`, `stocks`, `category_id`, `image_url`, `created_at`, `supplier_id`, `supplier_price`, `sizes`, `colors`) VALUES
+(1, '001', 'Sizes: S, M | Colors: Pink', 380, 30, 2, 'uploads/dress1.jpg', '2025-04-30 14:14:42', 1, 240.00, NULL, NULL),
+(2, '002', 'Sizes: S, L | Colors: Red, White, Blue', 500, 30, 1, 'uploads/products/686e07e6b1848_blouse3.jpg,uploads/products/686e07e6b1b3b_blouse2.jpg,uploads/products/686e07e6b1d2c_blouse1.jpg', '2025-05-01 13:25:54', 2, 250.00, NULL, NULL),
+(3, '6776', 'Sizes: XS, S, M, L | Colors: Black, White, Pink, Green, Yellow', 3500, 30, 7, 'uploads/products/686ca8149794f_6776.jpg', '2025-05-01 13:50:35', 2, 3000.00, NULL, NULL),
+(4, '013', 'Kate Spade', 550, 30, 11, 'uploads/katespade.jpg', '2025-05-05 14:11:33', 1, 450.00, NULL, NULL),
+(5, '005', 'Sizes: XS, S, M | Colors: Black, White', 200, 30, 3, 'uploads/products/686ca7d4f0ecc_short1.jpg', '2025-07-08 05:04:36', 1, 150.00, NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -332,16 +336,19 @@ INSERT INTO `store_settings` (`id`, `store_name`, `store_description`, `store_em
 CREATE TABLE `suppliers` (
   `supplier_id` int(11) NOT NULL,
   `supplier_name` varchar(255) NOT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+  `supplier_email` varchar(100) DEFAULT NULL,
+  `supplier_phone` varchar(20) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `category_id` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `suppliers`
 --
 
-INSERT INTO `suppliers` (`supplier_id`, `supplier_name`, `created_at`) VALUES
-(1, 'Supplier 1', '2025-04-30 13:50:11'),
-(2, 'Supplier 2', '2025-05-01 13:25:54');
+INSERT INTO `suppliers` (`supplier_id`, `supplier_name`, `supplier_email`, `supplier_phone`, `created_at`, `category_id`) VALUES
+(1, 'Supplier 1', 'supplier@email.com', '0987654321', '2025-04-30 13:50:11', 5),
+(2, 'Supplier 2', 'supplier2@email.com', '0912345678', '2025-05-01 13:25:54', 6);
 
 -- --------------------------------------------------------
 
@@ -503,7 +510,7 @@ ALTER TABLE `cart_items`
 -- AUTO_INCREMENT for table `categories`
 --
 ALTER TABLE `categories`
-  MODIFY `category_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
+  MODIFY `category_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
 
 --
 -- AUTO_INCREMENT for table `customers`
@@ -527,7 +534,7 @@ ALTER TABLE `payment_methods`
 -- AUTO_INCREMENT for table `products`
 --
 ALTER TABLE `products`
-  MODIFY `product_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `product_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT for table `status`
