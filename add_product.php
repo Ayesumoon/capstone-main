@@ -9,42 +9,23 @@ $category_result = $conn->query($category_query);
 $supplier_query = "SELECT supplier_id, supplier_name FROM suppliers";
 $supplier_result = $conn->query($supplier_query);
 
-
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $product_name = trim($_POST['product_name'] ?? "");
     $price = floatval($_POST['price'] ?? 0);
     $supplier_price = floatval($_POST['supplier_price'] ?? 0);
     $category_id = intval($_POST['category'] ?? 0);
     $stocks = intval($_POST['stocks'] ?? 0);
-    $supplier_name = trim($_POST['supplier'] ?? "");
-    $sizes = $_POST['sizes'] ?? [];
-    $colors = $_POST['colors'] ?? [];
+    $supplier_id = intval($_POST['supplier_id'] ?? 0);
 
-    // Build description from selected sizes and colors
-    $sizeText = implode(", ", $sizes);
-    $colorText = implode(", ", $colors);
-    $description = "Sizes: $sizeText | Colors: $colorText";
+    // Get sizes/colors from comma-separated inputs
+    $sizes_input = trim($_POST['sizes_input'] ?? '');
+    $colors_input = trim($_POST['colors_input'] ?? '');
+    $sizes = array_filter(array_map('trim', explode(',', $sizes_input)));
+    $colors = array_filter(array_map('trim', explode(',', $colors_input)));
 
-    if (empty($product_name) || $price <= 0 || $supplier_price <= 0 || $category_id <= 0 || $stocks < 0 || empty($supplier_name) || empty($sizes) || empty($colors)) {
+    if (empty($product_name) || $price <= 0 || $supplier_price <= 0 || $category_id <= 0 || $stocks < 0 || $supplier_id <= 0 || empty($sizes) || empty($colors)) {
         echo "<script>alert('All fields are required and must be valid!');</script>";
     } else {
-        // Get or insert supplier
-        $supplier_id = null;
-        $stmt = $conn->prepare("SELECT supplier_id FROM suppliers WHERE supplier_name = ?");
-        $stmt->bind_param("s", $supplier_name);
-        $stmt->execute();
-        $stmt->bind_result($supplier_id);
-        $stmt->fetch();
-        $stmt->close();
-
-        if (!$supplier_id) {
-            $stmt = $conn->prepare("INSERT INTO suppliers (supplier_name) VALUES (?)");
-            $stmt->bind_param("s", $supplier_name);
-            $stmt->execute();
-            $supplier_id = $stmt->insert_id;
-            $stmt->close();
-        }
-
         // Upload images
         $image_urls = [];
         if (!empty($_FILES['images']['name'][0])) {
@@ -72,23 +53,76 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $revenue = $price - $supplier_price;
 
         // Insert product
-        $sql = "INSERT INTO products (product_name, description, price_id, supplier_price, revenue, category_id, stocks, image_url, supplier_id) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO products (product_name, price_id, supplier_price, revenue, category_id, image_url, supplier_id) 
+                VALUES (?, ?, ?, ?, ?, ?, ?)";
         $stmt = $conn->prepare($sql);
         if ($stmt) {
-            $stmt->bind_param("ssdississ", $product_name, $description, $price, $supplier_price, $revenue, $category_id, $stocks, $image_urls_json, $supplier_id);
+            $stmt->bind_param("sdddiis", $product_name, $price, $supplier_price, $revenue, $category_id, $image_urls_json, $supplier_id);
             if ($stmt->execute()) {
-                echo "<script>alert('Product added successfully!'); window.location.href='products.php';</script>";
+                $product_id = $stmt->insert_id;
             } else {
-                echo "Error: " . $stmt->error;
+                echo "Error inserting product: " . $stmt->error;
+                exit;
             }
             $stmt->close();
         } else {
-            echo "Error preparing statement.";
+            echo "Error preparing product insert statement.";
+            exit;
         }
+
+        // Sizes
+        $size_ids = [];
+        foreach ($sizes as $size) {
+            $stmt = $conn->prepare("SELECT id FROM sizes WHERE size = ?");
+            $stmt->bind_param("s", $size);
+            $stmt->execute();
+            $stmt->bind_result($size_id);
+            if ($stmt->fetch()) {
+                $size_ids[] = $size_id;
+            } else {
+                $stmt->close();
+                $stmt = $conn->prepare("INSERT INTO sizes (size) VALUES (?)");
+                $stmt->bind_param("s", $size);
+                $stmt->execute();
+                $size_ids[] = $stmt->insert_id;
+            }
+            $stmt->close();
+        }
+
+        // Colors
+        $color_ids = [];
+        foreach ($colors as $color) {
+            $stmt = $conn->prepare("SELECT id FROM colors WHERE color = ?");
+            $stmt->bind_param("s", $color);
+            $stmt->execute();
+            $stmt->bind_result($color_id);
+            if ($stmt->fetch()) {
+                $color_ids[] = $color_id;
+            } else {
+                $stmt->close();
+                $stmt = $conn->prepare("INSERT INTO colors (color) VALUES (?)");
+                $stmt->bind_param("s", $color);
+                $stmt->execute();
+                $color_ids[] = $stmt->insert_id;
+            }
+            $stmt->close();
+        }
+
+        // Stock combinations
+        foreach ($size_ids as $size_id) {
+            foreach ($color_ids as $color_id) {
+                $stmt = $conn->prepare("INSERT INTO stock (product_id, size_id, color_id, current_qty) VALUES (?, ?, ?, ?)");
+                $stmt->bind_param("iiii", $product_id, $size_id, $color_id, $stocks);
+                $stmt->execute();
+                $stmt->close();
+            }
+        }
+
+        echo "<script>alert('Product added successfully with stock!'); window.location.href='products.php';</script>";
     }
 }
 ?>
+
 
 
 <!-- HTML STARTS HERE -->
@@ -114,12 +148,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <div>
                         <label class="block text-sm font-medium text-gray-700">Product Code</label>
                         <input type="text" name="product_name" required
-                            class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:ring-pink-500 focus:border-pink-500">
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Stocks</label>
-                        <input type="number" name="stocks" required
                             class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:ring-pink-500 focus:border-pink-500">
                     </div>
 
@@ -188,44 +216,21 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     class="block w-full text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-pink-300 file:text-white hover:file:bg-pink-600">
             </div>
 
-            <!-- Sizes -->
-            <div>
-                <h3 class="text-lg font-semibold text-gray-800 border-b pb-2 mb-4">Available Sizes</h3>
-                <div class="flex flex-wrap gap-3">
-                    <?php
-                    $sizeOptions = ['XS', 'S', 'M', 'L', 'XL', 'Free Size'];
-                    foreach ($sizeOptions as $size) {
-                        echo '
-                        <label class="cursor-pointer">
-                            <input type="checkbox" name="sizes[]" value="' . $size . '" class="hidden peer">
-                            <div class="px-4 py-2 border rounded-md text-sm font-semibold 
-                                        peer-checked:bg-pink-500 peer-checked:text-white peer-checked:border-pink-600 transition-all">
-                                ' . $size . '
-                            </div>
-                        </label>';
-                    }
-                    ?>
-                </div>
-            </div>
+        
+                <!-- Sizes -->
+<div>
+    <h3 class="text-lg font-semibold text-gray-800 border-b pb-2 mb-4">Add Sizes</h3>
+    <input type="text" name="sizes_input" placeholder="Enter sizes separated by commas (e.g., S, M, L)" 
+        class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:ring-pink-500 focus:border-pink-500">
+</div>
 
-            <!-- Colors -->
-            <div>
-                <h3 class="text-lg font-semibold text-gray-800 border-b pb-2 mb-4">Available Colors</h3>
-                <div class="flex flex-wrap gap-4">
-                    <?php
-                    $colorOptions = ['Red', 'Black', 'White', 'Pink', 'Blue', 'Green', 'Yellow', 'Purple'];
-                    foreach ($colorOptions as $color) {
-                        $hex = strtolower($color);
-                        echo '
-                        <label class="relative cursor-pointer">
-                            <input type="checkbox" name="colors[]" value="' . $color . '" class="hidden peer">
-                            <div class="w-8 h-8 rounded-full border-2 border-gray-300 peer-checked:border-blue-500"
-                                 style="background-color:' . $hex . ';"></div>
-                        </label>';
-                    }
-                    ?>
-                </div>
-            </div>
+<!-- Colors -->
+<div>
+    <h3 class="text-lg font-semibold text-gray-800 border-b pb-2 mb-4">Add Colors</h3>
+    <input type="text" name="colors_input" placeholder="Enter colors separated by commas (e.g., Red, Blue, Green)" 
+        class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:ring-pink-500 focus:border-pink-500">
+</div>
+
 
             <!-- Actions -->
             <div class="pt-6 flex gap-4">

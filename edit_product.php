@@ -1,8 +1,7 @@
 <?php
-require 'conn.php'; // Database connection
+require 'conn.php';
 session_start();
 
-// Check if product_id is provided
 if (!isset($_GET['id']) || empty($_GET['id'])) {
     echo "<script>alert('Invalid product ID!'); window.location.href='products.php';</script>";
     exit;
@@ -10,29 +9,12 @@ if (!isset($_GET['id']) || empty($_GET['id'])) {
 
 $product_id = intval($_GET['id']);
 
-// Fetch product details
+// Fetch product
 $sql = "SELECT * FROM products WHERE product_id = ?";
 $stmt = $conn->prepare($sql);
 $stmt->bind_param("i", $product_id);
 $stmt->execute();
 $result = $stmt->get_result();
-
-if ($result->num_rows === 0) {
-    echo "<script>alert('Product not found!'); window.location.href='products.php';</script>";
-    exit;
-}
-
-$product = $result->fetch_assoc();
-$stmt->close();
-
-// Fetch product details with supplier price
-$sql = "SELECT p.*, p.supplier_price FROM products p
-        LEFT JOIN suppliers s ON p.supplier_id = s.supplier_id
-        WHERE p.product_id = ?";
-$stmt = $conn->prepare($sql);
-$stmt->bind_param("i", $product_id);
-$stmt->execute();
-$result = $stmt->get_result();
 if ($result->num_rows === 0) {
     echo "<script>alert('Product not found!'); window.location.href='products.php';</script>";
     exit;
@@ -40,62 +22,87 @@ if ($result->num_rows === 0) {
 $product = $result->fetch_assoc();
 $stmt->close();
 
+// Categories & Suppliers
+$category_result = $conn->query("SELECT category_id, category_name FROM categories");
+$supplier_result = $conn->query("SELECT supplier_id, supplier_name FROM suppliers");
 
-// Fetch categories
-$category_query = "SELECT category_id, category_name FROM categories";
-$category_result = $conn->query($category_query);
-
-// Fetch suppliers with ID and name
-$supplier_query = "SELECT supplier_id, supplier_name FROM suppliers";
-$supplier_result = $conn->query($supplier_query);
-
-// Handle form submission
-// Handle form submission
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $product_name = trim($_POST['product_name']);
-    $sizes = isset($_POST['sizes']) ? implode(", ", $_POST['sizes']) : "";
-    $colors = isset($_POST['colors']) ? implode(", ", $_POST['colors']) : "";
+    $sizes_input = trim($_POST['sizes_input'] ?? '');
+    $colors_input = trim($_POST['colors_input'] ?? '');
+    $sizes = array_filter(array_map('trim', explode(',', $sizes_input)));
+    $colors = array_filter(array_map('trim', explode(',', $colors_input)));
 
-    $description = "Sizes: " . $sizes . " | Colors: " . $colors;
+    $description = "Sizes: " . implode(", ", $sizes) . " | Colors: " . implode(", ", $colors);
 
     $price_id = floatval($_POST['price']);
     $category_id = intval($_POST['category']);
-    $stocks = intval($_POST['stocks']);
     $supplier_id = intval($_POST['supplier']);
     $supplier_price = floatval($_POST['supplier_price']);
 
+    // Handle images
     $image_urls = [];
+    if (isset($_FILES["images"]) && count($_FILES["images"]["name"]) > 0) {
+        $target_dir = "uploads/products/";
+        if (!is_dir($target_dir)) mkdir($target_dir, 0777, true);
 
-// Handle multiple images
-if (isset($_FILES["images"]) && count($_FILES["images"]["name"]) > 0) {
-    $target_dir = "uploads/products/";
-    if (!is_dir($target_dir)) {
-        mkdir($target_dir, 0777, true);
-    }
-
-    foreach ($_FILES["images"]["tmp_name"] as $index => $tmp_name) {
-        $file_name = $_FILES["images"]["name"][$index];
-        $file_tmp = $_FILES["images"]["tmp_name"][$index];
-        $file_error = $_FILES["images"]["error"][$index];
-
-        if ($file_error === 0) {
-            $unique_name = uniqid() . "_" . basename($file_name);
-            $target_file = $target_dir . $unique_name;
-            $imageFileType = strtolower(pathinfo($target_file, PATHINFO_EXTENSION));
-            $allowed_types = ["jpg", "jpeg", "png", "gif"];
-
-            if (in_array($imageFileType, $allowed_types)) {
-                move_uploaded_file($file_tmp, $target_file);
-                $image_urls[] = $target_file;
+        foreach ($_FILES["images"]["tmp_name"] as $index => $tmp_name) {
+            $file_name = $_FILES["images"]["name"][$index];
+            $file_error = $_FILES["images"]["error"][$index];
+            if ($file_error === 0) {
+                $unique_name = uniqid() . "_" . basename($file_name);
+                $target_file = $target_dir . $unique_name;
+                $ext = strtolower(pathinfo($target_file, PATHINFO_EXTENSION));
+                $allowed = ["jpg","jpeg","png","gif"];
+                if (in_array($ext, $allowed)) {
+                    move_uploaded_file($tmp_name, $target_file);
+                    $image_urls[] = $target_file;
+                }
             }
         }
     }
-}
+    $image_url = !empty($image_urls) ? implode(",", $image_urls) : $product['image_url'];
 
-// If no new images uploaded, retain old
-$image_url = !empty($image_urls) ? implode(",", $image_urls) : $product['image_url'];
+    // Save sizes if not exists
+    $size_ids = [];
+    foreach ($sizes as $size) {
+        $stmt = $conn->prepare("SELECT size_id FROM sizes WHERE size = ?");
+        $stmt->bind_param("s", $size);
+        $stmt->execute();
+        $stmt->bind_result($size_id);
+        if ($stmt->fetch()) {
+            $size_ids[] = $size_id;
+        } else {
+            $stmt->close();
+            $stmt = $conn->prepare("INSERT INTO sizes (size) VALUES (?)");
+            $stmt->bind_param("s", $size);
+            $stmt->execute();
+            $size_ids[] = $stmt->insert_id;
+        }
+        $stmt->close();
+    }
 
-$update_sql = "UPDATE products SET product_name=?, description=?, price_id=?, category_id=?, stocks=?, image_url=?, supplier_id=?, supplier_price=? WHERE product_id=?";
+    // Save colors if not exists
+    $color_ids = [];
+    foreach ($colors as $color) {
+        $stmt = $conn->prepare("SELECT color_id FROM colors WHERE color = ?");
+        $stmt->bind_param("s", $color);
+        $stmt->execute();
+        $stmt->bind_result($color_id);
+        if ($stmt->fetch()) {
+            $color_ids[] = $color_id;
+        } else {
+            $stmt->close();
+            $stmt = $conn->prepare("INSERT INTO colors (color) VALUES (?)");
+            $stmt->bind_param("s", $color);
+            $stmt->execute();
+            $color_ids[] = $stmt->insert_id;
+        }
+        $stmt->close();
+    }
+
+    // Update product
+    $update_sql = "UPDATE products SET product_name=?, description=?, price_id=?, category_id=?, stocks=?, image_url=?, supplier_id=?, supplier_price=? WHERE product_id=?";
     $stmt = $conn->prepare($update_sql);
     if ($stmt) {
         $stmt->bind_param("ssdissdii", $product_name, $description, $price_id, $category_id, $stocks, $image_url, $supplier_id, $supplier_price, $product_id);
@@ -105,12 +112,10 @@ $update_sql = "UPDATE products SET product_name=?, description=?, price_id=?, ca
             echo "Error updating product: " . $stmt->error;
         }
         $stmt->close();
-    } else {
-        echo "Error preparing statement.";
     }
 }
-
 ?>
+
 
 <!-- HTML part -->
 <!DOCTYPE html>
@@ -143,12 +148,6 @@ $update_sql = "UPDATE products SET product_name=?, description=?, price_id=?, ca
             <div>
                 <label class="block text-sm font-medium text-gray-700">Product Name</label>
                 <input type="text" name="product_name" required value="<?php echo htmlspecialchars($product['product_name']); ?>"
-                    class="mt-1 block w-full rounded-md border border-gray-300 p-2 focus:ring-pink-500 focus:border-pink-500">
-            </div>
-
-            <div>
-                <label class="block text-sm font-medium text-gray-700">Stock Quantity</label>
-                <input type="number" name="stocks" required value="<?php echo $product['stocks']; ?>"
                     class="mt-1 block w-full rounded-md border border-gray-300 p-2 focus:ring-pink-500 focus:border-pink-500">
             </div>
 
@@ -219,47 +218,32 @@ $update_sql = "UPDATE products SET product_name=?, description=?, price_id=?, ca
     <?php endif; ?>
 </div>
 
+<!-- Sizes -->
+<div>
+    <h3 class="text-lg font-semibold text-gray-800 border-b pb-2 mb-4">Edit Sizes</h3>
+    <input type="text" name="sizes_input"
+        value="<?php
+            // Prepopulate with existing sizes from description
+            preg_match('/Sizes: (.*?) \\|/', $product['description'], $matches);
+            echo isset($matches[1]) ? htmlspecialchars($matches[1]) : '';
+        ?>"
+        placeholder="Enter sizes separated by commas (e.g., S, M, L)"
+        class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:ring-pink-500 focus:border-pink-500">
+</div>
 
-    <!-- Sizes -->
-    <div>
-        <h3 class="text-lg font-semibold text-gray-800 border-b pb-2 mb-4">Sizes</h3>
-        <div class="flex flex-wrap gap-3">
-            <?php
-            $sizeOptions = ['XS', 'S', 'M', 'L', 'XL', 'Free Size'];
-            foreach ($sizeOptions as $size) {
-                $checked = (strpos($product['description'], $size) !== false) ? "checked" : "";
-                echo '
-                <label class="cursor-pointer">
-                    <input type="checkbox" name="sizes[]" value="' . $size . '" class="hidden peer" ' . $checked . '>
-                    <div class="px-4 py-2 border rounded-md text-sm font-semibold 
-                                peer-checked:bg-pink-500 peer-checked:text-white peer-checked:border-pink-600 transition-all">
-                        ' . $size . '
-                    </div>
-                </label>';
-            }
-            ?>
-        </div>
-    </div>
+<!-- Colors -->
+<div>
+    <h3 class="text-lg font-semibold text-gray-800 border-b pb-2 mb-4">Edit Colors</h3>
+    <input type="text" name="colors_input"
+        value="<?php
+            // Prepopulate with existing colors from description
+            preg_match('/Colors: (.*)$/', $product['description'], $matches);
+            echo isset($matches[1]) ? htmlspecialchars($matches[1]) : '';
+        ?>"
+        placeholder="Enter colors separated by commas (e.g., Red, Blue, Green)"
+        class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:ring-pink-500 focus:border-pink-500">
+</div>
 
-    <!-- Colors -->
-    <div>
-        <h3 class="text-lg font-semibold text-gray-800 border-b pb-2 mb-4">Colors</h3>
-        <div class="flex flex-wrap gap-4">
-            <?php
-            $colorOptions = ['Red', 'Black', 'White', 'Pink', 'Blue', 'Green', 'Yellow', 'Purple'];
-            foreach ($colorOptions as $color) {
-                $hex = strtolower($color);
-                $checked = (strpos($product['description'], $color) !== false) ? "checked" : "";
-                echo '
-                <label class="relative cursor-pointer">
-                    <input type="checkbox" name="colors[]" value="' . $color . '" class="hidden peer" ' . $checked . '>
-                    <div class="w-8 h-8 rounded-full border-2 border-gray-300 peer-checked:border-blue-500"
-                         style="background-color:' . $hex . ';"></div>
-                </label>';
-            }
-            ?>
-        </div>
-    </div>
 
     <!-- Action Buttons -->
     <div class="flex gap-4 pt-6">

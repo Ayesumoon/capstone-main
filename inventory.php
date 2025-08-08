@@ -222,7 +222,6 @@ $conn->close();
               <th class="px-4 py-3 border text-left">Product ID</th>
               <th class="px-4 py-3 border text-left">Product Code</th>
               <th class="px-4 py-3 border text-left">Category</th>
-              <th class="px-4 py-3 border text-left">Stocks</th>
               <th class="px-4 py-3 border text-left">Price</th>
               <th class="px-4 py-3 border text-left">Supplier</th>
               <th class="px-4 py-3 border text-left">Supplier Price</th>
@@ -243,7 +242,6 @@ $conn->close();
               <td class="px-4 py-2 border"><?php echo $item['product_id']; ?></td>
               <td class="px-4 py-2 border"><?php echo $item['product_name']; ?></td>
               <td class="px-4 py-2 border"><?php echo $item['category_name']; ?></td>
-              <td class="px-4 py-2 border"><?php echo $item['stocks']; ?></td>
               <td class="px-4 py-2 border">₱<?php echo number_format($item['price_id'], 2); ?></td>
               <td class="px-4 py-2 border"><?php echo isset($item['supplier_name']) ? htmlspecialchars($item['supplier_name']) : 'No supplier'; ?></td>
               <td class="px-4 py-2 border">₱<?php echo number_format($supplier_price, 2); ?></td>
