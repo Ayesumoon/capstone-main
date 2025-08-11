@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Aug 08, 2025 at 11:52 AM
+-- Generation Time: Aug 11, 2025 at 03:03 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -46,7 +46,7 @@ CREATE TABLE `adminusers` (
 --
 
 INSERT INTO `adminusers` (`admin_id`, `username`, `admin_email`, `password_hash`, `role_id`, `status_id`, `created_at`, `first_name`, `last_name`, `last_logged_in`, `last_logged_out`) VALUES
-(1, 'Ayesu', 'nicholedeguzman@yahoo.com', '$2y$10$ENseQNg1WhLbfCjBEi3P4ezFAjuxciD8TWR/KoKqSUAKRJAR8HiKu', 2, 1, '2025-03-30 04:35:12', 'Nichole', 'De Guzman', '2025-08-08 16:38:02', '2025-07-11 12:41:58'),
+(1, 'Ayesu', 'nicholedeguzman@yahoo.com', '$2y$10$ENseQNg1WhLbfCjBEi3P4ezFAjuxciD8TWR/KoKqSUAKRJAR8HiKu', 2, 1, '2025-03-30 04:35:12', 'Nichole', 'De Guzman', '2025-08-11 21:01:07', NULL),
 (2, 'admin1', 'johndoe@email.com', '$2y$10$QJ9ELWmPTRfTDLE7BB2s1eoSioYsT2bvwuprqmQW9tQZlzAq1MNkm', 1, 1, '2025-04-13 22:22:07', 'John', 'Doe', '2025-04-14 18:27:15', '2025-04-14 18:46:37');
 
 -- --------------------------------------------------------
@@ -276,9 +276,9 @@ CREATE TABLE `products` (
 
 INSERT INTO `products` (`product_id`, `product_name`, `description`, `price_id`, `stocks`, `category_id`, `image_url`, `created_at`, `supplier_id`, `supplier_price`, `sizes`, `colors`) VALUES
 (1, '001', 'Sizes: S, M | Colors: Pink', 380, NULL, 2, 'uploads/dress1.jpg', '2025-04-30 14:14:42', 1, 240.00, NULL, NULL),
-(2, '002', 'Sizes: S, L | Colors: Red, White, Blue', 500, NULL, 1, 'uploads/products/686e07e6b1848_blouse3.jpg,uploads/products/686e07e6b1b3b_blouse2.jpg,uploads/products/686e07e6b1d2c_blouse1.jpg', '2025-05-01 13:25:54', 2, 250.00, NULL, NULL),
-(3, '6776', 'Sizes: XS, S, M, L | Colors: Black, White, Pink, Green, Yellow', 3500, NULL, 7, 'uploads/products/686ca8149794f_6776.jpg', '2025-05-01 13:50:35', 2, 3000.00, NULL, NULL),
-(4, '013', 'Kate Spade', 550, 30, 11, 'uploads/katespade.jpg', '2025-05-05 14:11:33', 1, 450.00, NULL, NULL),
+(2, '002', 'Sizes: S, L | Colors: Red, White, Blue', 500, 20, 1, 'uploads/products/686e07e6b1848_blouse3.jpg,uploads/products/686e07e6b1b3b_blouse2.jpg,uploads/products/686e07e6b1d2c_blouse1.jpg', '2025-05-01 13:25:54', 2, 250.00, NULL, NULL),
+(3, '6776', 'Sizes: XS, S, M, L | Colors: Black, White, Pink, Green, Yellow', 350, 20, 7, 'uploads/products/686ca8149794f_6776.jpg', '2025-05-01 13:50:35', 2, 3000.00, NULL, NULL),
+(4, '013', 'Kate Spade', 550, 40, 11, 'uploads/katespade.jpg', '2025-05-05 14:11:33', 1, 450.00, NULL, NULL),
 (5, '005', 'Sizes: XS, S, M | Colors: Black, White', 200, NULL, 3, 'uploads/products/686ca7d4f0ecc_short1.jpg', '2025-07-08 05:04:36', 1, 150.00, NULL, NULL);
 
 -- --------------------------------------------------------
@@ -351,10 +351,17 @@ INSERT INTO `status` (`status_id`, `status_name`) VALUES
 CREATE TABLE `stock` (
   `stock_id` int(11) NOT NULL,
   `product_id` int(11) NOT NULL,
-  `size_id` int(11) NOT NULL,
-  `color_id` int(11) NOT NULL,
   `current_qty` int(11) DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `stock`
+--
+
+INSERT INTO `stock` (`stock_id`, `product_id`, `current_qty`) VALUES
+(1, 3, 130),
+(7, 4, 10),
+(8, 2, 20);
 
 -- --------------------------------------------------------
 
@@ -370,6 +377,18 @@ CREATE TABLE `stock_in` (
   `supplier_id` int(11) DEFAULT NULL,
   `purchase_price` double DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `stock_in`
+--
+
+INSERT INTO `stock_in` (`stock_in_id`, `stock_id`, `quantity`, `date_added`, `supplier_id`, `purchase_price`) VALUES
+(1, 1, 30, '2025-08-11', 1, NULL),
+(2, 1, 40, '2025-08-11', 1, NULL),
+(3, 1, 40, '2025-08-11', 1, NULL),
+(4, 7, 10, '2025-08-11', 2, NULL),
+(5, 8, 20, '2025-08-11', 2, NULL),
+(6, 1, 20, '2025-08-11', 1, NULL);
 
 -- --------------------------------------------------------
 
@@ -554,9 +573,7 @@ ALTER TABLE `status`
 --
 ALTER TABLE `stock`
   ADD PRIMARY KEY (`stock_id`),
-  ADD KEY `product_id` (`product_id`),
-  ADD KEY `size_id` (`size_id`),
-  ADD KEY `color_id` (`color_id`);
+  ADD KEY `product_id` (`product_id`);
 
 --
 -- Indexes for table `stock_in`
@@ -667,13 +684,13 @@ ALTER TABLE `status`
 -- AUTO_INCREMENT for table `stock`
 --
 ALTER TABLE `stock`
-  MODIFY `stock_id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `stock_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
 
 --
 -- AUTO_INCREMENT for table `stock_in`
 --
 ALTER TABLE `stock_in`
-  MODIFY `stock_in_id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `stock_in_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
 -- AUTO_INCREMENT for table `store_settings`
@@ -751,9 +768,7 @@ ALTER TABLE `products`
 -- Constraints for table `stock`
 --
 ALTER TABLE `stock`
-  ADD CONSTRAINT `stock_ibfk_1` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `stock_ibfk_2` FOREIGN KEY (`size_id`) REFERENCES `sizes` (`size_id`),
-  ADD CONSTRAINT `stock_ibfk_3` FOREIGN KEY (`color_id`) REFERENCES `colors` (`color_id`);
+  ADD CONSTRAINT `stock_ibfk_1` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `stock_in`

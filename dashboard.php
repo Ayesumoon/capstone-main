@@ -4,9 +4,12 @@ $admin_id = $_SESSION['admin_id'] ?? null;
 $admin_name = "Admin";
 $admin_role = "Admin";
 
+// Get admin info
 if ($admin_id) {
     $query = "
-        SELECT CONCAT(first_name, ' ', last_name) AS full_name, r.role_name 
+        SELECT 
+            CONCAT(first_name, ' ', last_name) AS full_name, 
+            r.role_name 
         FROM adminusers a
         LEFT JOIN roles r ON a.role_id = r.role_id
         WHERE a.admin_id = ?
@@ -106,9 +109,14 @@ while ($row = $chartQuery->fetch_assoc()) {
       <div class="flex items-center space-x-4">
         <img alt="Admin profile" class="rounded-full" height="40" src="newID.jpg" width="40" />
         <div>
-          <h3 class="text-sm font-semibold"><?php echo htmlspecialchars($admin_name); ?></h3>
-          <p class="text-xs text-gray-500"><?php echo htmlspecialchars($admin_role); ?></p>
-        </div>
+    <h3 class="text-sm font-semibold">
+        <?= htmlspecialchars($username ?? 'Admin') ?>
+    </h3>
+    <p class="text-xs text-gray-500">
+        <?= htmlspecialchars($role_name ?? 'Admin') ?>
+    </p>
+</div>
+
       </div>
     </div>
   </div>
@@ -189,6 +197,7 @@ while ($row = $chartQuery->fetch_assoc()) {
       <span>Inventory</span>
     </a>
   </li>
+  <li class="py-1 hover:text-pink-600"><a href="stock_management.php" class="flex items-center"><i class="fas fa-boxes mr-2"></i>Stock Management</a></li>
 </ul>
 
       <!-- Other Links -->

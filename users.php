@@ -194,7 +194,10 @@ $conn->close();
                 <i class="fas fa-warehouse mr-2"></i>Inventory
               </a>
             </li>
+           <li class="py-1 hover:text-pink-600"><a href="stock_management.php" class="flex items-center"><i class="fas fa-boxes mr-2"></i>Stock Management</a></li>
           </ul>
+
+
 
           <!-- Other Pages -->
           <li class="px-4 py-2 hover:bg-gray-100">

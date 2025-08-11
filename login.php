@@ -3,28 +3,31 @@ session_start();
 require 'conn.php'; // Database connection
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $email = $_POST["email"];
+    $email = trim($_POST["email"]);
     $password = $_POST["password"];
 
-    $sql = "SELECT admin_id, admin_email, password_hash, role_id, username FROM adminusers WHERE admin_email = ?";
+    // Check if it's an admin
+    $sql = "SELECT admin_id, admin_email, password_hash, role_id, username 
+            FROM adminusers 
+            WHERE admin_email = ?";
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("s", $email);
     $stmt->execute();
     $stmt->store_result();
 
     if ($stmt->num_rows > 0) {
-        $stmt->bind_result($admin_id, $db_email, $db_password, $role, $username);
+        $stmt->bind_result($admin_id, $db_email, $db_password_hash, $role_id, $username);
         $stmt->fetch();
 
-        if (password_verify($password, $db_password)) {
+        if (password_verify($password, $db_password_hash)) {
             $_SESSION["loggedin"] = true;
-            $_SESSION["user_id"] = $admin_id;
+            $_SESSION["admin_id"] = $admin_id; // ✅ fixed typo
             $_SESSION["email"] = $db_email;
-            $_SESSION["role"] = $role;
-            $_SESSION["username"] = $username; // Store username in session
+            $_SESSION["role_id"] = $role_id;
+            $_SESSION["username"] = $username;
 
-            // Update last_logged_in timestamp
-            $updateLogin = "UPDATE adminusers SET last_logged_in = NOW() WHERE admin_id = ?";
+            // Update last_logged_in for admin
+            $updateLogin = "UPDATE adminusers SET last_logged_in = NOW(), last_logged_out = NULL WHERE admin_id = ?";
             $stmtUpdate = $conn->prepare($updateLogin);
             $stmtUpdate->bind_param("i", $admin_id);
             $stmtUpdate->execute();
@@ -34,11 +37,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             exit;
         }
     }
-    
     $stmt->close();
 
-    // If not an admin, check if it's a customer
-    $sql = "SELECT customer_id, email, password_hash FROM customers WHERE email = ?";
+    // If not admin, check if it's a customer
+    $sql = "SELECT customer_id, email, password_hash 
+            FROM customers 
+            WHERE email = ?";
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("s", $email);
     $stmt->execute();
@@ -48,30 +52,24 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $stmt->bind_result($customer_id, $db_email, $db_password_hash);
         $stmt->fetch();
 
-        // Verify password for customer
-        if (password_verify($password, $db_password_hash)) { // Fixed variable
+        if (password_verify($password, $db_password_hash)) {
             $_SESSION["loggedin"] = true;
-            $_SESSION["user_id"] = $customer_id;
+            $_SESSION["customer_id"] = $customer_id;
             $_SESSION["email"] = $db_email;
             $_SESSION["role"] = "Customer";
 
-            // Reset last_logged_out when logging in
-            $resetLogout = "UPDATE adminusers SET last_logged_out = NULL WHERE admin_id = ?";
-            $stmtReset = $conn->prepare($resetLogout);
-            $stmtReset->bind_param("i", $admin_id);
-            $stmtReset->execute();
-            $stmtReset->close();
-
-
-            header("Location: customerside/homepage.php"); // Redirect to customer page
+            header("Location: customerside/homepage.php");
             exit;
         }
     }
 
     $stmt->close();
     $conn->close();
+
+    $error = "Invalid email or password.";
 }
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
