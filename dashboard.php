@@ -1,10 +1,10 @@
 <?php
 include 'conn.php';
+
 $admin_id = $_SESSION['admin_id'] ?? null;
 $admin_name = "Admin";
 $admin_role = "Admin";
 
-// Get admin info
 if ($admin_id) {
     $query = "
         SELECT 
@@ -18,6 +18,7 @@ if ($admin_id) {
     $stmt->bind_param("i", $admin_id);
     $stmt->execute();
     $result = $stmt->get_result();
+
     if ($row = $result->fetch_assoc()) {
         $admin_name = $row['full_name'];
         $admin_role = $row['role_name'] ?? 'Admin';
