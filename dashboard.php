@@ -39,11 +39,12 @@ $newOrders = $totalSales = $totalRevenue = 0;
 $ordersQuery = $conn->query("SELECT COUNT(*) AS new_orders FROM orders WHERE $dateCondition");
 if ($row = $ordersQuery->fetch_assoc()) $newOrders = $row['new_orders'];
 
-// Sales and revenue (overall)
-$salesQuery = $conn->query("SELECT COUNT(*) AS total_sales FROM transactions");
+// Sales count (number of completed orders)
+$salesQuery = $conn->query("SELECT COUNT(*) AS total_sales FROM orders WHERE $dateCondition");
 if ($row = $salesQuery->fetch_assoc()) $totalSales = $row['total_sales'];
 
-$revenueQuery = $conn->query("SELECT SUM(total) AS revenue FROM transactions");
+// Revenue (sum of order totals)
+$revenueQuery = $conn->query("SELECT SUM(total_amount) AS revenue FROM orders WHERE $dateCondition");
 if ($row = $revenueQuery->fetch_assoc()) $totalRevenue = $row['revenue'] ?? 0;
 
 // Notifications
@@ -60,10 +61,15 @@ if ($row = $lowStockResult->fetch_assoc()) $lowStockNotif = $row['count'];
 $totalNotif = $newOrdersNotif + $lowStockNotif;
 
 // Recent orders (same for all filters)
-$recentOrders = $conn->query("SELECT o.order_id, o.total_amount, o.created_at, CONCAT(c.first_name, ' ', c.last_name) AS customer_name 
+$recentOrders = $conn->query("
+    SELECT o.order_id, o.total_amount, o.created_at, 
+           COALESCE(CONCAT(c.first_name, ' ', c.last_name), 'Walk-in Customer') AS customer_name
     FROM orders o 
-    JOIN customers c ON o.customer_id = c.customer_id 
-    ORDER BY o.created_at DESC LIMIT 5");
+    LEFT JOIN customers c ON o.customer_id = c.customer_id 
+    ORDER BY o.created_at DESC 
+    LIMIT 5
+");
+
 
 // Chart data
 $chartQuery = $conn->query("
@@ -303,8 +309,9 @@ while ($row = $chartQuery->fetch_assoc()) {
 <div class="mt-6">
   <form method="GET" class="flex flex-wrap gap-2 items-center mb-4">
     <select name="filter" class="border p-2 rounded-md shadow-sm focus:ring-pink-400 focus:outline-none">
-      <option value="today" <?= $_GET['filter'] === 'today' ? 'selected' : '' ?>>Today</option>
-      <option value="month" <?= $_GET['filter'] === 'month' ? 'selected' : '' ?>>This Month</option>
+      <option value="today" <?= ($_GET['filter'] ?? 'today') === 'today' ? 'selected' : '' ?>>Today</option>
+<option value="month" <?= ($_GET['filter'] ?? '') === 'month' ? 'selected' : '' ?>>This Month</option>
+
     </select>
     <button type="submit" class="bg-pink-300 text-white px-4 py-2 rounded-md hover:bg-pink-500 transition">Filter</button>
   </form>
@@ -340,37 +347,57 @@ while ($row = $chartQuery->fetch_assoc()) {
 <!-- Chart.js -->
 <div class="mt-6 bg-white p-6 rounded-xl shadow-lg">
   <h2 class="text-lg font-semibold mb-4">Order Trends (Last 7 Days)</h2>
-  <canvas id="ordersChart"></canvas>
+  <div class="w-full" style="height:300px;"> <!-- smaller height -->
+    <canvas id="ordersChart"></canvas>
+  </div>
 </div>
 
 
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<canvas id="ordersChart"></canvas>
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    const ctx = document.getElementById('ordersChart').getContext('2d');
-    new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: <?= json_encode($chartLabels) ?>,
-            datasets: [{
-                label: 'Orders',
-                data: <?= json_encode($chartData) ?>,
-                borderColor: 'rgba(255, 99, 132, 1)',
-                backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                fill: true,
-                tension: 0.4
-            }]
-        },
-        options: {
-            responsive: true,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    precision: 0
-                }
-            }
-        }
+let chart;
+const ctx = document.getElementById('ordersChart').getContext('2d');
+
+function loadChart(filter = 'today') {
+  fetch("chart_data.php?filter=" + filter)
+    .then(res => res.json())
+    .then(res => {
+      if (chart) chart.destroy(); // reset old chart
+      chart = new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels: res.labels,
+    datasets: [{
+      label: 'Orders',
+      data: res.data,
+      borderColor: 'rgba(255, 99, 132, 1)',
+      backgroundColor: 'rgba(255, 99, 132, 0.2)',
+      fill: true,
+      tension: 0.4
+    }]
+  },
+  options: { 
+    responsive: true,
+    maintainAspectRatio: false  // allows custom height
+  }
+});
+
     });
+}
+
+// Initial load
+loadChart("<?= $_GET['filter'] ?? 'today' ?>");
+
+// Update when filter form changes
+document.querySelector("select[name='filter']").addEventListener("change", function(){
+  loadChart(this.value);
+});
 </script>
+
 <script>
   function toggleNotifDropdown() {
     const dropdown = document.getElementById('notifDropdown');

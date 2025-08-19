@@ -8,17 +8,24 @@ if ($order_id <= 0) {
 }
 
 // Fetch order
-$order = $conn->query("SELECT o.order_id, o.date_ordered, o.total_amount, 
-                              CONCAT(a.first_name, ' ', a.last_name) AS cashier
-                        FROM orders o
-                        LEFT JOIN adminusers a ON o.admin_id = a.admin_id
-                        WHERE o.order_id = $order_id")->fetch_assoc();
+$order = $conn->query("
+    SELECT o.order_id, o.created_at, o.total_amount, o.cash_given, o.changes,
+           CONCAT(a.first_name, ' ', a.last_name) AS cashier,
+           pm.payment_method_name
+    FROM orders o
+    LEFT JOIN adminusers a ON o.admin_id = a.admin_id
+    LEFT JOIN payment_methods pm ON o.payment_method_id = pm.payment_method_id
+    WHERE o.order_id = $order_id
+")->fetch_assoc();
 
 // Fetch items
-$items = $conn->query("SELECT oi.quantity, oi.price_id, oi.discount, p.product_name 
-                       FROM order_items oi
-                       JOIN products p ON oi.product_id = p.product_id
-                       WHERE oi.order_id = $order_id");
+$items = $conn->query("
+    SELECT oi.qty, oi.price, p.product_name
+    FROM order_items oi
+    JOIN stock s ON oi.stock_id = s.stock_id
+    JOIN products p ON s.product_id = p.product_id
+    WHERE oi.order_id = $order_id
+");
 ?>
 
 <!DOCTYPE html>
@@ -27,47 +34,78 @@ $items = $conn->query("SELECT oi.quantity, oi.price_id, oi.discount, p.product_n
   <meta charset="utf-8">
   <title>Receipt</title>
   <style>
-    body { font-family: Arial, sans-serif; padding: 20px; }
-    h2 { text-align: center; }
-    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-    th, td { padding: 8px; border-bottom: 1px solid #ddd; text-align: left; }
-    .total { font-weight: bold; }
-    .center { text-align: center; }
+    body {
+      font-family: 'Courier New', monospace;
+      padding: 20px;
+      max-width: 300px;
+      margin: auto;
+      background: #fff;
+    }
+    h2, h3, p {
+      text-align: center;
+      margin: 4px 0;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    td {
+      padding: 3px 0;
+    }
+    .totals td {
+      font-weight: bold;
+      border-top: 1px dashed #000;
+      padding-top: 5px;
+    }
+    .footer {
+      text-align: center;
+      margin-top: 15px;
+      font-size: 12px;
+    }
+    .line {
+      border-top: 1px dashed #000;
+      margin: 10px 0;
+    }
   </style>
 </head>
 <body onload="window.print()">
-  <h2>SevenDwarfs POS Receipt</h2>
+
+  <h2>Seven Dwarfs</h2>
+  <p>Official Receipt</p>
+  <div class="line"></div>
+
   <p><strong>Order ID:</strong> <?= $order['order_id'] ?></p>
-  <p><strong>Date:</strong> <?= $order['date_ordered'] ?></p>
+  <p><strong>Date:</strong> <?= $order['created_at'] ?></p>
   <p><strong>Cashier:</strong> <?= htmlspecialchars($order['cashier']) ?></p>
+  <p><strong>Payment:</strong> <?= htmlspecialchars($order['payment_method_name']) ?></p>
+
+  <div class="line"></div>
 
   <table>
-    <thead>
+    <?php while ($row = $items->fetch_assoc()): ?>
       <tr>
-        <th>Product</th>
-        <th>Qty</th>
-        <th>Price</th>
-        <th>Discount</th>
-        <th>Total</th>
+        <td><?= htmlspecialchars($row['product_name']) ?> x<?= $row['qty'] ?></td>
+        <td style="text-align:right;">₱<?= number_format($row['price'] * $row['qty'], 2) ?></td>
       </tr>
-    </thead>
-    <tbody>
-      <?php while ($row = $items->fetch_assoc()): ?>
-        <?php 
-          $line_total = ($row['price_id'] * $row['quantity']) * (1 - $row['discount'] / 100);
-        ?>
-        <tr>
-          <td><?= htmlspecialchars($row['product_name']) ?></td>
-          <td><?= $row['quantity'] ?></td>
-          <td>₱<?= number_format($row['price_id'], 2) ?></td>
-          <td><?= $row['discount'] ?>%</td>
-          <td>₱<?= number_format($line_total, 2) ?></td>
-        </tr>
-      <?php endwhile; ?>
-    </tbody>
+    <?php endwhile; ?>
+    <tr class="totals">
+      <td>Total</td>
+      <td style="text-align:right;">₱<?= number_format($order['total_amount'], 2) ?></td>
+    </tr>
+    <tr>
+      <td>Cash</td>
+      <td style="text-align:right;">₱<?= number_format($order['cash_given'], 2) ?></td>
+    </tr>
+    <tr>
+      <td>Change</td>
+      <td style="text-align:right;">₱<?= number_format($order['changes'], 2) ?></td>
+    </tr>
   </table>
 
-  <p class="total">Total: ₱<?= number_format($order['total_amount'], 2) ?></p>
-  <p class="center">Thank you for your purchase!</p>
+  <div class="line"></div>
+
+  <p class="footer">Thank you for shopping!<br/>Please come again.</p>
+
 </body>
 </html>
