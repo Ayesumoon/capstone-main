@@ -54,6 +54,7 @@ $sqlProducts = "
         c.category_name, 
         p.stocks, 
         p.price_id,
+        p.created_at,
         s.supplier_name,
         p.supplier_price
     FROM products p
@@ -198,68 +199,62 @@ $conn->close();
       </nav>
     </div>
 
-    <!-- Main Content -->
-    <div class="flex-1 p-6 overflow-auto">
-      <div class="bg-pink-300 text-white p-4 rounded-t-2xl shadow-sm">
-        <h1 class="text-xl font-bold">Inventory Management</h1>
-      </div>
-      <div class="bg-white p-4 rounded-b shadow-md mb-6">
-        <form method="GET" action="inventory.php" class="flex items-center gap-2">
-          <label for="category" class="font-medium text-sm">Category:</label>
-          <select name="category" id="category" onchange="this.form.submit()" class="border rounded-md p-2 text-sm">
-            <option value="all">All</option>
-            <?php foreach ($categories as $category) { ?>
-              <option value="<?php echo $category['category_name']; ?>" <?php echo ($selectedCategory == $category['category_name']) ? 'selected' : ''; ?>>
-                <?php echo $category['category_name']; ?>
-              </option>
-            <?php } ?>
-          </select>
-        </form>
-      </div>
-      <div class="overflow-x-auto">
-        <table class="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm text-sm">
-          <thead class="bg-gray-100 text-gray-700">
-            <tr>
-              <th class="px-4 py-3 border text-left">Product ID</th>
-              <th class="px-4 py-3 border text-left">Product Code</th>
-              <th class="px-4 py-3 border text-left">Category</th>
-              <th class="px-4 py-3 border text-left">Price</th>
-              <th class="px-4 py-3 border text-left">Supplier</th>
-              <th class="px-4 py-3 border text-left">Supplier Price</th>
-              <th class="px-4 py-3 border text-left">Revenue</th>
-              <th class="px-4 py-3 border text-left">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            <?php 
-            if (!empty($inventory)) { 
-              foreach ($inventory as $item) {
-                $status = ($item['stocks'] > 20) ? "In Stock" : (($item['stocks'] > 0) ? "Low Stock" : "Out of Stock");
-                $supplier_price = isset($item['supplier_price']) ? floatval($item['supplier_price']) : 0;
-                $price = floatval($item['price_id']);
-                $revenue = ($price - $supplier_price) * intval($item['stocks']);
-            ?>
-            <tr class="hover:bg-gray-50 transition-all">
-              <td class="px-4 py-2 border"><?php echo $item['product_id']; ?></td>
-              <td class="px-4 py-2 border"><?php echo $item['product_name']; ?></td>
-              <td class="px-4 py-2 border"><?php echo $item['category_name']; ?></td>
-              <td class="px-4 py-2 border">₱<?php echo number_format($item['price_id'], 2); ?></td>
-              <td class="px-4 py-2 border"><?php echo isset($item['supplier_name']) ? htmlspecialchars($item['supplier_name']) : 'No supplier'; ?></td>
-              <td class="px-4 py-2 border">₱<?php echo number_format($supplier_price, 2); ?></td>
-              <td class="px-4 py-2 border text-green-600 font-medium">₱<?php echo number_format($revenue, 2); ?></td>
-              <td class="px-4 py-2 border font-semibold capitalize <?php echo ($status === 'In Stock') ? 'text-green-600' : (($status === 'Low Stock') ? 'text-yellow-600' : 'text-red-600'); ?>">
-                <?php echo $status; ?>
-              </td>
-            </tr>
-            <?php }} else { ?>
-            <tr>
-              <td colspan="9" class="text-center px-4 py-4 text-gray-500 border">No products found</td>
-            </tr>
-            <?php } ?>
-          </tbody>
-        </table>
-      </div>
-    </div>
+   <!-- Main Content -->
+<div class="flex-1 p-6 overflow-auto">
+  <div class="bg-pink-300 text-white p-4 rounded-t-2xl shadow-sm">
+    <h1 class="text-xl font-bold">Inventory Management</h1>
+  </div>
+  <div class="bg-white p-4 rounded-b shadow-md mb-6">
+    <form method="GET" action="inventory.php" class="flex items-center gap-2">
+      <label for="category" class="font-medium text-sm">Category:</label>
+      <select name="category" id="category" onchange="this.form.submit()" class="border rounded-md p-2 text-sm">
+        <option value="all">All</option>
+        <?php foreach ($categories as $category) { ?>
+          <option value="<?php echo $category['category_name']; ?>" <?php echo ($selectedCategory == $category['category_name']) ? 'selected' : ''; ?>>
+            <?php echo $category['category_name']; ?>
+          </option>
+        <?php } ?>
+      </select>
+    </form>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm text-sm">
+      <thead class="bg-gray-100 text-gray-700">
+        <tr>
+          <th class="px-4 py-3 border text-left">Product ID</th>
+          <th class="px-4 py-3 border text-left">Product Code</th>
+          <th class="px-4 py-3 border text-left">Category</th>
+          <th class="px-4 py-3 border text-left">Created At</th>
+          <th class="px-4 py-3 border text-left">Stock</th>
+          <th class="px-4 py-3 border text-left">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <?php 
+        if (!empty($inventory)) { 
+          foreach ($inventory as $item) {
+            $status = ($item['stocks'] > 20) ? "In Stock" : (($item['stocks'] > 0) ? "Low Stock" : "Out of Stock");
+        ?>
+        <tr class="hover:bg-gray-50 transition-all">
+          <td class="px-4 py-2 border"><?php echo $item['product_id']; ?></td>
+          <td class="px-4 py-2 border"><?php echo $item['product_name']; ?></td>
+          <td class="px-4 py-2 border"><?php echo $item['category_name']; ?></td>
+          <td class="px-4 py-2 border"><?php echo $item['created_at']; ?></td>
+          <td class="px-4 py-2 border"><?php echo $item['stocks']; ?></td>
+          <td class="px-4 py-2 border font-semibold capitalize <?php echo ($status === 'In Stock') ? 'text-green-600' : (($status === 'Low Stock') ? 'text-yellow-600' : 'text-red-600'); ?>">
+            <?php echo $status; ?>
+          </td>
+        </tr>
+        <?php }} else { ?>
+        <tr>
+          <td colspan="6" class="text-center px-4 py-4 text-gray-500 border">No products found</td>
+        </tr>
+        <?php } ?>
+      </tbody>
+    </table>
+  </div>
+</div>
+
   </div>
 </body>
 </html>
