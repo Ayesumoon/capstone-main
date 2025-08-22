@@ -2,25 +2,38 @@
 session_start();
 require 'conn.php';
 
-if (isset($_SESSION["user_id"])) {
-    $user_id = $_SESSION["user_id"];
+if (isset($_SESSION["admin_id"])) {
+    $user_id   = $_SESSION["admin_id"];
+    $username  = $_SESSION["username"] ?? 'Unknown';
+    $role_id   = $_SESSION["role_id"] ?? null;
 
-    // Prepare and execute the update query for last_logged_out
+    // ✅ Update last_logged_out
     $updateLogout = "UPDATE adminusers SET last_logged_out = NOW() WHERE admin_id = ?";
     if ($stmtLogout = $conn->prepare($updateLogout)) {
         $stmtLogout->bind_param("i", $user_id);
-        $stmtLogout->execute();
+        if (!$stmtLogout->execute()) {
+            error_log("Logout Update Failed: " . $stmtLogout->error);
+        }
         $stmtLogout->close();
     } else {
-        error_log("Logout Error: " . $conn->error); // Log errors for debugging
+        error_log("Prepare Failed: " . $conn->error);
+    }
+
+    // ✅ Insert into logs (tracks Super Admin/Admin logout)
+    $log_sql = "INSERT INTO system_logs (user_id, username, role_id, action) VALUES (?, ?, ?, ?)";
+    if ($log_stmt = $conn->prepare($log_sql)) {
+        $action = "User logged out";
+        $log_stmt->bind_param("isis", $user_id, $username, $role_id, $action);
+        $log_stmt->execute();
+        $log_stmt->close();
     }
 }
 
-// Destroy the session
+// ✅ Clear session
 session_unset();
 session_destroy();
 
-// Redirect to login page
+// ✅ Redirect to login page
 header("Location: login.php");
 exit;
 ?>

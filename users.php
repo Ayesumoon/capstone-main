@@ -261,9 +261,6 @@ $conn->close();
                 <th class="px-4 py-3">Email</th>
                 <th class="px-4 py-3">Role</th>
                 <th class="px-4 py-3">Status</th>
-                <th class="px-4 py-3">Last Login</th>
-                <th class="px-4 py-3">Last Logout</th>
-                <th class="px-4 py-3">Actions</th>
               </tr>
             </thead>
             <tbody class="text-gray-700">
@@ -278,12 +275,7 @@ $conn->close();
                   <td class="px-4 py-2 font-semibold <?php echo strtolower($user['status']) === 'active' ? 'text-green-600' : 'text-red-600'; ?>">
                     <?php echo ucfirst($user['status']); ?>
                   </td>
-                  <td class="px-4 py-2"><?php echo $user['last_logged_in']; ?></td>
-                  <td class="px-4 py-2"><?php echo $user['last_logged_out']; ?></td>
-                  <td class="px-4 py-2">
-                    <a href="edit_user.php?id=<?php echo $user['admin_id']; ?>" class="text-blue-500 hover:underline">Edit</a> |
-                    <a href="delete_user.php?id=<?php echo $user['admin_id']; ?>" onclick="return confirm('Are you sure?')" class="text-red-500 hover:underline">Delete</a>
-                  </td>
+
                 </tr>
               <?php }
               } else { ?>

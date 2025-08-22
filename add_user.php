@@ -2,9 +2,14 @@
 session_start();
 require 'conn.php'; // Database connection
 
+// ✅ Generate CSRF token if not exists
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
 $message = '';
 
-// Fetch available roles
+// ✅ Fetch available roles securely
 $roles = [];
 $role_query = "SELECT role_id, role_name FROM roles";
 $role_result = $conn->query($role_query);
@@ -12,18 +17,49 @@ while ($row = $role_result->fetch_assoc()) {
     $roles[] = $row;
 }
 
-// Handle form submission
-if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $username = trim($_POST['username']);
-    $email = trim($_POST['email']);
-    $password = password_hash($_POST['password'], PASSWORD_DEFAULT);
-    $first_name = trim($_POST['first_name']);
-    $last_name = trim($_POST['last_name']);
-    $status_id = $_POST['status_id'];
-    $created_at = date("Y-m-d H:i:s");
-    $role_id = $_POST['role_id']; // Now correctly using role_id
+// ✅ Handle form submission securely
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // CSRF token check
+    if (!hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+        $_SESSION['message'] = "Invalid CSRF token!";
+        header("Location: add_user.php");
+        exit();
+    }
 
-    // Check if username or email already exists
+    // Input sanitization
+    $username   = htmlspecialchars(trim($_POST['username']), ENT_QUOTES, 'UTF-8');
+    $email      = filter_var(trim($_POST['email']), FILTER_VALIDATE_EMAIL);
+    $password   = $_POST['password'];
+    $confirm_password = $_POST['confirm_password'];
+    $first_name = htmlspecialchars(trim($_POST['first_name']), ENT_QUOTES, 'UTF-8');
+    $last_name  = htmlspecialchars(trim($_POST['last_name']), ENT_QUOTES, 'UTF-8');
+    $role_id    = (int) $_POST['role_id'];
+    $status_id  = 1; // ✅ default Active
+    $created_at = date("Y-m-d H:i:s");
+
+    if (!$email) {
+        $_SESSION['message'] = "Invalid email format!";
+        header("Location: add_user.php");
+        exit();
+    }
+
+    // ✅ Password match check
+    if ($password !== $confirm_password) {
+        $_SESSION['message'] = "Passwords do not match!";
+        header("Location: add_user.php");
+        exit();
+    }
+
+    // ✅ Password strength check
+    if (!preg_match("/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d!@#$%^&*]{8,}$/", $password)) {
+        $_SESSION['message'] = "Password must be at least 8 characters long and include at least one number.";
+        header("Location: add_user.php");
+        exit();
+    }
+
+    $password_hash = password_hash($password, PASSWORD_DEFAULT);
+
+    // ✅ Check if username or email already exists
     $check_query = "SELECT admin_id FROM adminusers WHERE username = ? OR admin_email = ?";
     $check_stmt = $conn->prepare($check_query);
     $check_stmt->bind_param("ss", $username, $email);
@@ -35,21 +71,31 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         header("Location: add_user.php");
         exit();
     } else {
-        // Insert new user
+        // ✅ Insert new user
         $sql = "INSERT INTO adminusers (username, admin_email, password_hash, role_id, status_id, created_at, first_name, last_name) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $conn->prepare($sql);
-        $stmt->bind_param("sssissss", $username, $email, $password, $role_id, $status_id, $created_at, $first_name, $last_name);
+        $stmt->bind_param("sssissss", $username, $email, $password_hash, $role_id, $status_id, $created_at, $first_name, $last_name);
 
         if ($stmt->execute()) {
-            $_SESSION['success'] = "User added successfully!";
-            header("Location: users.php"); // Redirect to users page
-            exit();
-        } else {
-            $_SESSION['message'] = "Error: " . $stmt->error;
-            header("Location: add_user.php");
-            exit();
-        }
+    // ✅ Add to logs
+    $log_sql = "INSERT INTO system_logs (user_id, username, role_id, action) VALUES (?, ?, ?, ?)";
+    $log_stmt = $conn->prepare($log_sql);
+    $action = "Added a new user: " . $username;
+    $log_stmt->bind_param("isis", $_SESSION['admin_id'], $_SESSION['username'], $_SESSION['role_id'], $action);
+    $log_stmt->execute();
+    $log_stmt->close();
+
+    $_SESSION['success'] = "User added successfully!";
+    header("Location: users.php");
+    exit();
+} else {
+    error_log("DB Error: " . $stmt->error);
+    $_SESSION['message'] = "Something went wrong. Please try again.";
+    header("Location: add_user.php");
+    exit();
+}
+
         $stmt->close();
     }
     $check_stmt->close();
@@ -59,87 +105,113 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Add User</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Add User</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    // ✅ Optional JS validation for instant feedback
+    function validatePassword() {
+      const pw = document.getElementById("password").value;
+      const cpw = document.getElementById("confirm_password").value;
+      const msg = document.getElementById("pw_message");
+
+      if (pw !== cpw) {
+        msg.textContent = "Passwords do not match!";
+        msg.classList.remove("text-green-600");
+        msg.classList.add("text-red-600");
+      } else {
+        msg.textContent = "Passwords match ✅";
+        msg.classList.remove("text-red-600");
+        msg.classList.add("text-green-600");
+      }
+    }
+  </script>
 </head>
-<body class="bg-gray-100 min-h-screen p-6">
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-6">
 
-    <div class="max-w-2xl mx-auto bg-white p-6 rounded-lg shadow-md">
-        <h2 class="text-2xl font-bold text-pink-600 mb-4">Add New User</h2>
+  <div class="max-w-2xl w-full bg-white p-8 rounded-2xl shadow-lg">
+    <h2 class="text-3xl font-bold text-pink-600 mb-6 text-center">➕ Add New User</h2>
 
-        <?php if (isset($_SESSION['message'])) { ?>
-            <div class="mb-4 text-red-600 font-medium">
-                <?php 
-                    echo $_SESSION['message']; 
-                    unset($_SESSION['message']);
-                ?>
-            </div>
-        <?php } ?>
+    <?php if (isset($_SESSION['message'])) { ?>
+      <div class="mb-4 px-4 py-2 rounded bg-red-100 text-red-700 font-medium">
+        <?php 
+          echo htmlspecialchars($_SESSION['message'], ENT_QUOTES, 'UTF-8'); 
+          unset($_SESSION['message']);
+        ?>
+      </div>
+    <?php } ?>
 
-        <form action="add_user.php" method="POST" class="space-y-4">
+    <form action="add_user.php" method="POST" class="space-y-5">
+      <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
 
-            <div>
-                <label class="block font-medium text-gray-700">Username:</label>
-                <input type="text" name="username" required
-                    class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-pink-400">
-            </div>
+      <div>
+        <label class="block text-gray-700 font-medium mb-1">Username</label>
+        <input type="text" name="username" required
+          class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-pink-400">
+      </div>
 
-            <div>
-                <label class="block font-medium text-gray-700">First Name:</label>
-                <input type="text" name="first_name" required
-                    class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-pink-400">
-            </div>
+      <div>
+        <label class="block text-gray-700 font-medium mb-1">First Name</label>
+        <input type="text" name="first_name" required
+          class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-pink-400">
+      </div>
 
-            <div>
-                <label class="block font-medium text-gray-700">Last Name:</label>
-                <input type="text" name="last_name" required
-                    class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-pink-400">
-            </div>
+      <div>
+        <label class="block text-gray-700 font-medium mb-1">Last Name</label>
+        <input type="text" name="last_name" required
+          class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-pink-400">
+      </div>
 
-            <div>
-                <label class="block font-medium text-gray-700">Email:</label>
-                <input type="email" name="email" required
-                    class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-pink-400">
-            </div>
+      <div>
+        <label class="block text-gray-700 font-medium mb-1">Email</label>
+        <input type="email" name="email" required
+          class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-pink-400">
+      </div>
 
-            <div>
-                <label class="block font-medium text-gray-700">Password:</label>
-                <input type="password" name="password" required
-                    class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-pink-400">
-            </div>
+      <!-- Password -->
+      <div>
+        <label class="block text-gray-700 font-medium mb-1">Password</label>
+        <input type="password" id="password" name="password" required
+          class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-pink-400"
+          oninput="validatePassword()">
+        <p class="text-sm text-gray-500 mt-1">Password must be at least 8 characters long and include at least one number.</p>
+      </div>
 
-            <div>
-                <label class="block font-medium text-gray-700">Role:</label>
-                <select name="role_id" required
-                    class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-pink-400">
-                    <?php foreach ($roles as $role) { ?>
-                        <option value="<?php echo $role['role_id']; ?>">
-                            <?php echo htmlspecialchars($role['role_name']); ?>
-                        </option>
-                    <?php } ?>
-                </select>
-            </div>
+      <!-- Confirm Password -->
+      <div>
+        <label class="block text-gray-700 font-medium mb-1">Confirm Password</label>
+        <input type="password" id="confirm_password" name="confirm_password" required
+          class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-pink-400"
+          oninput="validatePassword()">
+        <p id="pw_message" class="text-sm mt-1"></p>
+      </div>
 
-            <div>
-                <label class="block font-medium text-gray-700">Status:</label>
-                <select name="status_id" required
-                    class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-pink-400">
-                    <option value="1">Active</option>
-                    <option value="2">Inactive</option>
-                </select>
-            </div>
+      <!-- Role -->
+      <div>
+        <label class="block text-gray-700 font-medium mb-1">Role</label>
+        <select name="role_id" required
+          class="w-full border border-gray-300 rounded-lg p-3 bg-white focus:ring-2 focus:ring-pink-400">
+          <?php foreach ($roles as $role) { ?>
+            <option value="<?php echo (int) $role['role_id']; ?>">
+              <?php echo htmlspecialchars($role['role_name']); ?>
+            </option>
+          <?php } ?>
+        </select>
+      </div>
 
-            <div class="flex gap-4 pt-4">
-                <button type="submit"
-                    class="bg-pink-500 text-white px-6 py-2 rounded hover:bg-pink-600 transition-all">Add User</button>
-                <button type="button" onclick="window.location.href='users.php'"
-                    class="bg-gray-300 text-gray-800 px-6 py-2 rounded hover:bg-gray-400 transition-all">Cancel</button>
-            </div>
-
-        </form>
-    </div>
+      <div class="flex gap-4 pt-4">
+        <button type="submit"
+          class="flex-1 bg-pink-500 text-white px-6 py-3 rounded-lg font-medium shadow-md hover:bg-pink-600 active:scale-95 transition-all">
+          Add User
+        </button>
+        <button type="button" onclick="window.location.href='users.php'"
+          class="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-lg font-medium shadow hover:bg-gray-300 active:scale-95 transition-all">
+          Cancel
+        </button>
+      </div>
+    </form>
+  </div>
 
 </body>
 </html>

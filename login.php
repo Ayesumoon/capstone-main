@@ -3,37 +3,44 @@ session_start();
 require 'conn.php'; // Database connection
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $email = trim($_POST["email"]);
+    $login_input = trim($_POST["login"]); // can be username OR email
     $password = $_POST["password"];
 
-    // Check if it's an admin
-    $sql = "SELECT admin_id, admin_email, password_hash, role_id, username 
+    // Check if it's an admin (username OR email)
+    $sql = "SELECT admin_id, admin_email, username, password_hash, role_id 
             FROM adminusers 
-            WHERE admin_email = ?";
+            WHERE admin_email = ? OR username = ?";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("s", $email);
+    $stmt->bind_param("ss", $login_input, $login_input);
     $stmt->execute();
     $stmt->store_result();
 
     if ($stmt->num_rows > 0) {
-        $stmt->bind_result($admin_id, $db_email, $db_password_hash, $role_id, $username);
+        $stmt->bind_result($admin_id, $db_email, $db_username, $db_password_hash, $role_id);
         $stmt->fetch();
 
         if (password_verify($password, $db_password_hash)) {
             $_SESSION["loggedin"] = true;
-            $_SESSION["admin_id"] = $admin_id; // ✅ fixed typo
+            $_SESSION["admin_id"] = $admin_id;
             $_SESSION["email"] = $db_email;
+            $_SESSION["username"] = $db_username;
             $_SESSION["role_id"] = $role_id;
-            $_SESSION["username"] = $username;
 
-            // Update last_logged_in for admin
-            $updateLogin = "UPDATE adminusers SET last_logged_in = NOW(), last_logged_out = NULL WHERE admin_id = ?";
+            // Update last_logged_in
+            $updateLogin = "UPDATE adminusers 
+                            SET last_logged_in = NOW(), last_logged_out = NULL 
+                            WHERE admin_id = ?";
             $stmtUpdate = $conn->prepare($updateLogin);
             $stmtUpdate->bind_param("i", $admin_id);
             $stmtUpdate->execute();
             $stmtUpdate->close();
 
-            header("Location: dashboard.php");
+            // ✅ Redirect based on role
+            if ($role_id == 1) {
+                header("Location: superadmin_dashboard.php"); // Super Admin
+            } else {
+                header("Location: dashboard.php"); // Normal Admin/Staff
+            }
             exit;
         }
     }
@@ -44,7 +51,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             FROM customers 
             WHERE email = ?";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("s", $email);
+    $stmt->bind_param("s", $login_input);
     $stmt->execute();
     $stmt->store_result();
 
@@ -66,9 +73,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $stmt->close();
     $conn->close();
 
-    $error = "Invalid email or password.";
+    $error = "Invalid username/email or password.";
 }
 ?>
+
 
 <!DOCTYPE html>
 <html lang="en">
@@ -98,29 +106,33 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <?php if (!empty($error)) echo "<p class='text-red-500 text-center mb-4'>$error</p>"; ?>
 
     <form method="post" class="space-y-4">
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Email</label>
-        <input type="email" name="email" required
-               class="mt-1 w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-transparent" />
-      </div>
+  <div>
+    <label class="block text-sm font-medium text-gray-700">Username or Email</label>
+    <input type="text" name="login" required
+           class="mt-1 w-full px-4 py-2 border border-gray-300 rounded-md 
+                  focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-transparent" />
+  </div>
 
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Password</label>
-        <div class="relative">
-          <input type="password" name="password" id="password" required
-                 class="mt-1 w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-transparent pr-10" />
-          <button type="button" onclick="togglePassword()"
-                  class="absolute inset-y-0 right-0 px-3 flex items-center text-sm text-gray-500 hover:text-pink-500 focus:outline-none">
-            Show
-          </button>
-        </div>
-      </div>
+  <div>
+    <label class="block text-sm font-medium text-gray-700">Password</label>
+    <div class="relative">
+      <input type="password" name="password" id="password" required
+             class="mt-1 w-full px-4 py-2 border border-gray-300 rounded-md 
+                    focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-transparent pr-10" />
+      <button type="button" onclick="togglePassword()"
+              class="absolute inset-y-0 right-0 px-3 flex items-center text-sm text-gray-500 
+                     hover:text-pink-500 focus:outline-none">
+        Show
+      </button>
+    </div>
+  </div>
 
-      <div class="pt-4">
-        <input type="submit" value="Login"
-               class="w-full bg-pink-500 text-white py-2 rounded-md font-semibold hover:bg-pink-600 transition-colors" />
-      </div>
-    </form>
+  <div class="pt-4">
+    <input type="submit" value="Login"
+           class="w-full bg-pink-500 text-white py-2 rounded-md font-semibold hover:bg-pink-600 transition-colors" />
+  </div>
+</form>
+
 
     <!-- Sign Up button -->
     <div class="mt-6 text-center">
