@@ -151,17 +151,6 @@ $conn->close();
               <a href="users.php" class="flex items-center">
                 <i class="fas fa-user mr-2"></i>User
               </a>
-            </li>
-            <li class="py-1 hover:text-pink-600">
-              <a href="user_types.php" class="flex items-center">
-                <i class="fas fa-id-badge mr-2"></i>Type
-              </a>
-            </li>
-            <li class="py-1 hover:text-pink-600">
-              <a href="user_status.php" class="flex items-center">
-                <i class="fas fa-toggle-on mr-2"></i>Status
-              </a>
-            </li>
             <li class="py-1 hover:text-pink-600">
               <a href="customers.php" class="flex items-center">
                 <i class="fas fa-users mr-2"></i>Customer

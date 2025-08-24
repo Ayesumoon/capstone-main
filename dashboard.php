@@ -156,18 +156,6 @@ while ($row = $chartQuery->fetch_assoc()) {
     </a>
   </li>
   <li class="py-1">
-    <a href="user_types.php" class="flex items-center space-x-2 hover:text-pink-600">
-      <i class="fas fa-id-badge"></i>
-      <span>Type</span>
-    </a>
-  </li>
-  <li class="py-1">
-    <a href="user_status.php" class="flex items-center space-x-2 hover:text-pink-600">
-      <i class="fas fa-toggle-on"></i>
-      <span>Status</span>
-    </a>
-  </li>
-  <li class="py-1">
     <a href="customers.php" class="flex items-center space-x-2 hover:text-pink-600">
       <i class="fas fa-users"></i>
       <span>Customer</span>

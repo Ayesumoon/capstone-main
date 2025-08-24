@@ -150,8 +150,6 @@ $conn->close();
           </li>
           <ul x-show="userMenu" x-transition x-cloak class="pl-8 text-sm text-gray-700 space-y-1">
             <li><a href="users.php" class="block py-1 hover:text-pink-600"><i class="fas fa-user mr-2"></i>User</a></li>
-            <li><a href="user_types.php" class="block py-1 hover:text-pink-600"><i class="fas fa-id-badge mr-2"></i>Type</a></li>
-            <li><a href="user_status.php" class="block py-1 hover:text-pink-600"><i class="fas fa-toggle-on mr-2"></i>Status</a></li>
             <li><a href="customers.php" class="block py-1 hover:text-pink-600"><i class="fas fa-users mr-2"></i>Customer</a></li>
           </ul>
           <!-- Product Management -->
