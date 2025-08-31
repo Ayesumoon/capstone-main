@@ -108,7 +108,7 @@ $payments = $conn->query("SELECT * FROM payment_methods");
   </div>
 
   <!-- Shopping Cart -->
-  <div class="w-96 bg-pink-100 shadow-lg rounded-lg overflow-hidden">
+<div class="w-[28rem] bg-pink-100 shadow-lg rounded-lg overflow-hidden">
     <div class="bg-pink-500 text-white font-bold text-lg p-3">Shopping Cart</div>
     <div class="p-4 flex flex-col flex-1 text-center">
       <div id="emptyMessage" class="py-6">
