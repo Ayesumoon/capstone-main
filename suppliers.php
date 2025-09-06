@@ -382,6 +382,22 @@ if ($result->num_rows > 0):
 
      </table>
     </div>
+    <div class="flex flex-col sm:flex-row justify-between items-center mt-4 text-xs text-gray-700 font-normal">
+     <div class="mb-2 sm:mb-0">
+      Showing 1 to 6 of 6 entries
+     </div>
+     <nav aria-label="Pagination" class="inline-flex rounded-md shadow-sm" role="navigation">
+      <button aria-label="Previous page" class="rounded-l-md bg-indigo-100 text-indigo-600 px-4 py-2 font-medium hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+       Previous
+      </button>
+      <button aria-current="page" aria-label="Page 1" class="bg-indigo-700 text-white px-4 py-2 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500">
+       1
+      </button>
+      <button aria-label="Next page" class="rounded-r-md bg-indigo-100 text-indigo-600 px-4 py-2 font-medium hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+       Next
+      </button>
+     </nav>
+    </div>
    </div>
   </div>
  </body>
