@@ -35,17 +35,26 @@ $stock_query = "
     SELECT 
         p.product_id,
         p.product_name,
+        c.category_name,
+        col.color,
+        sz.size,
         COALESCE(st.current_qty, 0) AS current_qty,
         MAX(sup.supplier_name) AS supplier_name,
         MAX(si.date_added) AS date_added
     FROM products p
+    INNER JOIN categories c ON p.category_id = c.category_id
     LEFT JOIN stock st ON p.product_id = st.product_id
+    LEFT JOIN product_colors pc ON p.product_id = pc.product_id
+    LEFT JOIN colors col ON st.color_id = col.color_id
+    LEFT JOIN product_sizes ps ON p.product_id = ps.product_id
+    LEFT JOIN sizes sz ON st.size_id = sz.size_id
     LEFT JOIN stock_in si ON si.stock_id = st.stock_id
     LEFT JOIN suppliers sup ON si.supplier_id = sup.supplier_id
     " . ($selected_category ? "WHERE p.category_id = $selected_category" : "") . "
-    GROUP BY p.product_id, p.product_name, st.current_qty
+    GROUP BY p.product_id, p.product_name, c.category_name, col.color, sz.size, st.current_qty
     ORDER BY date_added DESC
 ";
+
 $current_stock = $conn->query($stock_query);
 
 // Fetch suppliers for stock-in modal
@@ -164,11 +173,6 @@ while ($sup = $supplier_query->fetch_assoc()) {
         </li>
 
       <li class="px-4 py-2 hover:bg-gray-200">
-        <a href="payandtransac.php" class="flex items-center">
-          <i class="fas fa-money-check-alt mr-2"></i>Payment & Transactions
-        </a>
-      </li>
-      <li class="px-4 py-2 hover:bg-gray-200">
         <a href="storesettings.php" class="flex items-center">
           <i class="fas fa-cog mr-2"></i>Store Settings
         </a>
@@ -207,30 +211,36 @@ while ($sup = $supplier_query->fetch_assoc()) {
                 <thead>
                     <tr class="border-b border-gray-300 bg-gray-100">
                         <th class="px-4 py-3 text-left">Product</th>
+                        <th class="px-4 py-3 text-left">Color</th>
+                        <th class="px-4 py-3 text-left">Size</th>
                         <th class="px-4 py-3 text-left">Quantity</th>
                         <th class="px-4 py-3 text-left">Supplier</th>
                         <th class="px-4 py-3 text-left">Date Added</th>
                         <th class="px-4 py-3 text-left">Actions</th>
+
                     </tr>
                 </thead>
                 <tbody>
                     <?php if ($current_stock->num_rows > 0): ?>
                         <?php while ($row = $current_stock->fetch_assoc()): ?>
                             <tr class="border-b border-gray-300 hover:bg-gray-50">
-                                <td class="px-4 py-3"><?= htmlspecialchars($row['product_name']) ?></td>
-                                <td class="px-4 py-3"><?= htmlspecialchars($row['current_qty']) ?></td>
-                                <td class="px-4 py-3"><?= htmlspecialchars($row['supplier_name'] ?? 'N/A') ?></td>
-                                <td class="px-4 py-3"><?= htmlspecialchars($row['date_added'] ?? 'N/A') ?></td>
-                                <td class="px-4 py-3">
-                                    <button 
-                                        class="bg-pink-500 hover:bg-pink-600 text-white px-3 py-1 rounded shadow text-xs show-stockin-form"
-                                        data-product="<?= htmlspecialchars($row['product_name']) ?>"
-                                        data-product-id="<?= htmlspecialchars($row['product_id']) ?>"
-                                    >
-                                        <i class="fas fa-plus mr-1"></i> Stock In
-                                    </button>
-                                </td>
-                            </tr>
+                            <td class="px-4 py-3"><?= htmlspecialchars($row['product_name']) ?></td>
+                            <td class="px-4 py-3"><?= htmlspecialchars($row['color'] ?: '—') ?></td>
+                            <td class="px-4 py-3"><?= htmlspecialchars($row['size'] ?: '—') ?></td>
+                            <td class="px-4 py-3"><?= htmlspecialchars($row['current_qty']) ?></td>
+                            <td class="px-4 py-3"><?= htmlspecialchars($row['supplier_name'] ?? 'N/A') ?></td>
+                            <td class="px-4 py-3"><?= htmlspecialchars($row['date_added'] ?? 'N/A') ?></td>
+                            <td class="px-4 py-3">
+                                <button 
+                                    class="bg-pink-500 hover:bg-pink-600 text-white px-3 py-1 rounded shadow text-xs show-stockin-form"
+                                    data-product="<?= htmlspecialchars($row['product_name']) ?>"
+                                    data-product-id="<?= htmlspecialchars($row['product_id']) ?>"
+                                >
+                                    <i class="fas fa-plus mr-1"></i> Stock In
+                                </button>
+                            </td>
+                        </tr>
+
                         <?php endwhile; ?>
                     <?php else: ?>
                         <tr>
@@ -249,14 +259,48 @@ while ($sup = $supplier_query->fetch_assoc()) {
         <h3 class="text-lg font-semibold mb-4">Stock In</h3>
         <form action="process_stock_in.php" method="POST" class="space-y-4">
             <input type="hidden" name="product_id" id="modalProductId">
+
+            <!-- Product Name -->
             <div>
                 <label class="block text-sm font-medium mb-1">Product</label>
                 <input type="text" id="modalProductName" class="border p-2 w-full rounded bg-gray-100" readonly>
             </div>
+
+            <!-- Color -->
+            <div>
+                <label class="block text-sm font-medium mb-1">Color</label>
+                <select name="color_id" class="border w-full p-2 rounded" required>
+                    <option value="">Select Color</option>
+                    <?php
+                    $colors = $conn->query("SELECT color_id, color FROM colors ORDER BY color ASC");
+                    while ($c = $colors->fetch_assoc()):
+                    ?>
+                        <option value="<?= $c['color_id'] ?>"><?= htmlspecialchars($c['color']) ?></option>
+                    <?php endwhile; ?>
+                </select>
+            </div>
+
+            <!-- Size -->
+            <div>
+                <label class="block text-sm font-medium mb-1">Size</label>
+                <select name="size_id" class="border w-full p-2 rounded" required>
+                    <option value="">Select Size</option>
+                    <?php
+                    $sizes = $conn->query("SELECT size_id, size FROM sizes ORDER BY size ASC");
+                    while ($s = $sizes->fetch_assoc()):
+                    ?>
+                        <option value="<?= $s['size_id'] ?>"><?= htmlspecialchars($s['size']) ?></option>
+                    <?php endwhile; ?>
+                </select>
+            </div>
+
+            <!-- Quantity -->
             <div>
                 <label class="block text-sm font-medium mb-1">Quantity</label>
                 <input type="number" name="quantity" min="1" class="border p-2 w-full rounded" required>
             </div>
+
+            <!-- Supplier -->
             <div>
                 <label class="block text-sm font-medium mb-1">Supplier</label>
                 <select name="supplier_id" class="border w-full p-2 rounded" required>
@@ -266,6 +310,8 @@ while ($sup = $supplier_query->fetch_assoc()) {
                     <?php endforeach; ?>
                 </select>
             </div>
+
+            <!-- Actions -->
             <div class="flex justify-end space-x-2">
                 <button type="button" id="closeModal" class="bg-gray-300 px-4 py-2 rounded">Cancel</button>
                 <button type="submit" class="bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded">Save</button>
@@ -273,6 +319,7 @@ while ($sup = $supplier_query->fetch_assoc()) {
         </form>
     </div>
 </div>
+
 
 <script>
 // Show modal

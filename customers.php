@@ -137,7 +137,6 @@
 
       <li class="px-4 py-2 hover:bg-gray-100 transition"><a href="orders.php" class="flex items-center"><i class="fas fa-shopping-cart mr-2"></i>Orders</a></li>
        <li class="px-4 py-2 hover:bg-gray-200"><a href="suppliers.php" class="flex items-center"><i class="fas fa-industry mr-2"></i>Suppliers</a></li>
-      <li class="px-4 py-2 hover:bg-gray-100 transition"><a href="payandtransac.php" class="flex items-center"><i class="fas fa-money-check-alt mr-2"></i>Payment & Transactions</a></li>
       <li class="px-4 py-2 hover:bg-gray-100 transition"><a href="storesettings.php" class="flex items-center"><i class="fas fa-cog mr-2"></i>Store Settings</a></li>
       <li class="px-4 py-2 hover:bg-gray-100 transition"><a href="logout.php" class="flex items-center"><i class="fas fa-sign-out-alt mr-2"></i>Log out</a></li>
     </ul>

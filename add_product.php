@@ -217,19 +217,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             </div>
 
         
-                <!-- Sizes -->
-<div>
-    <h3 class="text-lg font-semibold text-gray-800 border-b pb-2 mb-4">Add Sizes</h3>
-    <input type="text" name="sizes_input" placeholder="Enter sizes separated by commas (e.g., S, M, L)" 
-        class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:ring-pink-500 focus:border-pink-500">
-</div>
-
-<!-- Colors -->
-<div>
-    <h3 class="text-lg font-semibold text-gray-800 border-b pb-2 mb-4">Add Colors</h3>
-    <input type="text" name="colors_input" placeholder="Enter colors separated by commas (e.g., Red, Blue, Green)" 
-        class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:ring-pink-500 focus:border-pink-500">
-</div>
 
 
             <!-- Actions -->

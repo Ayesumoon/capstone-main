@@ -32,6 +32,24 @@ if ($admin_id) {
     }
 }
 
+
+// Get search term from query string
+$search = isset($_GET['search']) ? trim($_GET['search']) : "";
+
+// Fetch categories with optional search filter
+if ($search !== "") {
+    $query = "SELECT * FROM categories WHERE category_name LIKE ? OR category_code LIKE ?";
+    $stmt = $conn->prepare($query);
+    $like = "%" . $search . "%";
+    $stmt->bind_param("ss", $like, $like);
+    $stmt->execute();
+    $result = $stmt->get_result();
+} else {
+    $query = "SELECT * FROM categories";
+    $result = $conn->query($query);
+}
+
+
 ?>
 
 
@@ -108,7 +126,6 @@ if ($admin_id) {
 
         <li class="px-4 py-2 hover:bg-gray-200"><a href="orders.php" class="flex items-center"><i class="fas fa-shopping-cart mr-2"></i>Orders</a></li>
         <li class="px-4 py-2 hover:bg-gray-200"><a href="suppliers.php" class="flex items-center"><i class="fas fa-industry mr-2"></i>Suppliers</a></li>
-        <li class="px-4 py-2 hover:bg-gray-200"><a href="payandtransac.php" class="flex items-center"><i class="fas fa-money-check-alt mr-2"></i>Payment & Transactions</a></li>
         <li class="px-4 py-2 hover:bg-gray-200"><a href="storesettings.php" class="flex items-center"><i class="fas fa-cog mr-2"></i>Store Settings</a></li>
         <li class="px-4 py-2 hover:bg-gray-200"><a href="logout.php" class="flex items-center"><i class="fas fa-sign-out-alt mr-2"></i>Log out</a></li>
       </ul>
@@ -137,12 +154,23 @@ if ($admin_id) {
     <div class="bg-white rounded-md shadow-sm p-4 overflow-x-auto">
       <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 gap-4 sm:gap-0">
         <div class="flex items-center gap-2 text-sm text-gray-700">
-          <label for="search" class="whitespace-nowrap">Search:</label>
-          <input
-            id="search"
-            type="text"
-            class="border border-gray-300 rounded-md text-gray-700 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 px-2 py-1"
-          />
+          <form method="GET" class="flex items-center gap-2 text-sm text-gray-700">
+  <label for="search" class="whitespace-nowrap">Search:</label>
+  <input
+    id="search"
+    name="search"
+    type="text"
+    value="<?php echo htmlspecialchars($search); ?>"
+    class="border border-gray-300 rounded-md text-gray-700 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 px-2 py-1"
+  />
+  <button
+    type="submit"
+    class="ml-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded text-sm"
+  >
+    Search
+  </button>
+</form>
+
         </div>
       </div>
 
