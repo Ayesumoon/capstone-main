@@ -8,13 +8,35 @@ if (!isset($_SESSION['admin_id']) || $_SESSION['role_id'] != 1) {
     exit();
 }
 
+// ✅ Helper function for role names
+function getRoleName($role_id) {
+    switch ($role_id) {
+        case 1: return 'Super Admin';
+        case 2: return 'Admin';
+        case 3: return 'Cashier';
+        default: return 'Unknown';
+    }
+}
+
 // ✅ Fetch login/logout logs
-$loginLogs = $conn->query("SELECT admin_id, username, last_logged_in, last_logged_out 
-                           FROM adminusers ORDER BY last_logged_in DESC");
+$loginLogs = $conn->query("
+    SELECT admin_id, username, role_id, last_logged_in, last_logged_out 
+    FROM adminusers 
+    ORDER BY last_logged_in DESC
+");
+if (!$loginLogs) {
+    die("Error fetching login logs: " . $conn->error);
+}
 
 // ✅ Fetch activity logs
-$actionLogs = $conn->query("SELECT log_id, user_id, username, role_id, action, created_at 
-                            FROM system_logs ORDER BY created_at DESC");
+$actionLogs = $conn->query("
+    SELECT log_id, user_id, username, role_id, action, created_at 
+    FROM system_logs 
+    ORDER BY created_at DESC
+");
+if (!$actionLogs) {
+    die("Error fetching action logs: " . $conn->error);
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -67,6 +89,7 @@ $actionLogs = $conn->query("SELECT log_id, user_id, username, role_id, action, c
             <tr>
               <th class="px-4 py-2 text-left">User ID</th>
               <th class="px-4 py-2 text-left">Username</th>
+              <th class="px-4 py-2 text-left">Role</th>
               <th class="px-4 py-2 text-left">Last Login</th>
               <th class="px-4 py-2 text-left">Last Logout</th>
             </tr>
@@ -76,6 +99,7 @@ $actionLogs = $conn->query("SELECT log_id, user_id, username, role_id, action, c
               <tr class="hover:bg-gray-50 transition">
                 <td class="px-4 py-2"><?= $row['admin_id']; ?></td>
                 <td class="px-4 py-2"><?= htmlspecialchars($row['username']); ?></td>
+                <td class="px-4 py-2"><?= getRoleName($row['role_id']); ?></td>
                 <td class="px-4 py-2 text-sm"><?= $row['last_logged_in'] ?? '—'; ?></td>
                 <td class="px-4 py-2 text-sm"><?= $row['last_logged_out'] ?? '—'; ?></td>
               </tr>
@@ -106,7 +130,7 @@ $actionLogs = $conn->query("SELECT log_id, user_id, username, role_id, action, c
                 <td class="px-4 py-2"><?= $row['log_id']; ?></td>
                 <td class="px-4 py-2"><?= $row['user_id']; ?></td>
                 <td class="px-4 py-2"><?= htmlspecialchars($row['username']); ?></td>
-                <td class="px-4 py-2"><?= ($row['role_id'] == 1) ? 'Super Admin' : 'Admin'; ?></td>
+                <td class="px-4 py-2"><?= getRoleName($row['role_id']); ?></td>
                 <td class="px-4 py-2 text-sm"><?= htmlspecialchars($row['action']); ?></td>
                 <td class="px-4 py-2 text-sm"><?= $row['created_at']; ?></td>
               </tr>

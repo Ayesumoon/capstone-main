@@ -50,7 +50,7 @@ $admin = $conn->query("SELECT first_name, last_name FROM adminusers WHERE admin_
       <a href="logs.php" class="block px-4 py-2 rounded-lg hover:bg-pink-500">📜 Logs</a>
     </nav>
     <div class="px-6 py-4 border-t border-pink-500">
-      <a href="logout.php" class="w-full inline-block text-center bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg font-medium">
+      <a href="superadmin_logout.php" class="w-full inline-block text-center bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg font-medium">
         🚪 Logout
       </a>
     </div>
