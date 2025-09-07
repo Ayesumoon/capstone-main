@@ -1,6 +1,32 @@
 <?php
 require 'conn.php';
 $suppliers = $conn->query("SELECT * FROM suppliers");
+
+
+$admin_id = $_SESSION['admin_id'] ?? null;
+$admin_name = "Admin";
+$admin_role = "Admin";
+
+// Get admin info
+if ($admin_id) {
+    $query = "
+        SELECT 
+            CONCAT(first_name, ' ', last_name) AS full_name, 
+            r.role_name 
+        FROM adminusers a
+        LEFT JOIN roles r ON a.role_id = r.role_id
+        WHERE a.admin_id = ?
+    ";
+    $stmt = $conn->prepare($query);
+    $stmt->bind_param("i", $admin_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    if ($row = $result->fetch_assoc()) {
+        $admin_name = $row['full_name'];
+        $admin_role = $row['role_name'] ?? 'Admin';
+    }
+}
+
 ?>
 
 
@@ -41,8 +67,8 @@ $suppliers = $conn->query("SELECT * FROM suppliers");
       <div class="mt-4 flex items-center space-x-4">
         <img src="newID.jpg" alt="Admin" class="rounded-full w-10 h-10" />
         <div>
-          <h3 class="text-sm font-semibold">Admin Name</h3>
-          <p class="text-xs text-gray-500">Administrator</p>
+          <h3 class="text-sm font-medium"><?php echo htmlspecialchars($admin_name); ?></h3>
+          <p class="text-xs text-gray-500"><?php echo htmlspecialchars($admin_role); ?></p>
         </div>
       </div>
     </div>
@@ -90,10 +116,6 @@ $suppliers = $conn->query("SELECT * FROM suppliers");
             <i class="fas fa-industry mr-2"></i>Suppliers
           </a>
         </li>
-        <li class="px-4 py-2 hover:bg-gray-200">
-          <a href="payandtransac.php" class="flex items-center">
-            <i class="fas fa-money-check-alt mr-2"></i>Payment & Transactions
-          </a>
         <li class="px-4 py-2 hover:bg-gray-200">
           <a href="storesettings.php" class="flex items-center">
             <i class="fas fa-cog mr-2"></i>Store Settings
@@ -381,22 +403,6 @@ if ($result->num_rows > 0):
 </tbody>
 
      </table>
-    </div>
-    <div class="flex flex-col sm:flex-row justify-between items-center mt-4 text-xs text-gray-700 font-normal">
-     <div class="mb-2 sm:mb-0">
-      Showing 1 to 6 of 6 entries
-     </div>
-     <nav aria-label="Pagination" class="inline-flex rounded-md shadow-sm" role="navigation">
-      <button aria-label="Previous page" class="rounded-l-md bg-indigo-100 text-indigo-600 px-4 py-2 font-medium hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-       Previous
-      </button>
-      <button aria-current="page" aria-label="Page 1" class="bg-indigo-700 text-white px-4 py-2 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500">
-       1
-      </button>
-      <button aria-label="Next page" class="rounded-r-md bg-indigo-100 text-indigo-600 px-4 py-2 font-medium hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-       Next
-      </button>
-     </nav>
     </div>
    </div>
   </div>

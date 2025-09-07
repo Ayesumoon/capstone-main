@@ -9,22 +9,24 @@ if (!isset($_SESSION['admin_id'])) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $product_id  = intval($_POST['product_id']);
+    $color_id    = intval($_POST['color_id']);
+    $size_id     = intval($_POST['size_id']);
     $quantity    = intval($_POST['quantity']);
     $supplier_id = intval($_POST['supplier_id']);
 
     // Validate inputs
-    if ($product_id <= 0 || $quantity <= 0 || $supplier_id <= 0) {
+    if ($product_id <= 0 || $color_id <= 0 || $size_id <= 0 || $quantity <= 0 || $supplier_id <= 0) {
         die("Invalid input.");
     }
 
-    // 1️⃣ Check if stock entry exists for this product
+    // 1️⃣ Check if stock entry exists for this product + color + size
     $checkStock = $conn->prepare("
         SELECT stock_id, current_qty 
         FROM stock 
-        WHERE product_id = ? 
+        WHERE product_id = ? AND color_id = ? AND size_id = ?
         LIMIT 1
     ");
-    $checkStock->bind_param("i", $product_id);
+    $checkStock->bind_param("iii", $product_id, $color_id, $size_id);
     $checkStock->execute();
     $result = $checkStock->get_result();
 
@@ -42,12 +44,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $updateStock->execute();
         $updateStock->close();
     } else {
-        // 3️⃣ Insert a new stock record
+        // 3️⃣ Insert a new stock record for this variant
         $insertStock = $conn->prepare("
-            INSERT INTO stock (product_id, current_qty) 
-            VALUES (?, ?)
+            INSERT INTO stock (product_id, color_id, size_id, current_qty) 
+            VALUES (?, ?, ?, ?)
         ");
-        $insertStock->bind_param("ii", $product_id, $quantity);
+        $insertStock->bind_param("iiii", $product_id, $color_id, $size_id, $quantity);
         $insertStock->execute();
         $stock_id = $insertStock->insert_id;
         $insertStock->close();
@@ -63,7 +65,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $insertStockIn->execute();
     $insertStockIn->close();
 
-    // 5️⃣ Update the products table stock column
+    // ⚠️ 5️⃣ Optional: Remove or adjust product-level stock tracking
+    // If you still want products.stocks to reflect total stock (all variants combined):
     $updateProductStock = $conn->prepare("
         UPDATE products 
         SET stocks = COALESCE(stocks, 0) + ? 

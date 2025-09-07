@@ -209,13 +209,7 @@ while ($row = $chartQuery->fetch_assoc()) {
             <i class="fas fa-industry mr-2"></i>Suppliers
           </a>
         </li>
-      <li class="px-4 py-2 hover:bg-gray-200">
-        <a href="payandtransac.php" class="flex items-center space-x-2">
-          <i class="fas fa-money-check-alt"></i>
-          <span>Payment & Transactions</span>
-        </a>
-      </li>
-
+  
       <li class="px-4 py-2 hover:bg-gray-200">
         <a href="storesettings.php" class="flex items-center space-x-2">
           <i class="fas fa-cog"></i>

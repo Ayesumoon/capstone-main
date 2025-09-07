@@ -47,30 +47,45 @@ if ($resultCategories->num_rows > 0) {
 $selectedCategory = isset($_GET['category']) ? $_GET['category'] : 'all';
 
 // Fetch product inventory data with supplier and category filtering
+// Base query
 $sqlProducts = "
     SELECT 
-        p.product_id, 
-        p.product_name, 
-        c.category_name, 
-        p.stocks, 
+        p.product_id,
+        p.product_name,
+        c.category_name,
+        st.current_qty AS stocks,
         p.price_id,
         p.created_at,
         s.supplier_name,
-        p.supplier_price
+        p.supplier_price,
+        col.color AS color,
+        sz.size AS size
     FROM products p
     INNER JOIN categories c ON p.category_id = c.category_id
     LEFT JOIN suppliers s ON p.supplier_id = s.supplier_id
+    LEFT JOIN stock st ON p.product_id = st.product_id
+    LEFT JOIN product_colors pc ON p.product_id = pc.product_id
+    LEFT JOIN colors col ON pc.color_id = col.color_id
+    LEFT JOIN product_sizes ps ON p.product_id = ps.product_id
+    LEFT JOIN sizes sz ON ps.size_id = sz.size_id
 ";
 
+
+
+// Add category filter if needed
 if ($selectedCategory !== 'all') {
     $sqlProducts .= " WHERE c.category_name = ?";
 }
+
+$sqlProducts .= " ORDER BY p.product_id, col.color, sz.size";
+
 
 $stmt = $conn->prepare($sqlProducts);
 
 if ($selectedCategory !== 'all') {
     $stmt->bind_param("s", $selectedCategory);
 }
+
 
 $stmt->execute();
 $resultProducts = $stmt->get_result();
@@ -179,11 +194,6 @@ $conn->close();
           </a>
         </li>
           <li class="px-4 py-2 hover:bg-gray-200">
-            <a href="payandtransac.php" class="flex items-center">
-              <i class="fas fa-money-check-alt mr-2"></i>Payment & Transactions
-            </a>
-          </li>
-          <li class="px-4 py-2 hover:bg-gray-200">
             <a href="storesettings.php" class="flex items-center">
               <i class="fas fa-cog mr-2"></i>Store Settings
             </a>
@@ -222,6 +232,8 @@ $conn->close();
           <th class="px-4 py-3 border text-left">Product ID</th>
           <th class="px-4 py-3 border text-left">Product Code</th>
           <th class="px-4 py-3 border text-left">Category</th>
+          <th class="px-4 py-3 border text-left">Colors</th>
+          <th class="px-4 py-3 border text-left">Sizes</th>
           <th class="px-4 py-3 border text-left">Created At</th>
           <th class="px-4 py-3 border text-left">Stock</th>
           <th class="px-4 py-3 border text-left">Status</th>
@@ -237,6 +249,8 @@ $conn->close();
           <td class="px-4 py-2 border"><?php echo $item['product_id']; ?></td>
           <td class="px-4 py-2 border"><?php echo $item['product_name']; ?></td>
           <td class="px-4 py-2 border"><?php echo $item['category_name']; ?></td>
+          <td class="px-4 py-2 border"><?php echo $item['color'] ?: '—'; ?></td>
+          <td class="px-4 py-2 border"><?php echo $item['size'] ?: '—'; ?></td>
           <td class="px-4 py-2 border"><?php echo $item['created_at']; ?></td>
           <td class="px-4 py-2 border"><?php echo $item['stocks']; ?></td>
           <td class="px-4 py-2 border font-semibold capitalize <?php echo ($status === 'In Stock') ? 'text-green-600' : (($status === 'Low Stock') ? 'text-yellow-600' : 'text-red-600'); ?>">
