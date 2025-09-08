@@ -2,10 +2,11 @@
 session_start();
 require 'conn.php'; // Include database connection
 
-$admin_id = $_SESSION['admin_id'] ?? null;
+$admin_id   = $_SESSION['admin_id'] ?? null;
 $admin_name = "Admin";
 $admin_role = "Admin";
 
+// 🔹 Fetch admin details if logged in
 if ($admin_id) {
     $query = "
         SELECT 
@@ -26,71 +27,97 @@ if ($admin_id) {
     }
 }
 
-$inventory = [];
+// 🔹 Fetch categories
 $categories = [];
-
-// Fetch categories from the database
-$sqlCategories = "SELECT category_id, category_name FROM categories";
-$resultCategories = $conn->query($sqlCategories);
-
-if ($resultCategories === false) {
-    die("Error in SQL query: " . $conn->error);
+$resultCategories = $conn->query("SELECT category_id, category_name FROM categories ORDER BY category_name ASC");
+while ($row = $resultCategories->fetch_assoc()) {
+    $categories[] = $row;
 }
 
-if ($resultCategories->num_rows > 0) {
-    while ($row = $resultCategories->fetch_assoc()) {
-        $categories[] = $row;
-    }
+// 🔹 Fetch colors
+$colors = [];
+$resultColors = $conn->query("SELECT color_id, color FROM colors ORDER BY color ASC");
+while ($row = $resultColors->fetch_assoc()) {
+    $colors[] = $row;
 }
 
-// Get selected category from the dropdown
-$selectedCategory = isset($_GET['category']) ? $_GET['category'] : 'all';
+// 🔹 Fetch sizes
+$sizes = [];
+$resultSizes = $conn->query("SELECT size_id, size FROM sizes ORDER BY size ASC");
+while ($row = $resultSizes->fetch_assoc()) {
+    $sizes[] = $row;
+}
 
-// Fetch product inventory data with supplier and category filtering
+// 🔹 Selected filters
+$selectedCategory = $_GET['category'] ?? 'all';
+$selectedColor    = $_GET['color'] ?? 'all';
+$selectedSize     = $_GET['size'] ?? 'all';
+
+// 🔹 Build query
 $sqlProducts = "
     SELECT 
         p.product_id,
         p.product_name,
         c.category_name,
         st.current_qty AS stocks,
-        p.price_id,
         p.created_at,
         s.supplier_name,
         p.supplier_price,
-        col.color AS color,
-        sz.size AS size
+        col.color,
+        sz.size
     FROM products p
     INNER JOIN categories c ON p.category_id = c.category_id
     LEFT JOIN suppliers s ON p.supplier_id = s.supplier_id
-    LEFT JOIN stock st ON p.product_id = st.product_id
     LEFT JOIN product_colors pc ON p.product_id = pc.product_id
     LEFT JOIN colors col ON pc.color_id = col.color_id
     LEFT JOIN product_sizes ps ON p.product_id = ps.product_id
     LEFT JOIN sizes sz ON ps.size_id = sz.size_id
+    LEFT JOIN stock st 
+        ON p.product_id = st.product_id
+        AND pc.color_id = st.color_id
+        AND ps.size_id = st.size_id
 ";
 
+// 🔹 Dynamic WHERE filters
+$where  = [];
+$params = [];
+$types  = "";
 
 if ($selectedCategory !== 'all') {
-    $sqlProducts .= " WHERE c.category_name = ?";
+    $where[] = "c.category_name = ?";
+    $params[] = $selectedCategory;
+    $types   .= "s";
+}
+if ($selectedColor !== 'all') {
+    $where[] = "col.color = ?";
+    $params[] = $selectedColor;
+    $types   .= "s";
+}
+if ($selectedSize !== 'all') {
+    $where[] = "sz.size = ?";
+    $params[] = $selectedSize;
+    $types   .= "s";
+}
+
+if ($where) {
+    $sqlProducts .= " WHERE " . implode(" AND ", $where);
 }
 
 $sqlProducts .= " ORDER BY p.product_id, col.color, sz.size";
 
-
+// 🔹 Execute query
 $stmt = $conn->prepare($sqlProducts);
 
-if ($selectedCategory !== 'all') {
-    $stmt->bind_param("s", $selectedCategory);
+if (!empty($params)) {
+    $stmt->bind_param($types, ...$params);
 }
 
 $stmt->execute();
 $resultProducts = $stmt->get_result();
 
-if ($resultProducts === false) {
-    die("Error in SQL query: " . $conn->error);
-}
-
-if ($resultProducts->num_rows > 0) {
+// 🔹 Collect inventory
+$inventory = [];
+if ($resultProducts && $resultProducts->num_rows > 0) {
     while ($row = $resultProducts->fetch_assoc()) {
         $inventory[] = $row;
     }
@@ -99,6 +126,7 @@ if ($resultProducts->num_rows > 0) {
 $stmt->close();
 $conn->close();
 ?>
+
 
 <!DOCTYPE html>
 <html lang="en">
@@ -209,25 +237,61 @@ $conn->close();
     <h1 class="text-xl font-bold">Inventory Management</h1>
   </div>
   <div class="bg-white p-4 rounded-b shadow-md mb-6">
-    <form method="GET" action="inventory.php" class="flex items-center gap-2">
+  <form method="GET" action="inventory.php" class="flex flex-wrap items-center gap-4">
+    
+    <!-- Category Filter -->
+    <div>
       <label for="category" class="font-medium text-sm">Category:</label>
       <select name="category" id="category" onchange="this.form.submit()" class="border rounded-md p-2 text-sm">
         <option value="all">All</option>
         <?php foreach ($categories as $category) { ?>
-          <option value="<?php echo $category['category_name']; ?>" <?php echo ($selectedCategory == $category['category_name']) ? 'selected' : ''; ?>>
+          <option value="<?php echo $category['category_name']; ?>" 
+            <?php echo ($selectedCategory == $category['category_name']) ? 'selected' : ''; ?>>
             <?php echo $category['category_name']; ?>
           </option>
         <?php } ?>
       </select>
-    </form>
-  </div>
+    </div>
+
+    <!-- Color Filter -->
+    <div>
+      <label for="color" class="font-medium text-sm">Color:</label>
+      <select name="color" id="color" onchange="this.form.submit()" class="border rounded-md p-2 text-sm">
+        <option value="all">All</option>
+        <?php foreach ($colors as $color) { ?>
+          <option value="<?php echo $color['color']; ?>" 
+            <?php echo ($selectedColor == $color['color']) ? 'selected' : ''; ?>>
+            <?php echo $color['color']; ?>
+          </option>
+        <?php } ?>
+      </select>
+    </div>
+
+    <!-- Size Filter -->
+    <div>
+      <label for="size" class="font-medium text-sm">Size:</label>
+      <select name="size" id="size" onchange="this.form.submit()" class="border rounded-md p-2 text-sm">
+        <option value="all">All</option>
+        <?php foreach ($sizes as $size) { ?>
+          <option value="<?php echo $size['size']; ?>" 
+            <?php echo ($selectedSize == $size['size']) ? 'selected' : ''; ?>>
+            <?php echo $size['size']; ?>
+          </option>
+        <?php } ?>
+      </select>
+    </div>
+
+  </form>
+</div>
+
   <div class="overflow-x-auto">
     <table class="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm text-sm">
       <thead class="bg-gray-100 text-gray-700">
         <tr>
-          <th class="px-4 py-3 border text-left">Product ID</th>
           <th class="px-4 py-3 border text-left">Product Code</th>
           <th class="px-4 py-3 border text-left">Category</th>
+          <th class="px-4 py-3 border text-left">Colors</th> 
+          <th class="px-4 py-3 border text-left">Sizes</th>
           <th class="px-4 py-3 border text-left">Created At</th>
           <th class="px-4 py-3 border text-left">Stock</th>
           <th class="px-4 py-3 border text-left">Status</th>
@@ -240,9 +304,10 @@ $conn->close();
             $status = ($item['stocks'] > 20) ? "In Stock" : (($item['stocks'] > 0) ? "Low Stock" : "Out of Stock");
         ?>
         <tr class="hover:bg-gray-50 transition-all">
-          <td class="px-4 py-2 border"><?php echo $item['product_id']; ?></td>
           <td class="px-4 py-2 border"><?php echo $item['product_name']; ?></td>
           <td class="px-4 py-2 border"><?php echo $item['category_name']; ?></td>
+          <td class="px-4 py-2 border"><?php echo $item['color'] ?: '—'; ?></td>
+          <td class="px-4 py-2 border"><?php echo $item['size'] ?: '—'; ?></td>
           <td class="px-4 py-2 border"><?php echo $item['created_at']; ?></td>
           <td class="px-4 py-2 border"><?php echo $item['stocks']; ?></td>
           <td class="px-4 py-2 border font-semibold capitalize <?php echo ($status === 'In Stock') ? 'text-green-600' : (($status === 'Low Stock') ? 'text-yellow-600' : 'text-red-600'); ?>">

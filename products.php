@@ -2,10 +2,11 @@
 session_start();
 require 'conn.php'; // Database connection
 
-$admin_id = $_SESSION['admin_id'] ?? null;
+$admin_id   = $_SESSION['admin_id'] ?? null;
 $admin_name = "Admin";
 $admin_role = "Admin";
 
+// 🔹 Fetch admin details
 if ($admin_id) {
     $query = "
         SELECT 
@@ -27,36 +28,40 @@ if ($admin_id) {
     $adminStmt->close();
 }
 
+// 🔹 Fetch categories
 $categories = [];
-$products = [];
-
-// Fetch categories from the database
-$sqlCategories = "SELECT category_id, category_name FROM categories";
+$sqlCategories = "SELECT category_id, category_name FROM categories ORDER BY category_name ASC";
 $resultCategories = $conn->query($sqlCategories);
-
-if ($resultCategories === false) {
-    die("Error fetching categories: " . $conn->error);
+while ($row = $resultCategories->fetch_assoc()) {
+    $categories[] = $row;
 }
 
-if ($resultCategories->num_rows > 0) {
-    while ($row = $resultCategories->fetch_assoc()) {
-        $categories[] = $row;
-    }
-}
+// 🔹 Selected category filter
+$selectedCategory = $_GET['category'] ?? 'all';
 
-// Get selected category from the dropdown
-$selectedCategory = isset($_GET['category']) ? $_GET['category'] : 'all';
-
-// Fetch products with category filtering
+// 🔹 Fetch products with colors & sizes based on stock
 $sqlProducts = "
-    SELECT p.*, c.category_name 
+    SELECT 
+        p.product_id,
+        p.product_name,
+        p.description,
+        p.image_url,
+        p.price_id,
+        c.category_name,
+        GROUP_CONCAT(DISTINCT col.color ORDER BY col.color SEPARATOR ', ') AS colors,
+        GROUP_CONCAT(DISTINCT sz.size ORDER BY sz.size SEPARATOR ', ') AS sizes
     FROM products p
     LEFT JOIN categories c ON p.category_id = c.category_id
+    LEFT JOIN stock st ON p.product_id = st.product_id
+    LEFT JOIN colors col ON st.color_id = col.color_id
+    LEFT JOIN sizes sz ON st.size_id = sz.size_id
 ";
 
 if ($selectedCategory !== 'all') {
     $sqlProducts .= " WHERE p.category_id = ?";
 }
+
+$sqlProducts .= " GROUP BY p.product_id ORDER BY p.product_id DESC";
 
 $productStmt = $conn->prepare($sqlProducts);
 
@@ -67,14 +72,16 @@ if ($selectedCategory !== 'all') {
 $productStmt->execute();
 $resultProducts = $productStmt->get_result();
 
-if ($resultProducts->num_rows > 0) {
-    while ($row = $resultProducts->fetch_assoc()) {
-        $products[] = $row;
-    }
+$products = [];
+while ($row = $resultProducts->fetch_assoc()) {
+    $products[] = $row;
 }
 
+$productStmt->close();
 $conn->close();
 ?>
+
+
 <!DOCTYPE html>
 <html lang="en">
  <head>
@@ -238,7 +245,6 @@ $conn->close();
             <th class="px-4 py-3 text-left">Image</th>
             <th class="px-4 py-3 text-left">Code</th>
             <th class="px-4 py-3 text-left">Description</th>
-            <th class="px-4 py-3 text-left">Product ID</th>
             <th class="px-4 py-3 text-left">Price</th>
             <th class="px-4 py-3 text-left">Category</th>
             <th class="px-4 py-3 text-left">Actions</th>
@@ -251,8 +257,13 @@ $conn->close();
                 <img src="<?= htmlspecialchars($product['image_url']); ?>" alt="Product" class="w-12 h-12 object-cover rounded-full border shadow-sm" />
               </td>
               <td class="px-4 py-3"><?= htmlspecialchars($product['product_name']); ?></td>
-              <td class="px-4 py-3"><?= htmlspecialchars($product['description']); ?></td>
-              <td class="px-4 py-3"><?= $product['product_id']; ?></td>
+<td class="px-4 py-3">
+  <?= htmlspecialchars($product['description']); ?>
+  <div class="text-xs text-gray-500 mt-1">
+    <strong>Colors:</strong> <?= $product['colors'] ?: '—'; ?><br>
+    <strong>Sizes:</strong> <?= $product['sizes'] ?: '—'; ?>
+  </div>
+</td>
               <td class="px-4 py-3">₱<?= number_format($product['price_id'], 2); ?></td>
               <td class="px-4 py-3"><?= htmlspecialchars($product['category_name']); ?></td>
               <td class="px-4 py-3">
