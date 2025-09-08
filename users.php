@@ -231,9 +231,7 @@ $conn->close();
               <option value="inactive" <?php echo ($status_filter == "inactive") ? 'selected' : ''; ?>>Inactive</option>
             </select>
           </form>
-          <a href="add_user.php" class="bg-pink-300 hover:bg-pink-500 text-white px-5 py-2 rounded-md shadow transition text-sm font-medium">
-            <i class="fas fa-plus mr-2"></i>Add User
-          </a>
+
         </div>
 
         <div class="overflow-x-auto">

@@ -2,23 +2,24 @@
 require 'conn.php'; // Include your database connection file
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    $username   = $_POST['username'];
     $first_name = $_POST['first_name'];
-    $last_name = $_POST['last_name'];
-    $email = $_POST['email'];
-    $phone = $_POST['phone'];
-    $password = password_hash($_POST['password'], PASSWORD_DEFAULT);
-    $address = $_POST['address'];
-    $status_id = 1; // Default to 'Active'
+    $last_name  = $_POST['last_name'];
+    $email      = $_POST['email'];
+    $password   = password_hash($_POST['password'], PASSWORD_DEFAULT);
+    $role_id    = 2; // default role (e.g., normal admin)
+    $status_id  = 1; // default active
 
-    // Insert data into database (include status_id)
-    $sql = "INSERT INTO customers (first_name, last_name, email, phone, password_hash, address, status_id) VALUES (?, ?, ?, ?, ?, ?, ?)";
+    // Insert into adminusers
+    $sql = "INSERT INTO adminusers (username, first_name, last_name, admin_email, password_hash, role_id, status_id) 
+            VALUES (?, ?, ?, ?, ?, ?, ?)";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("ssssssi", $first_name, $last_name, $email, $phone, $password, $address, $status_id);
+    $stmt->bind_param("ssssssi", $username, $first_name, $last_name, $email, $password, $role_id, $status_id);
+
     if ($stmt->execute()) {
-        header("Location: login.php");
+        header("Location: login.php"); // redirect to login
         exit();
-    }
-     else {
+    } else {
         echo "Error: " . $stmt->error;
     }
 
@@ -26,6 +27,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $conn->close();
 }
 ?>
+
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -52,73 +55,58 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <h2 class="text-2xl font-bold text-center text-pink-600 mb-4">Sign Up</h2>
 
     <form method="post" class="space-y-4" onsubmit="return validatePasswords();">
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700">First Name</label>
-          <input type="text" name="first_name" required
-                 class="mt-1 w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-400" />
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700">Last Name</label>
-          <input type="text" name="last_name" required
-                 class="mt-1 w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-400" />
-        </div>
-      </div>
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <div>
+      <label class="block text-sm font-medium text-gray-700">First Name</label>
+      <input type="text" name="first_name" required
+             class="mt-1 w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-pink-400" />
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-gray-700">Last Name</label>
+      <input type="text" name="last_name" required
+             class="mt-1 w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-pink-400" />
+    </div>
+  </div>
 
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Email</label>
-        <input type="email" name="email" required
-               class="mt-1 w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-400" />
-      </div>
+  <div>
+    <label class="block text-sm font-medium text-gray-700">Username</label>
+    <input type="text" name="username" required
+           class="mt-1 w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-pink-400" />
+  </div>
 
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Phone</label>
-        <input type="text" name="phone" required
-               class="mt-1 w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-400" />
-      </div>
+  <div>
+    <label class="block text-sm font-medium text-gray-700">Email</label>
+    <input type="email" name="email" required
+           class="mt-1 w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-pink-400" />
+  </div>
 
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Password</label>
-        <div class="relative">
-          <input type="password" name="password" id="password" required
-                 class="mt-1 w-full px-4 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-400" />
-          <button type="button" onclick="togglePassword('password', this)" 
-                  class="absolute inset-y-0 right-0 px-3 flex items-center text-sm text-gray-500 hover:text-pink-500 focus:outline-none">
-            Show
-          </button>
-        </div>
-      </div>
+  <div>
+    <label class="block text-sm font-medium text-gray-700">Password</label>
+    <input type="password" name="password" id="password" required
+           class="mt-1 w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-pink-400" />
+  </div>
 
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Confirm Password</label>
-        <div class="relative">
-          <input type="password" name="confirm_password" id="confirm_password" required
-                 class="mt-1 w-full px-4 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-400" />
-          <button type="button" onclick="togglePassword('confirm_password', this)" 
-                  class="absolute inset-y-0 right-0 px-3 flex items-center text-sm text-gray-500 hover:text-pink-500 focus:outline-none">
-            Show
-          </button>
-        </div>
-      </div>
+  <div>
+    <label class="block text-sm font-medium text-gray-700">Confirm Password</label>
+    <input type="password" name="confirm_password" id="confirm_password" required
+           class="mt-1 w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-pink-400" />
+  </div>
 
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Address</label>
-        <textarea name="address" required rows="3"
-                  class="mt-1 w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-400"></textarea>
-      </div>
+  <div class="pt-4">
+    <input type="submit" value="Sign Up"
+           class="w-full bg-pink-500 text-white py-2 rounded-md font-semibold hover:bg-pink-600" />
+  </div>
 
-      <div class="pt-4">
-        <input type="submit" value="Sign Up"
-               class="w-full bg-pink-500 text-white py-2 rounded-md font-semibold hover:bg-pink-600 transition-colors" />
-      </div>
-
-      <div class="text-center mt-4">
+<div class="text-center mt-4">
         <p class="text-sm text-gray-600">Already have an account?</p>
         <a href="login.php" class="inline-block mt-2 px-4 py-2 bg-white border border-pink-500 text-pink-600 rounded-md font-semibold hover:bg-pink-50 transition-colors">
           Log In Here
         </a>
       </div>
-    </form>
+
+</form>
+
+
   </div>
 
   <script>

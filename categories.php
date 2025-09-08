@@ -2,35 +2,38 @@
 // Database connection
 require 'conn.php';
 
-// Fetch categories
-$query = "SELECT * FROM categories";
-$result = mysqli_query($conn, $query);
 
+$admin_id   = $_SESSION['admin_id'] ?? null;
+$admin_name = "Admin";
+$admin_role = "Admin";
 
-$admin_id = $_SESSION['admin_id'] ?? null;
-$username = "Admin";
-$role_name = "Admin";
-
+// 🔹 Fetch admin details
 if ($admin_id) {
     $query = "
         SELECT 
-            CONCAT(a.first_name, ' ', a.last_name) AS full_name,
-            r.role_name
+            CONCAT(first_name, ' ', last_name) AS full_name, 
+            r.role_name 
         FROM adminusers a
-        JOIN roles r ON a.role_id = r.role_id
+        LEFT JOIN roles r ON a.role_id = r.role_id
         WHERE a.admin_id = ?
     ";
+    $adminStmt = $conn->prepare($query);
+    $adminStmt->bind_param("i", $admin_id);
+    $adminStmt->execute();
+    $result = $adminStmt->get_result();
 
-    $stmt = mysqli_prepare($conn, $query);
-    mysqli_stmt_bind_param($stmt, 'i', $admin_id);
-    mysqli_stmt_execute($stmt);
-    $result = mysqli_stmt_get_result($stmt);
-
-    if ($row = mysqli_fetch_assoc($result)) {
-        $username = $row['full_name'];
-        $role_name = $row['role_name'];
+    if ($row = $result->fetch_assoc()) {
+        $admin_name = $row['full_name'];
+        $admin_role = $row['role_name'] ?? 'Admin';
     }
+    $adminStmt->close();
 }
+
+
+
+// Fetch categories
+$query = "SELECT * FROM categories";
+$result = mysqli_query($conn, $query);
 
 
 // Get search term from query string
@@ -88,9 +91,9 @@ if ($search !== "") {
       <div class="mt-4 flex items-center space-x-4">
         <img src="newID.jpg" alt="Admin" class="rounded-full w-10 h-10" />
         <div>
-          <h3 class="text-sm font-semibold"><?php echo htmlspecialchars($username); ?></h3>
-          <p class="text-xs text-gray-500"><?php echo htmlspecialchars($role_name); ?></p>
-        </div>
+        <h3 class="text-sm font-semibold"><?php echo htmlspecialchars($admin_name); ?></h3>
+        <p class="text-xs text-gray-500"><?php echo htmlspecialchars($admin_role); ?></p>
+      </div>
       </div>
     </div>
 

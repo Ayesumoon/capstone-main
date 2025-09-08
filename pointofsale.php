@@ -2,14 +2,19 @@
 require 'conn.php';
 session_start();
 
-// Fetch products with stock & price
+// Fetch products with stock, color, size & price
 $query = "
-    SELECT p.product_id, p.product_name, p.price_id AS price, 
-           COALESCE(s.current_qty,0) AS stock, 
-           p.image_url, 
+    SELECT p.product_id, p.product_name, p.price_id AS price,
+           s.stock_id,
+           COALESCE(s.current_qty,0) AS stock,
+           col.color, 
+           sz.size,
+           p.image_url,
            c.category_name
     FROM products p
-    LEFT JOIN stock s ON p.product_id = s.product_id
+    INNER JOIN stock s ON p.product_id = s.product_id
+    LEFT JOIN colors col ON s.color_id = col.color_id
+    LEFT JOIN sizes sz ON s.size_id = sz.size_id
     LEFT JOIN categories c ON p.category_id = c.category_id
 ";
 $products = $conn->query($query);
@@ -20,13 +25,12 @@ $categories = $conn->query("SELECT category_id, category_name FROM categories");
 // Fetch payment methods
 $payments = $conn->query("SELECT * FROM payment_methods");
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Seven Dwarf Boutique - POS</title>
+  <title>Seven Dwarfs Boutique - POS</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
@@ -36,13 +40,6 @@ $payments = $conn->query("SELECT * FROM payment_methods");
     .sidebar::-webkit-scrollbar-track { background: #fff1f2; }
     .sidebar::-webkit-scrollbar-thumb { background-color: #f9a8d4; border-radius: 3px; }
     .product-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(233, 213, 255, 0.3); }
-    .dwarf-red { background-color: #ff6b6b; }
-    .dwarf-orange { background-color: #ffbe76; }
-    .dwarf-yellow { background-color: #f6e58d; }
-    .dwarf-green { background-color: #7bed9f; }
-    .dwarf-blue { background-color: #70a1ff; }
-    .dwarf-indigo { background-color: #5f27cd; }
-    .dwarf-violet { background-color: #a55eea; }
     .active-category { background-color: #f472b6; color: white !important; }
   </style>
 </head>
@@ -57,17 +54,14 @@ $payments = $conn->query("SELECT * FROM payment_methods");
     <div class="sidebar flex-1 overflow-y-auto py-4 px-2">
       <h3 class="px-4 py-2 text-pink-900 font-semibold">Categories</h3>
       <ul class="space-y-1" id="categoryList">
-        <li><a href="#" onclick="filterCategory('all', event)" class="flex items-center px-4 py-2 text-pink-900 hover:bg-pink-200 rounded-lg transition active-category"><span class="mr-2 w-3 h-3 rounded-full bg-pink-500"></span> All</a></li>
-        <li><a href="#" onclick="filterCategory('Blouse', event)" class="flex items-center px-4 py-2 text-pink-900 hover:bg-pink-200 rounded-lg transition"><span class="mr-2 w-3 h-3 rounded-full dwarf-red"></span> Blouse</a></li>
-        <li><a href="#" onclick="filterCategory('Dress', event)" class="flex items-center px-4 py-2 text-pink-900 hover:bg-pink-200 rounded-lg transition"><span class="mr-2 w-3 h-3 rounded-full dwarf-orange"></span> Dress</a></li>
-        <li><a href="#" onclick="filterCategory('Shorts', event)" class="flex items-center px-4 py-2 text-pink-900 hover:bg-pink-200 rounded-lg transition"><span class="mr-2 w-3 h-3 rounded-full dwarf-yellow"></span> Shorts</a></li>
-        <li><a href="#" onclick="filterCategory('Skirt', event)" class="flex items-center px-4 py-2 text-pink-900 hover:bg-pink-200 rounded-lg transition"><span class="mr-2 w-3 h-3 rounded-full dwarf-green"></span> Skirt</a></li>
-        <li><a href="#" onclick="filterCategory('Trouser', event)" class="flex items-center px-4 py-2 text-pink-900 hover:bg-pink-200 rounded-lg transition"><span class="mr-2 w-3 h-3 rounded-full dwarf-blue"></span> Trouser</a></li>
-        <li><a href="#" onclick="filterCategory('Pants', event)" class="flex items-center px-4 py-2 text-pink-900 hover:bg-pink-200 rounded-lg transition"><span class="mr-2 w-3 h-3 rounded-full dwarf-indigo"></span> Pants</a></li>
-        <li><a href="#" onclick="filterCategory('Coordinates', event)" class="flex items-center px-4 py-2 text-pink-900 hover:bg-pink-200 rounded-lg transition"><span class="mr-2 w-3 h-3 rounded-full dwarf-violet"></span> Coordinates</a></li>
-        <li><a href="#" onclick="filterCategory('Shoes', event)" class="flex items-center px-4 py-2 text-pink-900 hover:bg-pink-200 rounded-lg transition"><span class="mr-2 w-3 h-3 rounded-full bg-pink-500"></span> Shoes</a></li>
-        <li><a href="#" onclick="filterCategory('Perfume', event)" class="flex items-center px-4 py-2 text-pink-900 hover:bg-pink-200 rounded-lg transition"><span class="mr-2 w-3 h-3 rounded-full dwarf-red"></span> Perfume</a></li>
-        <li><a href="#" onclick="filterCategory('Bags', event)" class="flex items-center px-4 py-2 text-pink-900 hover:bg-pink-200 rounded-lg transition"><span class="mr-2 w-3 h-3 rounded-full dwarf-yellow"></span> Bags</a></li>
+        <li><a href="#" onclick="filterCategory('all', event)" class="flex items-center px-4 py-2 text-pink-900 hover:bg-pink-200 rounded-lg transition active-category">All</a></li>
+        <?php while($cat = $categories->fetch_assoc()): ?>
+          <li>
+            <a href="#" onclick="filterCategory('<?= strtolower($cat['category_name']) ?>', event)" class="flex items-center px-4 py-2 text-pink-900 hover:bg-pink-200 rounded-lg transition">
+              <span class="mr-2 w-3 h-3 rounded-full bg-pink-400"></span> <?= htmlspecialchars($cat['category_name']) ?>
+            </a>
+          </li>
+        <?php endwhile; ?>
       </ul>
     </div>
   </div>
@@ -82,22 +76,31 @@ $payments = $conn->query("SELECT * FROM payment_methods");
     </div>
 
     <div class="flex-1 overflow-y-auto p-6">
-      <h2 class="text-2xl font-bold text-pink-900 mb-6">Featured Products</h2>
+      <h2 class="text-2xl font-bold text-pink-900 mb-6">Available Products</h2>
       <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6" id="productGrid">
         <?php while($row = $products->fetch_assoc()): ?>
-          <div class="border rounded shadow hover:shadow-lg transform hover:scale-105 transition p-3 text-center product-card animate-fadeInUp"
+          <div class="border rounded shadow hover:shadow-lg transform hover:scale-105 transition p-3 text-center product-card"
             data-name="<?= strtolower($row['product_name']) ?>"
             data-category="<?= strtolower($row['category_name'] ?? 'uncategorized') ?>">
 
             <img src="<?= $row['image_url'] ?? 'placeholder.png' ?>" 
                  alt="<?= htmlspecialchars($row['product_name']) ?>" 
                  class="w-full h-32 object-cover rounded mb-2">
-            
+
             <h3 class="font-semibold"><?= htmlspecialchars($row['product_name']) ?></h3>
             <p class="text-pink-600 font-bold">₱<?= number_format($row['price'],2) ?></p>
             <p class="text-xs text-gray-500">Stock: <?= $row['stock'] ?></p>
+            <p class="text-xs text-gray-500">Color: <?= htmlspecialchars($row['color'] ?? '-') ?></p>
+            <p class="text-xs text-gray-500">Size: <?= htmlspecialchars($row['size'] ?? '-') ?></p>
+
             <button 
-              onclick="addToCart(<?= $row['product_id'] ?>, '<?= $row['product_name'] ?>', <?= $row['price'] ?>)" 
+              onclick="addToCart(
+                <?= $row['stock_id'] ?>, 
+                '<?= addslashes($row['product_name']) ?>', 
+                <?= $row['price'] ?>, 
+                '<?= $row['color'] ?? '-' ?>', 
+                '<?= $row['size'] ?? '-' ?>'
+              )" 
               class="bg-pink-500 hover:bg-pink-600 text-white px-3 py-1 rounded mt-2 w-full transform transition hover:scale-105">
               Add
             </button>
@@ -153,12 +156,12 @@ $payments = $conn->query("SELECT * FROM payment_methods");
 let cart = [];
 
 // Add item
-function addToCart(id, name, price) {
-  let item = cart.find(p => p.id === id);
+function addToCart(stock_id, name, price, color, size) {
+  let item = cart.find(p => p.stock_id === stock_id);
   if (item) {
     item.qty++;
   } else {
-    cart.push({id, name, price, qty: 1});
+    cart.push({stock_id, name, price, color, size, qty: 1});
   }
   renderCart();
 }
@@ -180,8 +183,9 @@ function renderCart() {
       subtotal += item.price * item.qty;
       cartDiv.innerHTML += `
         <div class="flex justify-between items-center border-b py-2 px-2 rounded-md bg-gray-50">
-          <div>
+          <div class="text-left">
             <p class="font-semibold text-gray-800">${item.name}</p>
+            <p class="text-xs text-gray-500">Color: ${item.color} | Size: ${item.size}</p>
             <p class="text-xs text-gray-500">x${item.qty}</p>
           </div>
           <div class="flex items-center space-x-2">
@@ -209,7 +213,7 @@ function filterCategory(category, e) {
     p.style.display = (category==="all"||prodCategory===category) ? "block" : "none";
   });
   document.querySelectorAll("#categoryList a").forEach(l => l.classList.remove("active-category"));
-  if (e) e.target.classList.add("active-category");
+  if (e) e.currentTarget.classList.add("active-category");
 }
 
 // Search filter

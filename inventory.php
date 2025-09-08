@@ -59,7 +59,7 @@ $sqlProducts = "
         p.product_id,
         p.product_name,
         c.category_name,
-        st.current_qty AS stocks,
+        COALESCE(stocks.total_in, 0) - COALESCE(sales.total_sold, 0) AS stocks,
         p.created_at,
         s.supplier_name,
         p.supplier_price,
@@ -68,15 +68,43 @@ $sqlProducts = "
     FROM products p
     INNER JOIN categories c ON p.category_id = c.category_id
     LEFT JOIN suppliers s ON p.supplier_id = s.supplier_id
-    LEFT JOIN product_colors pc ON p.product_id = pc.product_id
-    LEFT JOIN colors col ON pc.color_id = col.color_id
-    LEFT JOIN product_sizes ps ON p.product_id = ps.product_id
-    LEFT JOIN sizes sz ON ps.size_id = sz.size_id
-    LEFT JOIN stock st 
-        ON p.product_id = st.product_id
-        AND pc.color_id = st.color_id
-        AND ps.size_id = st.size_id
+    
+    -- ✅ Start from stock instead of forcing product_colors/product_sizes
+    LEFT JOIN stock st_main ON p.product_id = st_main.product_id
+    LEFT JOIN colors col ON st_main.color_id = col.color_id
+    LEFT JOIN sizes sz ON st_main.size_id = sz.size_id
+    
+    -- 🔹 Stock-in totals
+    LEFT JOIN (
+        SELECT 
+            st.product_id,
+            st.color_id,
+            st.size_id,
+            SUM(si.quantity) AS total_in
+        FROM stock_in si
+        INNER JOIN stock st ON si.stock_id = st.stock_id
+        GROUP BY st.product_id, st.color_id, st.size_id
+    ) stocks 
+        ON p.product_id = stocks.product_id
+        AND st_main.color_id = stocks.color_id
+        AND st_main.size_id = stocks.size_id
+    
+    -- 🔹 Sales totals
+    LEFT JOIN (
+        SELECT 
+            st.product_id,
+            st.color_id,
+            st.size_id,
+            SUM(oi.qty) AS total_sold
+        FROM order_items oi
+        INNER JOIN stock st ON oi.stock_id = st.stock_id
+        GROUP BY st.product_id, st.color_id, st.size_id
+    ) sales
+        ON p.product_id = sales.product_id
+        AND st_main.color_id = sales.color_id
+        AND st_main.size_id = sales.size_id
 ";
+
 
 // 🔹 Dynamic WHERE filters
 $where  = [];
