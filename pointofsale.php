@@ -24,6 +24,28 @@ $categories = $conn->query("SELECT category_id, category_name FROM categories");
 
 // Fetch payment methods
 $payments = $conn->query("SELECT * FROM payment_methods");
+
+// Group products
+$productsArr = [];
+while ($row = $products->fetch_assoc()) {
+  $pid = $row['product_id'];
+  if (!isset($productsArr[$pid])) {
+    $productsArr[$pid] = [
+      'id' => $pid,
+      'name' => $row['product_name'],
+      'price' => $row['price'],
+      'image' => $row['image_url'],
+      'category' => $row['category_name'],
+      'stocks' => []
+    ];
+  }
+  $productsArr[$pid]['stocks'][] = [
+    'stock_id' => $row['stock_id'],
+    'color' => $row['color'] ?? '-',
+    'size' => $row['size'] ?? '-',
+    'qty' => $row['stock']
+  ];
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -78,34 +100,51 @@ $payments = $conn->query("SELECT * FROM payment_methods");
     <div class="flex-1 overflow-y-auto p-6">
       <h2 class="text-2xl font-bold text-pink-900 mb-6">Available Products</h2>
       <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6" id="productGrid">
-        <?php while($row = $products->fetch_assoc()): ?>
+        <?php foreach($productsArr as $product): ?>
           <div class="border rounded shadow hover:shadow-lg transform hover:scale-105 transition p-3 text-center product-card"
-            data-name="<?= strtolower($row['product_name']) ?>"
-            data-category="<?= strtolower($row['category_name'] ?? 'uncategorized') ?>">
+            data-name="<?= strtolower($product['name']) ?>"
+            data-category="<?= strtolower($product['category'] ?? 'uncategorized') ?>">
 
-            <img src="<?= $row['image_url'] ?? 'placeholder.png' ?>" 
-                 alt="<?= htmlspecialchars($row['product_name']) ?>" 
+            <img src="<?= $product['image'] ?? 'placeholder.png' ?>" 
+                 alt="<?= htmlspecialchars($product['name']) ?>" 
                  class="w-full h-32 object-cover rounded mb-2">
 
-            <h3 class="font-semibold"><?= htmlspecialchars($row['product_name']) ?></h3>
-            <p class="text-pink-600 font-bold">₱<?= number_format($row['price'],2) ?></p>
-            <p class="text-xs text-gray-500">Stock: <?= $row['stock'] ?></p>
-            <p class="text-xs text-gray-500">Color: <?= htmlspecialchars($row['color'] ?? '-') ?></p>
-            <p class="text-xs text-gray-500">Size: <?= htmlspecialchars($row['size'] ?? '-') ?></p>
+            <h3 class="font-semibold"><?= htmlspecialchars($product['name']) ?></h3>
+            <p class="text-pink-600 font-bold">₱<?= number_format($product['price'],2) ?></p>
+
+            <!-- Size Dropdown -->
+            <div class="mt-2">
+              <label class="block text-xs text-gray-500">Size</label>
+              <select class="w-full border rounded p-1 text-sm size-select">
+                <option value="">Select size</option>
+                <?php 
+                  $sizes = array_unique(array_column($product['stocks'], 'size'));
+                  foreach($sizes as $size): ?>
+                    <option value="<?= htmlspecialchars($size) ?>"><?= htmlspecialchars($size) ?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+
+            <!-- Color Dropdown -->
+            <div class="mt-2">
+              <label class="block text-xs text-gray-500">Color</label>
+              <select class="w-full border rounded p-1 text-sm color-select">
+                <option value="">Select color</option>
+                <?php 
+                  $colors = array_unique(array_column($product['stocks'], 'color'));
+                  foreach($colors as $color): ?>
+                    <option value="<?= htmlspecialchars($color) ?>"><?= htmlspecialchars($color) ?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
 
             <button 
-              onclick="addToCart(
-                <?= $row['stock_id'] ?>, 
-                '<?= addslashes($row['product_name']) ?>', 
-                <?= $row['price'] ?>, 
-                '<?= $row['color'] ?? '-' ?>', 
-                '<?= $row['size'] ?? '-' ?>'
-              )" 
-              class="bg-pink-500 hover:bg-pink-600 text-white px-3 py-1 rounded mt-2 w-full transform transition hover:scale-105">
+              onclick="addVariantToCart(<?= $product['id'] ?>, '<?= addslashes($product['name']) ?>', <?= $product['price'] ?>, this)" 
+              class="bg-pink-500 hover:bg-pink-600 text-white px-3 py-1 rounded mt-3 w-full transform transition hover:scale-105">
               Add
             </button>
           </div>
-        <?php endwhile; ?>
+        <?php endforeach; ?>
       </div>
     </div>
   </div>
@@ -155,7 +194,24 @@ $payments = $conn->query("SELECT * FROM payment_methods");
 <script>
 let cart = [];
 
-// Add item
+// Add variant with size & color
+function addVariantToCart(pid, name, price, btn) {
+  const card = btn.closest(".product-card");
+  const size = card.querySelector(".size-select").value;
+  const color = card.querySelector(".color-select").value;
+
+  if (!size || !color) {
+    alert("Please select both size and color.");
+    return;
+  }
+
+  // Use composite ID (pid + size + color) if no direct stock_id lookup
+  const stock_id = pid + "-" + size + "-" + color;
+
+  addToCart(stock_id, name, price, color, size);
+}
+
+// Add item to cart
 function addToCart(stock_id, name, price, color, size) {
   let item = cart.find(p => p.stock_id === stock_id);
   if (item) {
