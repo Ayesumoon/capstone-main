@@ -64,8 +64,8 @@ $isLoggedIn = isset($_SESSION['customer_id']); // Adjust if you're using a diffe
     <ul class="flex flex-wrap justify-center space-x-4 text-sm md:text-base">
       <li><a href="homepage.php" class="bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-full transition">Home</a></li>
       <li><a href="shop.php" class="hover:text-pink-500">Shop</a></li>
-      <li><a href="about.php" class="hover:text-pink-500">About</a></li>
-      <li><a href="contact.php" class="hover:text-pink-500">Contact</a></li>
+      <li><a href="about" class="hover:text-pink-500">About</a></li>
+      <li><a href="contact" class="hover:text-pink-500">Contact</a></li>
     </ul>
 
     <!-- Icons -->
@@ -145,6 +145,7 @@ $isLoggedIn = isset($_SESSION['customer_id']); // Adjust if you're using a diffe
     </form>
   </div>
 </div>
+
 
 
 
@@ -272,13 +273,13 @@ $isLoggedIn = isset($_SESSION['customer_id']); // Adjust if you're using a diffe
         <!-- Product 1 -->
         <div class="bg-white rounded-xl overflow-hidden shadow-lg product-card transition duration-300">
           <div class="relative">
-            <img src="https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/e7509efe-d19b-4525-b9e8-60958fa1f875.png" alt="Pastel pink dress with embroidered dwarf hats along the hem and puff sleeves" class="w-full h-80 object-cover">
+            <img src= coords.jpg alt="Pastel pink dress with embroidered dwarf hats along the hem and puff sleeves" class="w-full h-80 object-cover">
             <span class="absolute top-4 right-4 bg-pink-200 text-pink-800 text-xs font-bold px-3 py-1 rounded-full">New</span>
           </div>
           <div class="p-6">
             <div class="flex justify-between items-start mb-2">
               <h3 class="font-bold text-xl">Dwarf Hat Dress</h3>
-              <span class="font-bold text-lg">$68.99</span>
+              <span class="font-bold text-lg"> ₱550</span>
             </div>
             <p class="text-gray-600 mb-4">A charming dress featuring tiny embroidered dwarf hats</p>
             <div class="flex space-x-2 mb-4">
@@ -299,7 +300,7 @@ $isLoggedIn = isset($_SESSION['customer_id']); // Adjust if you're using a diffe
           <div class="p-6">
             <div class="flex justify-between items-start mb-2">
               <h3 class="font-bold text-xl">Dwarf Button Cardigan</h3>
-              <span class="font-bold text-lg">$79.99</span>
+              <span class="font-bold text-lg">₱750</span>
             </div>
             <p class="text-gray-600 mb-4">Cozy cardigan featuring seven special buttons</p>
             <div class="flex space-x-2 mb-4">
@@ -320,7 +321,7 @@ $isLoggedIn = isset($_SESSION['customer_id']); // Adjust if you're using a diffe
           <div class="p-6">
             <div class="flex justify-between items-start mb-2">
               <h3 class="font-bold text-xl">Miner's Overalls</h3>
-              <span class="font-bold text-lg">$89.99</span>
+              <span class="font-bold text-lg">₱89.99</span>
             </div>
             <p class="text-gray-600 mb-4">Authentic-style overalls with seven special pockets</p>
             <div class="flex space-x-2 mb-4">
@@ -435,16 +436,16 @@ $isLoggedIn = isset($_SESSION['customer_id']); // Adjust if you're using a diffe
       <div>
         <h3 class="text-white font-bold mb-4">Contact</h3>
         <address class="not-italic">
-          <p class="mb-2">123 Fairy Tale Lane</p>
-          <p class="mb-2">Storybrooke, ST 12345</p>
-          <p class="mb-2">(555) 123-4567</p>
+          <p class="mb-2"> Rizal Avenue</p>
+          <p class="mb-2">Zone 2</p>
+          <p class="mb-2">Bayamabang,Pangasinan</p>
           <p>hello@sevendwarfsboutique.com</p>
         </address>
       </div>
     </div>
     
     <div class="max-w-7xl mx-auto pt-8 mt-8 border-t border-gray-800 flex flex-col md:flex-row justify-between items-center">
-      <p class="text-sm mb-4 md:mb-0">© 2023 Seven Dwarfs Boutique. All rights reserved.</p>
+      <p class="text-sm mb-4 md:mb-0">© 2024 Seven Dwarfs Boutique. All rights reserved.</p>
       <div class="flex space-x-4">
         <a href="#" class="hover:text-white transition duration-300">
           <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">

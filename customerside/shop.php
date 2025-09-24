@@ -153,8 +153,8 @@ die("Query failed: " . $conn->error);
  <ul class="flex flex-wrap justify-center space-x-4 text-sm md:text-base">
         <li><a href="homepage.php" class="hover:text-pink-500">Home</a></li>
         <li><a href="shop.php" class="bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-full transition">Shop</a></li>
-        <li><a href="about.php" class="hover:text-pink-500">About</a></li>
-        <li><a href="contact.php" class="hover:text-pink-500">Contact</a></li>
+        <li><a href="about" class="hover:text-pink-500">About</a></li>
+        <li><a href="contact" class="hover:text-pink-500">Contact</a></li>
       </ul>
 
       
@@ -279,6 +279,7 @@ die("Query failed: " . $conn->error);
               <h4 class="text-lg font-semibold"><?php echo htmlspecialchars($product['product_name']); ?></h4>
               <p class="text-sm text-gray-600 mt-2"><?php echo htmlspecialchars($product['category_name']); ?></p>
               <p class="font-semibold text-pink-600 mt-2">₱<?php echo number_format($product['price'], 2); ?></p>
+            
             </a>
           </div>
         <?php endwhile; ?>
