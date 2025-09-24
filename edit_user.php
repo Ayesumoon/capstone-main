@@ -12,7 +12,7 @@ if (!isset($_GET['id']) || empty($_GET['id'])) {
 $admin_id = (int) $_GET['id'];
 
 // Fetch user details before editing
-$sql = "SELECT admin_id, username, admin_email, first_name, last_name, role_id, status_id FROM adminusers WHERE admin_id = ?";
+$sql = "SELECT admin_id, username, admin_email, first_name, last_name FROM adminusers WHERE admin_id = ?";
 $stmt = $conn->prepare($sql);
 $stmt->bind_param("i", $admin_id);
 $stmt->execute();
@@ -27,14 +27,6 @@ if ($result->num_rows == 0) {
 $user = $result->fetch_assoc();
 $stmt->close();
 
-// Fetch available roles
-$roles = [];
-$role_query = "SELECT role_id, role_name FROM roles";
-$role_result = $conn->query($role_query);
-while ($row = $role_result->fetch_assoc()) {
-    $roles[] = $row;
-}
-
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $updates = [];
@@ -46,8 +38,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $email = trim($_POST['admin_email']);
     $first_name = trim($_POST['first_name']);
     $last_name = trim($_POST['last_name']);
-    $role_id = (int) $_POST['role_id'];
-    $status_id = (int) $_POST['status_id'];
 
     if (!empty($username) && $username !== $user['username']) {
         $updates[] = "username = ?";
@@ -68,16 +58,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $updates[] = "last_name = ?";
         $params[] = $last_name;
         $types .= "s";
-    }
-    if ($role_id != $user['role_id']) {
-        $updates[] = "role_id = ?";
-        $params[] = $role_id;
-        $types .= "i";
-    }
-    if ($status_id != $user['status_id']) {
-        $updates[] = "status_id = ?";
-        $params[] = $status_id;
-        $types .= "i";
     }
 
     // Handle password change
@@ -195,28 +175,6 @@ $conn->close();
         <label class="block text-gray-700 font-medium mb-1">Confirm Password</label>
         <input type="password" name="confirm_password" 
           class="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-pink-400">
-      </div>
-
-      <!-- Role -->
-      <div>
-        <label class="block text-gray-700 font-medium mb-1">Role</label>
-        <select name="role_id" class="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-pink-400">
-          <?php foreach ($roles as $role) { ?>
-            <option value="<?php echo $role['role_id']; ?>" 
-              <?php echo ($user['role_id'] == $role['role_id']) ? 'selected' : ''; ?>>
-              <?php echo htmlspecialchars($role['role_name']); ?>
-            </option>
-          <?php } ?>
-        </select>
-      </div>
-
-      <!-- Status -->
-      <div>
-        <label class="block text-gray-700 font-medium mb-1">Status</label>
-        <select name="status_id" class="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-pink-400">
-          <option value="1" <?php echo ($user['status_id'] == 1) ? 'selected' : ''; ?>>Active</option>
-          <option value="2" <?php echo ($user['status_id'] == 2) ? 'selected' : ''; ?>>Inactive</option>
-        </select>
       </div>
 
       <!-- Buttons -->

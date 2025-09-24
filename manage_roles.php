@@ -84,7 +84,6 @@ $users = $conn->query($sql);
       <a href="superadmin_dashboard.php" class="block px-4 py-2 rounded-lg hover:bg-pink-500">📊 Dashboard</a>
       <a href="manage_users.php" class="block px-4 py-2 rounded-lg hover:bg-pink-500">👥 Manage Users</a>
       <a href="manage_roles.php" class="block px-4 py-2 rounded-lg bg-pink-700">🔑 Manage Roles</a>
-      <a href="system_settings.php" class="block px-4 py-2 rounded-lg hover:bg-pink-500">⚙️ System Settings</a>
       <a href="logs.php" class="block px-4 py-2 rounded-lg hover:bg-pink-500">📜 Logs</a>
     </nav>
     <div class="px-6 py-4 border-t border-pink-500">

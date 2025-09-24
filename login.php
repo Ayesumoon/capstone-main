@@ -35,11 +35,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $stmtUpdate->execute();
             $stmtUpdate->close();
 
-            // ✅ Redirect based on role
+            // ✅ Redirect based on role_id from `roles` table
             if ($role_id == 1) {
                 header("Location: superadmin_dashboard.php"); // Super Admin
+            } elseif ($role_id == 2) {
+                header("Location: dashboard.php"); // Staff
+            } elseif ($role_id == 3) {
+                header("Location: manager_dashboard.php"); // Manager
+            } elseif ($role_id == 0) {
+                header("Location: pointofsale.php"); // Cashier
             } else {
-                header("Location: dashboard.php"); // Normal Admin/Staff
+                header("Location: dashboard.php"); // Fallback
             }
             exit;
         }

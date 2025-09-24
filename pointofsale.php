@@ -2,6 +2,27 @@
 require 'conn.php';
 session_start();
 
+// ✅ Get logged-in admin info
+$admin_id = $_SESSION["admin_id"] ?? null;
+$username = $_SESSION["username"] ?? null;
+$email = $_SESSION["email"] ?? null;
+$role_id = $_SESSION["role_id"] ?? null;
+$role_name = null;
+
+if ($admin_id) {
+  // Fetch role name for display
+  $stmt = $conn->prepare("SELECT r.role_name 
+                          FROM adminusers a
+                          INNER JOIN roles r ON a.role_id = r.role_id
+                          WHERE a.admin_id = ?");
+  $stmt->bind_param("i", $admin_id);
+  $stmt->execute();
+  $stmt->bind_result($role_name);
+  $stmt->fetch();
+  $stmt->close();
+}
+
+
 // Fetch products with stock, color, size & price
 $query = "
     SELECT p.product_id, p.product_name, p.price_id AS price,
@@ -84,6 +105,7 @@ while ($row = $products->fetch_assoc()) {
             </a>
           </li>
         <?php endwhile; ?>
+        <a href="logout.php" class="ml-3 text-sm text-pink-600 hover:underline">Logout</a>
       </ul>
     </div>
   </div>
@@ -94,7 +116,15 @@ while ($row = $products->fetch_assoc()) {
       <input id="search" type="text" placeholder="Search products..." 
              onkeyup="filterSearch()" 
              class="border-0 focus:ring-2 focus:ring-pink-300 rounded-full bg-pink-50 px-4 py-2 w-64">
-      <div class="w-8 h-8 rounded-full bg-pink-500 flex items-center justify-center text-white font-semibold">JD</div>
+<div class="flex items-center space-x-2">
+  <div class="text-right hidden sm:block">
+    <p class="text-sm font-semibold text-gray-700"><?= htmlspecialchars($username ?? "Guest") ?></p>
+    <p class="text-xs text-gray-500"><?= htmlspecialchars($role_name ?? "Unknown") ?></p>
+  </div>
+  <div class="w-10 h-10 rounded-full bg-pink-500 flex items-center justify-center text-white font-bold">
+    <?= strtoupper(substr($username ?? "U", 0, 2)) ?>
+  </div>
+</div>
     </div>
 
     <div class="flex-1 overflow-y-auto p-6">
