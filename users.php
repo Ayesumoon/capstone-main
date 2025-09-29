@@ -189,28 +189,69 @@ $conn->close();
 
 
           <!-- Other Pages -->
-          <li class="px-4 py-2 hover:bg-gray-100">
-            <a href="orders.php" class="flex items-center">
-              <i class="fas fa-shopping-cart mr-2"></i>Orders
-            </a>
-          </li>
-          </li>
-        <li class="px-4 py-2 hover:bg-gray-200">
-          <a href="suppliers.php" class="flex items-center">
-            <i class="fas fa-industry mr-2"></i>Suppliers
-          </a>
-        </li>
-    
-          <li class="px-4 py-2 hover:bg-gray-100">
-            <a href="storesettings.php" class="flex items-center">
-              <i class="fas fa-cog mr-2"></i>Store Settings
-            </a>
-          </li>
-          <li class="px-4 py-2 hover:bg-gray-100">
-            <a href="logout.php" class="flex items-center">
-              <i class="fas fa-sign-out-alt mr-2"></i>Log out
-            </a>
-          </li>
+          
+<!-- Other Pages -->
+<li class="px-4 py-2 hover:bg-gray-200">
+  <a href="orders.php" class="flex items-center">
+    <i class="fas fa-shopping-cart mr-2"></i>Orders
+  </a>
+</li>
+
+<li class="px-4 py-2 hover:bg-gray-200">
+  <a href="refund_history.php" class="flex items-center">
+    <i class="fas fa-undo-alt mr-2"></i>Refund History
+  </a>
+</li>
+
+<li class="px-4 py-2 hover:bg-gray-200">
+  <a href="suppliers.php" class="flex items-center">
+    <i class="fas fa-industry mr-2"></i>Suppliers
+  </a>
+</li>
+
+<li class="px-4 py-2 hover:bg-gray-200">
+  <a href="storesettings.php" class="flex items-center">
+    <i class="fas fa-cog mr-2"></i>Store Settings
+  </a>
+</li>
+
+<li class="px-4 py-2 hover:bg-gray-200">
+  <a href="logout.php" class="flex items-center">
+    <i class="fas fa-sign-out-alt mr-2"></i>Log out
+  </a>
+</li>
+
+<!-- Other Pages -->
+<li class="px-4 py-2 hover:bg-gray-200">
+  <a href="orders.php" class="flex items-center">
+    <i class="fas fa-shopping-cart mr-2"></i>Orders
+  </a>
+</li>
+
+<li class="px-4 py-2 hover:bg-gray-200">
+  <a href="refund_history.php" class="flex items-center">
+    <i class="fas fa-undo-alt mr-2"></i>Refund History
+  </a>
+</li>
+
+<li class="px-4 py-2 hover:bg-gray-200">
+  <a href="suppliers.php" class="flex items-center">
+    <i class="fas fa-industry mr-2"></i>Suppliers
+  </a>
+</li>
+
+<li class="px-4 py-2 hover:bg-gray-200">
+  <a href="storesettings.php" class="flex items-center">
+    <i class="fas fa-cog mr-2"></i>Store Settings
+  </a>
+</li>
+
+<li class="px-4 py-2 hover:bg-gray-200">
+  <a href="logout.php" class="flex items-center">
+    <i class="fas fa-sign-out-alt mr-2"></i>Log out
+  </a>
+</li>
+
         </ul>
       </nav>
     </div>

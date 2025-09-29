@@ -2,11 +2,11 @@
 session_start();
 require 'conn.php'; // Include database connection
 
-$admin_id = $_SESSION['admin_id'] ?? null;
+$admin_id   = $_SESSION['admin_id'] ?? null;
 $admin_name = "Admin";
 $admin_role = "Admin";
 
-// Get admin info
+// 🔹 Get admin info
 if ($admin_id) {
     $query = "
         SELECT 
@@ -24,21 +24,41 @@ if ($admin_id) {
         $admin_name = $row['full_name'];
         $admin_role = $row['role_name'] ?? 'Admin';
     }
+    $stmt->close();
 }
 
-// Fetch order statuses from the database
+// 🔹 Fetch order statuses for filter dropdown
 $order_status_query = "SELECT * FROM order_status";
-$status_result = $conn->query($order_status_query);
+$status_result      = $conn->query($order_status_query);
 
-// Store all status options
 $status_options = '';
 while ($status_row = $status_result->fetch_assoc()) {
-    $status_options .= "<option value='{$status_row['order_status_id']}'>{$status_row['order_status_name']}</option>";
+    $selected = (($_GET['status'] ?? 'all') == $status_row['order_status_id']) ? "selected" : "";
+    // ✅ Only show the name now
+    $status_options .= "<option value='{$status_row['order_status_id']}' $selected>{$status_row['order_status_name']}</option>";
 }
 
-$orders = [];
 
-// Fetch only admin orders
+// 🔹 Build filter conditions
+$where  = ["o.admin_id IS NOT NULL"];
+$params = [];
+$types  = "";
+
+// Status filter
+if (!empty($_GET['status']) && $_GET['status'] !== 'all') {
+    $where[]   = "o.order_status_id = ?";
+    $params[]  = intval($_GET['status']);
+    $types    .= "i";
+}
+
+// Date filter
+if (!empty($_GET['date'])) {
+    $where[]   = "DATE(o.created_at) = ?";
+    $params[]  = $_GET['date'];
+    $types    .= "s";
+}
+
+// 🔹 Build SQL query with filters
 $sql = "SELECT 
     o.order_id,
     o.admin_id AS order_by_id,
@@ -47,23 +67,34 @@ $sql = "SELECT
     os.order_status_name AS order_status,
     pm.payment_method_name AS payment_method,
     o.created_at
-    FROM orders o
-    LEFT JOIN products p ON o.product_id = p.product_id
-    LEFT JOIN order_status os ON o.order_status_id = os.order_status_id
-    LEFT JOIN payment_methods pm ON o.payment_method_id = pm.payment_method_id
-    WHERE o.admin_id IS NOT NULL";
+FROM orders o
+LEFT JOIN products p ON o.product_id = p.product_id
+LEFT JOIN order_status os ON o.order_status_id = os.order_status_id
+LEFT JOIN payment_methods pm ON o.payment_method_id = pm.payment_method_id
+WHERE " . implode(" AND ", $where) . " 
+ORDER BY o.created_at DESC";
 
-$result = $conn->query($sql);
-if ($result === false) {
-    die("Error in SQL query: " . $conn->error);
+// 🔹 Execute query
+$orders = [];
+$stmt   = $conn->prepare($sql);
+
+if (!empty($params)) {
+    $stmt->bind_param($types, ...$params);
 }
-if ($result->num_rows > 0) {
-    while ($row = $result->fetch_assoc()) {
-        $orders[] = $row;
-    }
+
+$stmt->execute();
+$result = $stmt->get_result();
+
+while ($row = $result->fetch_assoc()) {
+    $orders[] = $row;
 }
+
+$stmt->close();
 $conn->close();
-?><!DOCTYPE html>
+?>
+
+
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -141,6 +172,11 @@ $conn->close();
               <i class="fas fa-shopping-cart mr-2"></i>Orders
             </a>
           </li>
+          <li class="px-4 py-2 hover:bg-gray-200">
+            <a href="refund_history.php" class="flex items-center">
+              <i class="fas fa-undo-alt mr-2"></i>Refund History
+            </a>
+          </li>
         <li class="px-4 py-2 hover:bg-gray-200 ">
           <a href="suppliers.php" class="flex items-center">
             <i class="fas fa-industry mr-2"></i>Suppliers
@@ -168,17 +204,23 @@ $conn->close();
       <h1 class="text-2xl font-semibold">Admin Orders</h1>
     </div>
 
-    <!-- Filters -->
-    <div class="bg-white p-4 rounded-b-2xl shadow-md flex items-center gap-4">
-      <label for="status" class="text-sm font-medium text-gray-700">Status:</label>
-      <select id="status" class="p-2 border rounded focus:ring-pink-500 focus:outline-none text-sm">
-        <option value="all">All</option>
-        <?php echo $status_options; ?>
-      </select>
+ <!-- Filters -->
+<form method="GET" class="bg-white p-4 rounded-b-2xl shadow-md flex items-center gap-4">
+  <!-- Status Filter -->
+  <label for="status" class="text-sm font-medium text-gray-700">Status:</label>
+  <select name="status" id="status" onchange="this.form.submit()" 
+          class="p-2 border rounded focus:ring-pink-500 focus:outline-none text-sm">
+    <option value="all" <?= ($_GET['status'] ?? 'all') === 'all' ? 'selected' : '' ?>>All</option>
+    <?= $status_options ?>
+  </select>
 
-      <label for="date" class="text-sm font-medium text-gray-700">Date:</label>
-      <input type="date" id="date" class="p-2 border rounded focus:ring-pink-500 focus:outline-none text-sm">
-    </div>
+  <!-- Date Filter -->
+  <label for="date" class="text-sm font-medium text-gray-700">Date:</label>
+  <input type="date" name="date" id="date" 
+         value="<?= htmlspecialchars($_GET['date'] ?? '') ?>" 
+         onchange="this.form.submit()" 
+         class="p-2 border rounded focus:ring-pink-500 focus:outline-none text-sm">
+</form>
 
     <!-- Table -->
     <div class="overflow-x-auto">
@@ -192,7 +234,6 @@ $conn->close();
             <th class="px-4 py-3 text-left">Status</th>
             <th class="px-4 py-3 text-left">Payment</th>
             <th class="px-4 py-3 text-left">Date</th>
-            <th class="px-4 py-3 text-left">Actions</th>
           </tr>
         </thead>
         <tbody class="text-gray-700">
@@ -206,10 +247,6 @@ $conn->close();
                 <td class="px-4 py-2 border-b"><?php echo $order['order_status']; ?></td>
                 <td class="px-4 py-2 border-b"><?php echo $order['payment_method']; ?></td>
                 <td class="px-4 py-2 border-b"><?php echo $order['created_at']; ?></td>
-                <td class="px-4 py-2 border-b space-x-2">
-                  <button class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs transition">View</button>
-                  <button class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-xs transition">Update</button>
-                </td>
               </tr>
             <?php }
           } else { ?>

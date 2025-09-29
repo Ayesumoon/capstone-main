@@ -2,6 +2,14 @@
 require 'conn.php';
 session_start();
 
+// 🔹 Get next refund transaction ID (auto-increment preview)
+$next_refund_id = null;
+$res = $conn->query("SHOW TABLE STATUS LIKE 'refunds'"); // adjust table name if it's not `refunds`
+if ($res && $row = $res->fetch_assoc()) {
+    $next_refund_id = $row['Auto_increment']; // next ID that will be assigned
+}
+
+
 // ✅ Get logged-in admin info
 $admin_id = $_SESSION["admin_id"] ?? null;
 $username = $_SESSION["username"] ?? null;
@@ -89,6 +97,50 @@ while ($row = $products->fetch_assoc()) {
 <body class="bg-pink-50">
 <div class="flex h-screen overflow-hidden">
 
+<!-- Refund Modal -->
+<div id="refundModal" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center hidden z-50">
+  <div class="bg-white w-full max-w-md rounded-lg shadow-lg p-6 relative">
+    <button onclick="closeRefundModal()" 
+            class="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-xl font-bold">&times;</button>
+    
+    <h2 class="text-xl font-bold text-pink-600 mb-4">Refund Transaction</h2>
+
+    <form id="refundForm" method="POST" action="process_refund.php" onsubmit="return confirm('Confirm refund?')">
+      <!-- Order ID -->
+      <div class="mb-3">
+        <label class="block font-semibold text-gray-700 mb-1">Order ID</label>
+        <input type="number" name="order_id" id="refundOrderId" 
+               class="border rounded-lg w-full p-2 bg-white" 
+               placeholder="Enter Order ID" required>
+      </div>
+
+      <div class="flex space-x-3 mt-6">
+        <button type="submit" 
+                class="bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-lg w-1/2 shadow-md">
+          Submit Refund
+        </button>
+        <button type="button" onclick="closeRefundModal()" 
+                class="bg-gray-700 hover:bg-gray-800 text-white px-4 py-2 rounded-lg w-1/2 shadow-md">
+          Cancel
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+// Open refund modal
+function openRefundModal() {
+  document.getElementById('refundModal').classList.remove('hidden');
+}
+
+// Close modal
+function closeRefundModal() {
+  document.getElementById('refundModal').classList.add('hidden');
+}
+</script>
+
+
   <!-- Sidebar Categories -->
   <div class="w-64 bg-pink-100 border-r border-pink-200 flex flex-col">
     <div class="p-4 flex items-center justify-center bg-gradient-to-r from-pink-500 to-rose-500">
@@ -141,32 +193,33 @@ while ($row = $products->fetch_assoc()) {
 
             <h3 class="font-semibold"><?= htmlspecialchars($product['name']) ?></h3>
             <p class="text-pink-600 font-bold">₱<?= number_format($product['price'],2) ?></p>
+<!-- Size Dropdown -->
+<div class="mt-2">
+  <label class="block text-xs text-gray-500">Size</label>
+  <select class="w-full border rounded p-1 text-sm size-select">
+    <option value="">Select size</option>
+    <?php 
+      $sizes = array_unique(array_column($product['stocks'], 'size'));
+      foreach($sizes as $size): ?>
+        <option value="<?= htmlspecialchars($size) ?>"><?= htmlspecialchars($size) ?></option>
+    <?php endforeach; ?>
+  </select>
+</div>
 
-            <!-- Size Dropdown -->
-            <div class="mt-2">
-              <label class="block text-xs text-gray-500">Size</label>
-              <select class="w-full border rounded p-1 text-sm size-select">
-                <option value="">Select size</option>
-                <?php 
-                  $sizes = array_unique(array_column($product['stocks'], 'size'));
-                  foreach($sizes as $size): ?>
-                    <option value="<?= htmlspecialchars($size) ?>"><?= htmlspecialchars($size) ?></option>
-                <?php endforeach; ?>
-              </select>
-            </div>
-
-            <!-- Color Dropdown -->
-            <div class="mt-2">
-              <label class="block text-xs text-gray-500">Color</label>
-              <select class="w-full border rounded p-1 text-sm color-select">
-                <option value="">Select color</option>
-                <?php 
-                  $colors = array_unique(array_column($product['stocks'], 'color'));
-                  foreach($colors as $color): ?>
-                    <option value="<?= htmlspecialchars($color) ?>"><?= htmlspecialchars($color) ?></option>
-                <?php endforeach; ?>
-              </select>
-            </div>
+<!-- Color Dropdown -->
+<div class="mt-2">
+  <label class="block text-xs text-gray-500">Color</label>
+  <select class="w-full border rounded p-1 text-sm color-select">
+    <option value="">Select color</option>
+    <?php foreach($product['stocks'] as $variant): ?>
+      <option value="<?= htmlspecialchars($variant['color']) ?>"
+              data-size="<?= htmlspecialchars($variant['size']) ?>"
+              data-stock-id="<?= $variant['stock_id'] ?>">
+        <?= htmlspecialchars($variant['color']) ?>
+      </option>
+    <?php endforeach; ?>
+  </select>
+</div>
 
             <button 
               onclick="addVariantToCart(<?= $product['id'] ?>, '<?= addslashes($product['name']) ?>', <?= $product['price'] ?>, this)" 
@@ -180,66 +233,107 @@ while ($row = $products->fetch_assoc()) {
   </div>
 
   <!-- Shopping Cart -->
-  <div class="w-96 bg-pink-100 shadow-lg rounded-lg overflow-hidden">
-    <div class="bg-pink-500 text-white font-bold text-lg p-3">Shopping Cart</div>
-    <div class="p-4 flex flex-col flex-1 text-center">
-      <div id="emptyMessage" class="py-6">
-        <p class="text-gray-600 font-semibold">Your cart is empty</p>
-        <p class="text-gray-400 text-sm">Add some dwarfly items!</p>
+<div class="w-96 bg-pink-100 shadow-lg rounded-lg overflow-hidden">
+  <div class="bg-pink-500 text-white font-bold text-lg p-3">Shopping Cart</div>
+  <div class="p-4 flex flex-col flex-1 text-center">
+    <div id="emptyMessage" class="py-6">
+      <p class="text-gray-600 font-semibold">Your cart is empty</p>
+      <p class="text-gray-400 text-sm">Add some dwarfly items!</p>
+    </div>
+    <div id="cartTable" class="flex-1 overflow-y-auto mb-4 space-y-2 hidden"></div>
+
+    <!-- Checkout Form -->
+    <form method="POST" action="process_sale.php" target="_blank" onsubmit="return confirm('Proceed to checkout?')">
+      <input type="hidden" name="cart_data" id="cartData">
+      <div class="bg-white rounded-lg shadow p-3 mt-2">
+        <div class="flex justify-between text-gray-700 text-sm">
+          <span class="font-bold">Subtotal:</span>
+          <span id="subtotal">₱0.00</span>
+        </div>
+        <div class="flex justify-between text-lg font-bold text-black border-t pt-2">
+          <span>Total:</span>
+          <span id="total">₱0.00</span>
+        </div>
       </div>
-      <div id="cartTable" class="flex-1 overflow-y-auto mb-4 space-y-2 hidden"></div>
-      <form method="POST" action="process_sale.php" target="_blank" onsubmit="return confirm('Proceed to checkout?')">
-        <input type="hidden" name="cart_data" id="cartData">
-        <div class="bg-white rounded-lg shadow p-3 mt-2">
-          <div class="flex justify-between text-gray-700 text-sm">
-            <span class="font-bold">Subtotal:</span>
-            <span id="subtotal">₱0.00</span>
-          </div>
-          <div class="flex justify-between text-lg font-bold text-black border-t pt-2">
-            <span>Total:</span>
-            <span id="total">₱0.00</span>
-          </div>
-        </div>
-        <div class="mt-4 text-left">
-          <label class="block font-semibold text-gray-700 mb-1">Payment Method</label>
-          <select name="payment_method" class="border rounded-lg w-full p-2 bg-white">
-            <?php while($pm = $payments->fetch_assoc()): ?>
-              <option value="<?= $pm['payment_method_id'] ?>"><?= $pm['payment_method_name'] ?></option>
-            <?php endwhile; ?>
-          </select>
-        </div>
-        <div class="mt-4 text-left">
-          <label class="block font-semibold text-gray-700 mb-1">Cash Given</label>
-          <input type="number" step="0.01" name="cash_given" placeholder="Enter cash amount" class="border rounded-lg w-full p-2 bg-white">
-        </div>
-        <div class="mt-6 flex space-x-3">
-          <button type="submit" class="bg-pink-400 hover:bg-pink-500 text-white px-4 py-2 rounded-lg w-1/2 shadow-md">Checkout</button>
-          <button type="button" onclick="clearCart()" class="bg-gray-700 hover:bg-gray-800 text-white px-4 py-2 rounded-lg w-1/2 shadow-md">Clear</button>
-        </div>
-      </form>
+      <div class="mt-4 text-left">
+        <label class="block font-semibold text-gray-700 mb-1">Payment Method</label>
+        <select name="payment_method" class="border rounded-lg w-full p-2 bg-white">
+          <?php while($pm = $payments->fetch_assoc()): ?>
+            <option value="<?= $pm['payment_method_id'] ?>"><?= $pm['payment_method_name'] ?></option>
+          <?php endwhile; ?>
+        </select>
+      </div>
+      <div class="mt-4 text-left">
+        <label class="block font-semibold text-gray-700 mb-1">Cash Given</label>
+        <input type="number" step="0.01" name="cash_given" placeholder="Enter cash amount" class="border rounded-lg w-full p-2 bg-white">
+      </div>
+      <div class="mt-6 flex space-x-3">
+        <button type="submit" class="bg-pink-400 hover:bg-pink-500 text-white px-4 py-2 rounded-lg w-1/2 shadow-md">Checkout</button>
+        <button type="button" onclick="clearCart()" class="bg-gray-700 hover:bg-gray-800 text-white px-4 py-2 rounded-lg w-1/2 shadow-md">Clear</button>
+      </div>
+    </form>
+
+    <!-- Refund Button OUTSIDE the form -->
+    <div class="mt-4">
+      <button type="button" onclick="openRefundModal()" 
+              class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg w-full shadow-md">
+        Refund
+      </button>
     </div>
   </div>
+</div>
+
 </div>
 
 <script>
 let cart = [];
 
-// Add variant with size & color
+document.addEventListener("DOMContentLoaded", () => {
+  document.querySelectorAll(".product-card").forEach(card => {
+    const sizeSelect = card.querySelector(".size-select");
+    const colorSelect = card.querySelector(".color-select");
+
+    // When selecting size, filter colors
+    sizeSelect.addEventListener("change", () => {
+      const chosenSize = sizeSelect.value;
+      Array.from(colorSelect.options).forEach(opt => {
+        if (!opt.value) return; // keep "Select color"
+        opt.hidden = (opt.dataset.size !== chosenSize);
+      });
+      colorSelect.value = ""; // reset color
+    });
+
+    // When selecting color, auto-select the matching size if needed
+    colorSelect.addEventListener("change", () => {
+      const chosenColor = colorSelect.value;
+      const chosenSize = colorSelect.options[colorSelect.selectedIndex]?.dataset.size;
+      if (chosenSize) {
+        sizeSelect.value = chosenSize;
+      }
+    });
+  });
+});
+
 function addVariantToCart(pid, name, price, btn) {
   const card = btn.closest(".product-card");
   const size = card.querySelector(".size-select").value;
-  const color = card.querySelector(".color-select").value;
+  const colorSelect = card.querySelector(".color-select");
+  const selectedColor = colorSelect.options[colorSelect.selectedIndex];
 
-  if (!size || !color) {
+  if (!size || !colorSelect.value) {
     alert("Please select both size and color.");
     return;
   }
 
-  // Use composite ID (pid + size + color) if no direct stock_id lookup
-  const stock_id = pid + "-" + size + "-" + color;
+  const stock_id = parseInt(selectedColor.dataset.stockId);
+  if (!stock_id) {
+    alert("Invalid size/color combination.");
+    return;
+  }
 
-  addToCart(stock_id, name, price, color, size);
+  addToCart(stock_id, name, price, colorSelect.value, size);
 }
+
 
 // Add item to cart
 function addToCart(stock_id, name, price, color, size) {

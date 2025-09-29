@@ -121,6 +121,11 @@ $store_settings = mysqli_fetch_assoc($result); // Fetch the data as an associati
           <i class="fas fa-shopping-cart mr-2"></i>Orders
         </a>
       </li>
+      <li class="px-4 py-2 hover:bg-gray-200">
+        <a href="refund_history.php" class="flex items-center">
+          <i class="fas fa-undo-alt mr-2"></i>Refund History
+        </a>
+      </li>
       </li>
         <li class="px-4 py-2 hover:bg-gray-200">
           <a href="suppliers.php" class="flex items-center">
