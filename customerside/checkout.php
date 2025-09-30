@@ -56,7 +56,7 @@ if (isset($_SESSION['customer_id']) && !empty($_SESSION['customer_id'])) {
     <ul class="flex flex-wrap justify-center space-x-4 text-sm md:text-base">
       <li><a href="homepage.php" class="hover:text-pink-500">Home</a></li>
       <li><a href="shop.php" class="hover:text-pink-500">Shop</a></li>
-      <li><a href="about" class="bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-full transition">About</a></li>
+      <li><a href="about" class="hover:text-pink-500">About</a></li>
       <li><a href="contact" class="hover:text-pink-500">Contact</a></li>
     </ul>
 
