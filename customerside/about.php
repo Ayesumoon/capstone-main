@@ -1,3 +1,26 @@
+<?php
+$conn = new mysqli("localhost", "root", "", "dbms");
+
+$isLoggedIn = isset($_SESSION['customer_id']);
+
+if ($conn->connect_error) {
+  die("Connection failed: " . $conn->connect_error);
+}
+
+$products = mysqli_query($conn, "SELECT * FROM products"); // adjust table name if needed
+
+$sql = "SELECT product_name, description, price_id AS price, image_url 
+        FROM products 
+        WHERE stocks > 0 
+        ORDER BY product_id DESC 
+        LIMIT 6";
+
+$result = $conn->query($sql);
+?>
+<?php
+session_start();
+$isLoggedIn = isset($_SESSION['customer_id']); // Adjust if you're using a different session key
+?>
 <!DOCTYPE html>
 <html lang="en" x-data="{ profileOpen: false, showLogin: false, showSignup: false }" @keydown.escape.window="showLogin = false; showSignup = false">
 <head>
@@ -41,8 +64,8 @@
     <ul class="flex flex-wrap justify-center space-x-4 text-sm md:text-base">
       <li><a href="homepage.php" class="hover:text-pink-500">Home</a></li>
       <li><a href="shop.php" class="hover:text-pink-500">Shop</a></li>
-      <li><a href="about" class="bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-full transition">About</a></li>
-      <li><a href="contact" class="hover:text-pink-500">Contact</a></li>
+      <li><a href="about.php" class="bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-full transition">About</a></li>
+      <li><a href="contact.php" class="hover:text-pink-500">Contact</a></li>
     </ul>
 
     <!-- Icons -->

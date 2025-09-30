@@ -1,0 +1,324 @@
+<?php
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+
+$isLoggedIn = false;
+
+
+if (isset($_SESSION['customer_id']) && !empty($_SESSION['customer_id'])) {
+    $isLoggedIn = true;
+}
+?> 
+
+<!DOCTYPE html>
+<html lang="en" x-data="{ profileOpen: false, showLogin: false, showSignup: false }" @keydown.escape.window="showLogin = false; showSignup = false">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Seven Dwarfs Boutique</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+  <style>
+    [x-cloak] { display: none !important; }
+  </style>
+</head>
+<body class="bg-pink-50 text-gray-800">
+
+<!-- Navbar -->
+<nav class="bg-pink-100 shadow-md">
+  <div class="max-w-7xl mx-auto px-4 py-4 flex flex-wrap justify-between items-center gap-4">
+
+    <!-- Hamburger (if needed for mobile, placeholder here) -->
+    <div class="w-10 h-10 flex flex-col justify-center space-y-1.5 md:hidden">
+      <span class="block h-[2px] w-full bg-black rounded"></span>
+      <span class="block h-[2px] w-full bg-black rounded"></span>
+      <span class="block h-[2px] w-full bg-black rounded"></span>
+    </div>
+
+    <!-- Left side: Logo and Brand -->
+    <div class="flex items-center space-x-4">
+      <img src="logo.png" alt="User profile picture" class="rounded-full" width="60" height="50">
+    </div>
+
+    <!-- Center: Logo + Search -->
+    <div class="flex flex-1 items-center gap-4">
+      <h1 class="text-2xl font-bold text-pink-600 whitespace-nowrap">Seven Dwarfs Boutique</h1>
+      <form action="shop.php" method="get" class="flex flex-1 max-w-sm">
+        <input type="text" name="search" placeholder="Search products..." 
+              class="w-full px-3 py-2 border border-pink-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-400 text-sm">
+      </form>
+    </div>
+
+    <!-- Navigation Links -->
+    <ul class="flex flex-wrap justify-center space-x-4 text-sm md:text-base">
+      <li><a href="homepage.php" class="hover:text-pink-500">Home</a></li>
+      <li><a href="shop.php" class="hover:text-pink-500">Shop</a></li>
+      <li><a href="about.php" class="hover:text-pink-500">About</a></li>
+      <li><a href="contact.php" class="bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-full transition">Contact</a></li>
+    </ul>
+
+   <!-- Icons -->
+    <div class="flex items-center gap-4">
+      <!-- Cart Icon -->
+      <a href="cart.php" class="hover:text-pink-500" title="Cart">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-pink-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13l-1.5 6h11.1a1 1 0 001-.8l1.4-5.2H7zm0 0l-1-4H4" />
+        </svg>
+      </a>
+
+      <!-- Profile -->
+      <div class="relative">
+  <?php if ($isLoggedIn): ?>
+  <div x-data="{ open: false }" class="relative">
+    <button @click="open = !open" class="hover:text-pink-500" title="Profile">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-pink-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A4 4 0 0112 14a4 4 0 016.879 3.804M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+      </svg>
+    </button>
+    <div x-show="open" @click.away="open = false" class="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+      <a href="profile.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-pink-100">My Profile</a>
+      <a href="purchases.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-pink-100">My Purchases</a>
+      <form action="logout.php" method="POST">
+        <button type="submit" class="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-pink-100">Logout</button>
+      </form>
+    </div>
+  </div>
+  <?php else: ?>
+  <button @click="showLogin = true" class="hover:text-pink-500" title="Profile">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A4 4 0 0112 14a4 4 0 016.879 3.804M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+  </button>
+  <?php endif; ?>
+</div>
+
+  </div>
+</nav>
+
+<!-- Login Modal -->
+<div x-show="showLogin" x-transition x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+  <div class="bg-white rounded-lg p-6 w-full max-w-md relative">
+    <button @click="showLogin = false" class="absolute top-3 right-3 text-gray-400 hover:text-pink-500 text-lg font-bold">&times;</button>
+    <h2 class="text-lg font-semibold mb-4 text-pink-600">Login</h2>
+    <form action="login_handler.php" method="POST">
+      <input type="email" name="email" placeholder="Email" required class="w-full border border-gray-300 p-2 rounded mb-3 focus:ring-2 focus:ring-pink-400">
+      <input type="password" name="password" placeholder="Password" required class="w-full border border-gray-300 p-2 rounded mb-3 focus:ring-2 focus:ring-pink-400">
+      <button type="submit" class="w-full bg-pink-500 text-white py-2 rounded hover:bg-pink-600 transition">Log In</button>
+    </form>
+    <p class="text-sm text-center mt-4">
+      Don't have an account? 
+      <button @click="showLogin = false; showSignup = true" class="text-pink-600 hover:underline">Sign up here</button>
+    </p>
+  </div>
+</div>
+
+<!-- Signup Modal -->
+<div x-show="showSignup" x-transition x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+  <div class="bg-white rounded-lg p-6 w-full max-w-md relative" x-data="{ password: '', confirmPassword: '', mismatch: false }">
+    <button @click="showSignup = false" class="absolute top-3 right-3 text-gray-400 hover:text-pink-500 text-lg font-bold">&times;</button>
+    <h2 class="text-lg font-semibold mb-4 text-pink-600">Sign Up</h2>
+    <form action="signup_handler.php" method="POST" @submit.prevent="mismatch = password !== confirmPassword; if (!mismatch) $el.submit();">
+      <input type="text" name="first_name" placeholder="First Name" required class="w-full border border-gray-300 p-2 rounded mb-3 focus:ring-2 focus:ring-pink-400">
+      <input type="text" name="last_name" placeholder="Last Name" required class="w-full border border-gray-300 p-2 rounded mb-3 focus:ring-2 focus:ring-pink-400">
+      <input type="email" name="email" placeholder="Email" required class="w-full border border-gray-300 p-2 rounded mb-3 focus:ring-2 focus:ring-pink-400">
+      <input type="text" name="phone" placeholder="Phone" required class="w-full border border-gray-300 p-2 rounded mb-3 focus:ring-2 focus:ring-pink-400">
+      <input type="text" name="address" placeholder="Address" required class="w-full border border-gray-300 p-2 rounded mb-3 focus:ring-2 focus:ring-pink-400">
+      <input type="password" name="password" placeholder="Password" x-model="password" required class="w-full border border-gray-300 p-2 rounded mb-3 focus:ring-2 focus:ring-pink-400">
+      <input type="password" name="confirm_password" placeholder="Confirm Password" x-model="confirmPassword" required class="w-full border border-gray-300 p-2 rounded mb-3 focus:ring-2 focus:ring-pink-400">
+
+      <template x-if="mismatch">
+        <p class="text-red-500 text-sm mb-3">Passwords do not match.</p>
+      </template>
+
+      <button type="submit" class="w-full bg-pink-500 text-white py-2 rounded hover:bg-pink-600 transition">Sign Up</button>
+    </form>
+  </div>
+</div>
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Contact Page</title>
+  <style>
+    body {
+      background: #ffe3e3;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+
+    .container {
+      width: 700px;
+      margin: 60px auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      position: relative;
+      z-index: 0;
+    }
+
+    .contact-info {
+      background: #cf276d;
+      color: #fff;
+      padding: 36px 28px;
+      border-radius: 16px;
+      min-width: 300px;
+      max-width: px;
+      height: 320px;
+      box-shadow: 0 8px 32px rgba(229,57,53,0.18);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      margin-right: -40px; /* subtle overlap */
+      z-index: 2;
+    }
+
+    .contact-info h2 {
+      margin-top: 0;
+      margin-bottom: 24px;
+      font-size: 1.6em;
+      font-weight: 600;
+      letter-spacing: 1px;
+    }
+
+    .contact-info ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .contact-info li {
+      margin-bottom: 20px;
+      font-size: 1em;
+      display: flex;
+      align-items: center;
+    }
+
+    .contact-info .icon {
+      margin-right: 14px;
+      font-size: 1.2em;
+    }
+
+    .contact-form {
+      background: #fff;
+      padding: 48px 40px 40px 80px;
+      border-radius: 16px;
+      min-width: 400px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.10);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      z-index: 1;
+    }
+
+    .contact-form h2 {
+      margin-top: 0;
+      margin-bottom: 8px;
+      font-size: 1.5em;
+      font-weight: 600;
+      color: #263238;
+    }
+
+    .contact-form p {
+      margin-bottom: 24px;
+      color: #78909c;
+      font-size: 1em;
+    }
+
+    .contact-form form {
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+    }
+
+    .contact-form input,
+    .contact-form textarea {
+      margin: 0;
+      padding: 14px 18px;
+      border: 1.5px solid #ececec;
+      border-radius: 10px;
+      font-size: 1em;
+      background: #f9f9f9;
+      resize: none;
+      outline: none;
+      transition: border 0.2s;
+      box-sizing: border-box;
+    }
+
+    .contact-form input:focus,
+    .contact-form textarea:focus {
+      border: 1.5px solid #e53935;
+      background: #fff;
+    }
+
+    .contact-form textarea {
+      min-height: 80px;
+      max-height: 160px;
+    }
+
+    .contact-form button {
+      background: #db3596;
+      color: #fff;
+      border: none;
+      border-radius: 24px;
+      padding: 14px 0;
+      font-size: 1.1em;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      letter-spacing: 1px;
+      width: 100%;
+      margin-top: 8px;
+      box-shadow: 0 2px 8px rgba(229,57,53,0.10);
+      align-self: center;
+    }
+
+    .contact-form button:hover {
+      background: #d32f6e;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+  <div class="contact-info">
+    <h2>Contact Us</h2>
+    <ul>
+      <li style="white-space: nowrap;">
+        <span class="icon">&#x1F4CD;</span>
+Rizal Avenue,Brgy.Zone 2 <br>
+        Bayambang Pangasinan
+      </li>
+      <li>
+          <span class="icon">&#x2709;</span>
+        regiefernandez16@gmail.com
+        </li>
+        <li>
+          <span class="icon">&#x260E;</span>
+          09190034561
+        </li>
+        <li>
+          <span class="fab fa-facebook"style="color:#1877F2;"></i></span>
+          <a href="https://www.facebook.com/profile.php?id=61556665545916" target="_blank" style="color:#ffffff; text-decoration:none;">
+            facebook.com/SevenDwarfSBoutique
+        </li>
+      </ul>
+    </div>
+     <li>
+        
+    <div class="contact-form">
+      <h2>Get in Touch</h2>
+      <p>Feel free to drop us a line below!</p>
+      <form>
+        <input type="text" placeholder="Your Name" required>
+        <input type="email" placeholder="Your Email" required>
+        <textarea placeholder="Typing your message here..." required></textarea>
+        <button type="submit">SEND</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>
