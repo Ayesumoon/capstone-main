@@ -4,7 +4,8 @@ require 'conn.php';
 $order_id = intval($_GET['order_id'] ?? 0);
 
 $sql = "
-    SELECT oi.stock_id, oi.qty, p.product_name, col.color, sz.size
+    SELECT oi.id AS order_item_id, oi.stock_id, oi.qty, oi.price,
+           p.product_name, col.color, sz.size
     FROM order_items oi
     INNER JOIN stock s ON oi.stock_id = s.stock_id
     INNER JOIN products p ON s.product_id = p.product_id

@@ -2,97 +2,93 @@
 require 'conn.php';
 session_start();
 
-if ($_SERVER["REQUEST_METHOD"] === "POST") {
-    $order_id = intval($_POST['order_id'] ?? 0);
+if ($_SERVER["REQUEST_METHOD"] !== "POST") {
+    die("⚠️ Invalid request.");
+}
 
-    if ($order_id <= 0) {
-        die("⚠️ Invalid Order ID.");
-    }
+$order_id   = intval($_POST['order_id'] ?? 0);
+$stock_id   = intval($_POST['stock_id'] ?? 0);
+$refund_qty = intval($_POST['refund_qty'] ?? 0);
+$admin_id   = $_SESSION['admin_id'] ?? null;
 
-    $admin_id = $_SESSION['admin_id'] ?? null;
+if ($order_id <= 0 || $stock_id <= 0 || $refund_qty <= 0) {
+    die("⚠️ Invalid refund request.");
+}
 
-    // Find status ID for "Refunded"
-    $status_sql = "SELECT order_status_id FROM order_status WHERE LOWER(order_status_name) = 'refunded' LIMIT 1";
-    $status_res = $conn->query($status_sql);
-    if (!$status_res || $status_res->num_rows === 0) {
-        die("⚠️ 'Refunded' status not found in order_status table.");
-    }
-    $status_row = $status_res->fetch_assoc();
-    $refunded_status_id = $status_row['order_status_id'];
+// Get "Refunded" status
+$status_sql = "SELECT order_status_id FROM order_status WHERE LOWER(order_status_name) = 'refunded' LIMIT 1";
+$status_res = $conn->query($status_sql);
+if (!$status_res || $status_res->num_rows === 0) {
+    die("⚠️ 'Refunded' status not found.");
+}
+$refunded_status_id = $status_res->fetch_assoc()['order_status_id'];
 
-    $conn->begin_transaction();
+$conn->begin_transaction();
 
-    try {
-        // 🔹 Fetch all items from the order
-        $items_sql = "
-            SELECT oi.order_id, oi.stock_id, oi.qty, oi.price,
+try {
+    // Fetch the specific item from this order
+    $sql = "SELECT oi.id AS order_item_id, oi.qty, oi.price,
                    p.product_id, s.size_id, s.color_id
             FROM order_items oi
             INNER JOIN stock s ON oi.stock_id = s.stock_id
             INNER JOIN products p ON s.product_id = p.product_id
-            WHERE oi.order_id = ?
-        ";
-        $stmt = $conn->prepare($items_sql);
-        $stmt->bind_param("i", $order_id);
-        $stmt->execute();
-        $items = $stmt->get_result();
-        $stmt->close();
+            WHERE oi.order_id = ? AND oi.stock_id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("ii", $order_id, $stock_id);
+    $stmt->execute();
+    $item = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
 
-        if ($items->num_rows === 0) {
-            throw new Exception("No items found for Order ID {$order_id}");
-        }
+    if (!$item) throw new Exception("Item not found in this order.");
+    if ($refund_qty > $item['qty']) throw new Exception("Refund qty exceeds purchased qty.");
 
-        // 🔹 Insert refund records + restock items
-        while ($item = $items->fetch_assoc()) {
-            $refund_amount_item = $item['qty'] * $item['price'];
+    $refund_amount = $refund_qty * $item['price'];
 
-            // Record refund
-            $stmt = $conn->prepare("
-                INSERT INTO refunds (order_id, product_id, stock_id, size_id, color_id, refund_amount, refunded_at, refunded_by)
-                VALUES (?, ?, ?, ?, ?, ?, NOW(), ?)
-            ");
-            $stmt->bind_param(
-                "iiiiidi",
-                $order_id,
-                $item['product_id'],
-                $item['stock_id'],
-                $item['size_id'],
-                $item['color_id'],
-                $refund_amount_item,
-                $admin_id
-            );
-            $stmt->execute();
-            $stmt->close();
+    // Insert refund
+    $stmt = $conn->prepare("
+        INSERT INTO refunds 
+          (order_id, order_item_id, product_id, stock_id, size_id, color_id, refund_amount, refunded_at, refunded_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), ?)
+    ");
+    $stmt->bind_param(
+        "iiiiiidi",
+        $order_id,
+        $item['order_item_id'],
+        $item['product_id'],
+        $stock_id,
+        $item['size_id'],
+        $item['color_id'],
+        $refund_amount,
+        $admin_id
+    );
+    $stmt->execute();
+    $stmt->close();
 
-            // ✅ Restock refunded items in stock table
-            $stmt = $conn->prepare("UPDATE stock SET current_qty = current_qty + ? WHERE stock_id = ?");
-            $stmt->bind_param("ii", $item['qty'], $item['stock_id']);
-            $stmt->execute();
-            $stmt->close();
+    // Update stock
+    $stmt = $conn->prepare("UPDATE stock SET current_qty = current_qty + ? WHERE stock_id = ?");
+    $stmt->bind_param("ii", $refund_qty, $stock_id);
+    $stmt->execute();
+    $stmt->close();
 
-            // ✅ Insert into stock_in for tracking (refund restock)
-            $stmt = $conn->prepare("
-                INSERT INTO stock_in (stock_id, qty, source_type, source_id, created_at, created_by)
-                VALUES (?, ?, 'refund', ?, NOW(), ?)
-            ");
-            $stmt->bind_param("iiii", $item['stock_id'], $item['qty'], $order_id, $admin_id);
-            $stmt->execute();
-            $stmt->close();
-        }
+    // Record in stock_in (matches DB schema)
+    $stmt = $conn->prepare("
+        INSERT INTO stock_in (stock_id, quantity, date_added, supplier_id, purchase_price)
+        VALUES (?, ?, NOW(), NULL, NULL)
+    ");
+    $stmt->bind_param("ii", $stock_id, $refund_qty);
+    $stmt->execute();
+    $stmt->close();
 
-        // 🔹 Update order status to "Refunded"
-        $stmt = $conn->prepare("UPDATE orders SET order_status_id = ? WHERE order_id = ?");
-        $stmt->bind_param("ii", $refunded_status_id, $order_id);
-        $stmt->execute();
-        $stmt->close();
+    // 👉 Order status logic:
+    // If you want to mark the whole order refunded only if *all* items refunded, you need extra check here.
+    $stmt = $conn->prepare("UPDATE orders SET order_status_id = ? WHERE order_id = ?");
+    $stmt->bind_param("ii", $refunded_status_id, $order_id);
+    $stmt->execute();
+    $stmt->close();
 
-        $conn->commit();
-
-        echo "<script>alert('✅ Order {$order_id} refunded successfully!'); window.location.href='pointofsale.php';</script>";
-    } catch (Exception $e) {
-        $conn->rollback();
-        die("❌ Refund failed: " . $e->getMessage());
-    }
-} else {
-    die("⚠️ Invalid request.");
+    $conn->commit();
+    echo "<script>alert('✅ Refund successful!'); window.location.href='pointofsale.php';</script>";
+} catch (Exception $e) {
+    $conn->rollback();
+    die("❌ Refund failed: " . $e->getMessage());
 }
