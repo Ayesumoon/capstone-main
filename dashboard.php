@@ -116,15 +116,10 @@ while ($row = $chartQuery->fetch_assoc()) {
       <div class="flex items-center space-x-4">
         <img alt="Admin profile" class="rounded-full" height="40" src="newID.jpg" width="40" />
         <div>
-    <h3 class="text-sm font-semibold">
-        <?= htmlspecialchars($username ?? 'Admin') ?>
-    </h3>
-    <p class="text-xs text-gray-500">
-        <?= htmlspecialchars($role_name ?? 'Admin') ?>
-    </p>
-</div>
-
-      </div>
+            <h3 class="text-sm font-semibold"><?php echo htmlspecialchars($admin_name); ?></h3>
+            <p class="text-xs text-gray-500"><?php echo htmlspecialchars($admin_role); ?></p>
+          </div>
+        </div>
     </div>
   </div>
 

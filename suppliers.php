@@ -1,5 +1,32 @@
 <?php
 require 'conn.php';
+
+
+$admin_id = $_SESSION['admin_id'] ?? null;
+$admin_name = "Admin";
+$admin_role = "Admin";
+
+if ($admin_id) {
+    $query = "
+        SELECT 
+            CONCAT(first_name, ' ', last_name) AS full_name, 
+            r.role_name 
+        FROM adminusers a
+        LEFT JOIN roles r ON a.role_id = r.role_id
+        WHERE a.admin_id = ?
+    ";
+    $stmt = $conn->prepare($query);
+    $stmt->bind_param("i", $admin_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    if ($row = $result->fetch_assoc()) {
+        $admin_name = $row['full_name'];
+        $admin_role = $row['role_name'] ?? 'Admin';
+    }
+}
+
+
 $suppliers = $conn->query("SELECT * FROM suppliers");
 ?>
 
@@ -41,9 +68,9 @@ $suppliers = $conn->query("SELECT * FROM suppliers");
       <div class="mt-4 flex items-center space-x-4">
         <img src="newID.jpg" alt="Admin" class="rounded-full w-10 h-10" />
         <div>
-          <h3 class="text-sm font-semibold">Admin Name</h3>
-          <p class="text-xs text-gray-500">Administrator</p>
-        </div>
+            <h3 class="text-sm font-semibold"><?php echo htmlspecialchars($admin_name); ?></h3>
+            <p class="text-xs text-gray-500"><?php echo htmlspecialchars($admin_role); ?></p>
+          </div>
       </div>
     </div>
 

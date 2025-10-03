@@ -140,6 +140,55 @@ function closeRefundModal() {
 }
 </script>
 
+<!-- Refund Modal -->
+<div id="refundModal" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center hidden z-50">
+  <div class="bg-white w-full max-w-md rounded-lg shadow-lg p-6 relative">
+    <button onclick="closeRefundModal()" 
+            class="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-xl font-bold">&times;</button>
+    
+    <h2 class="text-xl font-bold text-pink-600 mb-4">Refund Transaction</h2>
+
+    <form id="refundForm" method="POST" action="process_refund.php" onsubmit="return confirm('Confirm refund?')">
+      <!-- Order ID -->
+      <div class="mb-3">
+        <label class="block font-semibold text-gray-700 mb-1">Order ID</label>
+        <input type="number" name="order_id" id="refundOrderId" 
+               class="border rounded-lg w-full p-2 bg-white" 
+               placeholder="Enter Order ID" required>
+        <button type="button" 
+                onclick="loadOrderItems()" 
+                class="mt-2 bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded">
+          Load Items
+        </button>
+      </div>
+
+      <!-- Items Dropdown -->
+      <div id="refundItemsContainer" class="hidden mb-4">
+        <label class="block font-semibold text-gray-700 mb-1">Select Item to Refund</label>
+        <select name="stock_id" id="refundItemSelect" class="border rounded-lg w-full p-2 bg-white" required>
+          <!-- JS will populate here -->
+        </select>
+
+        <label class="block font-semibold text-gray-700 mb-1 mt-3">Quantity to Refund</label>
+        <input type="number" name="refund_qty" id="refundQty" 
+               class="border rounded-lg w-full p-2 bg-white" min="1" value="1" required>
+      </div>
+
+      <div class="flex space-x-3 mt-6">
+        <button type="submit" 
+                class="bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-lg w-1/2 shadow-md">
+          Submit Refund
+        </button>
+        <button type="button" onclick="closeRefundModal()" 
+                class="bg-gray-700 hover:bg-gray-800 text-white px-4 py-2 rounded-lg w-1/2 shadow-md">
+          Cancel
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
 
   <!-- Sidebar Categories -->
   <div class="w-64 bg-pink-100 border-r border-pink-200 flex flex-col">
@@ -403,6 +452,50 @@ function filterSearch() {
     p.style.display = p.dataset.name.includes(val) ? "block" : "none";
   });
 }
+
+function loadOrderItems() {
+  const orderId = document.getElementById("refundOrderId").value;
+  if (!orderId) {
+    alert("Enter Order ID first.");
+    return;
+  }
+
+  fetch("get_order_items.php?order_id=" + orderId)
+    .then(res => res.json())
+    .then(items => {
+      if (items.length === 0) {
+        alert("No items found for this order.");
+        return;
+      }
+
+      const select = document.getElementById("refundItemSelect");
+      select.innerHTML = "";
+      items.forEach(it => {
+        let opt = document.createElement("option");
+        opt.value = it.stock_id;
+        opt.textContent = `${it.product_name} - ${it.color ?? '-'} / ${it.size ?? '-'} (Qty: ${it.qty})`;
+        opt.dataset.maxQty = it.qty;
+        select.appendChild(opt);
+      });
+
+      // Show container
+      document.getElementById("refundItemsContainer").classList.remove("hidden");
+
+      // Set max quantity dynamically
+      select.addEventListener("change", () => {
+        const max = select.options[select.selectedIndex].dataset.maxQty;
+        document.getElementById("refundQty").max = max;
+      });
+
+      // Trigger once for first item
+      select.dispatchEvent(new Event("change"));
+    })
+    .catch(err => {
+      console.error(err);
+      alert("Error loading order items.");
+    });
+}
+
 </script>
 </body>
 </html>

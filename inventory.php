@@ -53,13 +53,13 @@ $selectedCategory = $_GET['category'] ?? 'all';
 $selectedColor    = $_GET['color'] ?? 'all';
 $selectedSize     = $_GET['size'] ?? 'all';
 
-// 🔹 Build query
+// 🔹 Build query using stock.current_qty
 $sqlProducts = "
     SELECT 
         p.product_id,
         p.product_name,
         c.category_name,
-        COALESCE(stocks.total_in, 0) - COALESCE(sales.total_sold, 0) AS stocks,
+        st.current_qty AS stocks,  -- ✅ live stock value
         p.created_at,
         s.supplier_name,
         p.supplier_price,
@@ -68,43 +68,10 @@ $sqlProducts = "
     FROM products p
     INNER JOIN categories c ON p.category_id = c.category_id
     LEFT JOIN suppliers s ON p.supplier_id = s.supplier_id
-    
-    -- ✅ Start from stock instead of forcing product_colors/product_sizes
-    LEFT JOIN stock st_main ON p.product_id = st_main.product_id
-    LEFT JOIN colors col ON st_main.color_id = col.color_id
-    LEFT JOIN sizes sz ON st_main.size_id = sz.size_id
-    
-    -- 🔹 Stock-in totals
-    LEFT JOIN (
-        SELECT 
-            st.product_id,
-            st.color_id,
-            st.size_id,
-            SUM(si.quantity) AS total_in
-        FROM stock_in si
-        INNER JOIN stock st ON si.stock_id = st.stock_id
-        GROUP BY st.product_id, st.color_id, st.size_id
-    ) stocks 
-        ON p.product_id = stocks.product_id
-        AND st_main.color_id = stocks.color_id
-        AND st_main.size_id = stocks.size_id
-    
-    -- 🔹 Sales totals
-    LEFT JOIN (
-        SELECT 
-            st.product_id,
-            st.color_id,
-            st.size_id,
-            SUM(oi.qty) AS total_sold
-        FROM order_items oi
-        INNER JOIN stock st ON oi.stock_id = st.stock_id
-        GROUP BY st.product_id, st.color_id, st.size_id
-    ) sales
-        ON p.product_id = sales.product_id
-        AND st_main.color_id = sales.color_id
-        AND st_main.size_id = sales.size_id
+    LEFT JOIN stock st ON p.product_id = st.product_id
+    LEFT JOIN colors col ON st.color_id = col.color_id
+    LEFT JOIN sizes sz ON st.size_id = sz.size_id
 ";
-
 
 // 🔹 Dynamic WHERE filters
 $where  = [];
@@ -232,7 +199,7 @@ $conn->close();
             <li><a href="categories.php" class="block py-1 hover:text-pink-600"><i class="fas fa-tags mr-2"></i>Category</a></li>
             <li><a href="products.php" class="block py-1 hover:text-pink-600"><i class="fas fa-box mr-2"></i>Product</a></li>
             <li><a href="inventory.php" class="block py-1 bg-pink-100 text-pink-600 rounded"><i class="fas fa-warehouse mr-2"></i>Inventory</a></li>
-           <li class="py-1 hover:text-pink-600"><a href="stock_management.php" class="flex items-center"><i class="fas fa-boxes mr-2"></i>Stock Management</a></li>
+            <li class="py-1 hover:text-pink-600"><a href="stock_management.php" class="flex items-center"><i class="fas fa-boxes mr-2"></i>Stock Management</a></li>
           </ul>
           
 <!-- Other Pages -->
@@ -355,7 +322,7 @@ $conn->close();
         </tr>
         <?php }} else { ?>
         <tr>
-          <td colspan="6" class="text-center px-4 py-4 text-gray-500 border">No products found</td>
+          <td colspan="7" class="text-center px-4 py-4 text-gray-500 border">No products found</td>
         </tr>
         <?php } ?>
       </tbody>

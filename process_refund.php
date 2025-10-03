@@ -42,10 +42,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             throw new Exception("No items found for Order ID {$order_id}");
         }
 
-        // 🔹 Insert refund records for each item
+        // 🔹 Insert refund records + restock items
         while ($item = $items->fetch_assoc()) {
             $refund_amount_item = $item['qty'] * $item['price'];
 
+            // Record refund
             $stmt = $conn->prepare("
                 INSERT INTO refunds (order_id, product_id, stock_id, size_id, color_id, refund_amount, refunded_at, refunded_by)
                 VALUES (?, ?, ?, ?, ?, ?, NOW(), ?)
@@ -63,14 +64,18 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             $stmt->execute();
             $stmt->close();
 
-            // 🔹 Restock items (add back refunded quantity)
+            // ✅ Restock refunded items in stock table
             $stmt = $conn->prepare("UPDATE stock SET current_qty = current_qty + ? WHERE stock_id = ?");
             $stmt->bind_param("ii", $item['qty'], $item['stock_id']);
             $stmt->execute();
             $stmt->close();
 
-            $stmt = $conn->prepare("UPDATE products SET stocks = IFNULL(stocks,0) + ? WHERE product_id = ?");
-            $stmt->bind_param("ii", $item['qty'], $item['product_id']);
+            // ✅ Insert into stock_in for tracking (refund restock)
+            $stmt = $conn->prepare("
+                INSERT INTO stock_in (stock_id, qty, source_type, source_id, created_at, created_by)
+                VALUES (?, ?, 'refund', ?, NOW(), ?)
+            ");
+            $stmt->bind_param("iiii", $item['stock_id'], $item['qty'], $order_id, $admin_id);
             $stmt->execute();
             $stmt->close();
         }
