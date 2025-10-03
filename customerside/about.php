@@ -59,7 +59,8 @@ $isLoggedIn = isset($_SESSION['customer_id']); // Adjust if you're using a diffe
               class="w-full px-3 py-2 border border-pink-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-400 text-sm">
       </form>
     </div>
-
+ 
+    
     <!-- Navigation Links -->
     <ul class="flex flex-wrap justify-center space-x-4 text-sm md:text-base">
       <li><a href="homepage.php" class="hover:text-pink-500">Home</a></li>

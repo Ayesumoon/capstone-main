@@ -27,6 +27,7 @@ if (isset($_SESSION['customer_id']) && !empty($_SESSION['customer_id'])) {
 </head>
 <body class="bg-pink-50 text-gray-800">
 
+
 <!-- Navbar -->
 <nav class="bg-pink-100 shadow-md">
   <div class="max-w-7xl mx-auto px-4 py-4 flex flex-wrap justify-between items-center gap-4">

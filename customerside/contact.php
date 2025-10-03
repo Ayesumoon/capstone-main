@@ -38,6 +38,7 @@ if (isset($_SESSION['customer_id']) && !empty($_SESSION['customer_id'])) {
       <span class="block h-[2px] w-full bg-black rounded"></span>
     </div>
 
+    
     <!-- Left side: Logo and Brand -->
     <div class="flex items-center space-x-4">
       <img src="logo.png" alt="User profile picture" class="rounded-full" width="60" height="50">
