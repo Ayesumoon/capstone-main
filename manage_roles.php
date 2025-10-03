@@ -78,26 +78,29 @@ $users = $conn->query($sql);
 <body class="bg-gray-100 min-h-screen flex">
 
   <!-- Sidebar -->
-  <aside id="sidebar" class="w-64 bg-pink-600 text-white flex flex-col transition-all duration-300 ease-in-out">
-    <div class="px-6 py-4 text-2xl font-bold border-b border-pink-500">Super Admin</div>
-    <nav class="flex-1 px-4 py-6 space-y-3">
-      <a href="superadmin_dashboard.php" class="block px-4 py-2 rounded-lg hover:bg-pink-500">📊 Dashboard</a>
-      <a href="manage_users.php" class="block px-4 py-2 rounded-lg hover:bg-pink-500">👥 Manage Users</a>
-      <a href="manage_roles.php" class="block px-4 py-2 rounded-lg bg-pink-700">🔑 Manage Roles</a>
-      <a href="logs.php" class="block px-4 py-2 rounded-lg hover:bg-pink-500">📜 Logs</a>
+  <aside id="sidebar" class="w-64 bg-white border-r border-gray-200 text-gray-700 flex flex-col transition-all duration-300 ease-in-out">
+    <div class="px-6 py-4 text-2xl font-bold border-b border-gray-200 text-gray-800">
+      Super Admin
+    </div>
+    <nav class="flex-1 px-4 py-6 space-y-2">
+      <a href="superadmin_dashboard.php" class="block px-4 py-2 rounded-lg hover:bg-gray-100 hover:text-blue-600">📊 Dashboard</a>
+      <a href="manage_users.php" class="block px-4 py-2 rounded-lg hover:bg-gray-100 hover:text-blue-600">👥 Manage Users</a>
+      <a href="manage_roles.php" class="block px-4 py-2 rounded-lg bg-blue-50 text-blue-600 font-medium">🔑 Manage Roles</a>
+      <a href="logs.php" class="block px-4 py-2 rounded-lg hover:bg-gray-100 hover:text-blue-600">📜 Logs</a>
     </nav>
-    <div class="px-6 py-4 border-t border-pink-500">
-      <a href="logout.php" class="w-full block text-center bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg font-medium">
+    <div class="px-6 py-4 border-t border-gray-200">
+      <a href="logout.php" class="w-full block text-center bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg font-medium text-white">
         🚪 Logout
       </a>
     </div>
   </aside>
 
-   <!-- Main Content -->
-  <main class="flex-1 p-8">
+  <!-- Main Content -->
+  <main class="flex-1 p-8 transition-all duration-300 ease-in-out">
     <header class="flex justify-between items-center mb-8">
       <div class="flex items-center space-x-4">
-        <button id="toggleSidebar" class="text-pink-600 text-2xl focus:outline-none">☰</button>
+        <!-- Sidebar toggle -->
+        <button id="toggleSidebar" class="text-gray-600 text-2xl focus:outline-none">☰</button>
         <h1 class="text-3xl font-bold text-gray-800">Manage Roles & Users</h1>
       </div>
     </header>
@@ -119,7 +122,7 @@ $users = $conn->query($sql);
       <h2 class="text-xl font-bold text-gray-700 mb-4">👥 Users & Roles</h2>
       <div class="overflow-x-auto">
         <table class="min-w-full border border-gray-200">
-          <thead class="bg-pink-500 text-white">
+          <thead class="bg-gray-100 text-gray-700">
             <tr>
               <th class="px-4 py-2 text-left">ID</th>
               <th class="px-4 py-2 text-left">Username</th>
@@ -146,11 +149,9 @@ $users = $conn->query($sql);
                   <?php } ?>
                 </td>
                 <td class="px-4 py-2 text-center space-x-2">
-                  <button onclick="openEditModal(<?= $row['admin_id']; ?>, <?= $row['role_id']; ?>)"
-        class="text-blue-500 hover:underline">Edit Role</button>
+                  <button onclick="openEditModal(<?= $row['admin_id']; ?>, <?= $row['role_id']; ?>)" class="text-blue-500 hover:underline">Edit Role</button>
                   <?php if ($row['role_id'] != 1) { ?>
-                    <button onclick="openDeleteModal(<?= $row['admin_id']; ?>)"
-                            class="text-red-500 hover:underline">Delete Role</button>
+                    <button onclick="openDeleteModal(<?= $row['admin_id']; ?>)" class="text-red-500 hover:underline">Delete Role</button>
                   <?php } ?>
                 </td>
               </tr>
@@ -160,6 +161,7 @@ $users = $conn->query($sql);
       </div>
     </div>
   </main>
+
 
   <!-- Edit Role Modal -->
   <div id="editModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">

@@ -81,22 +81,23 @@ $admin = $conn->query("SELECT first_name, last_name FROM adminusers WHERE admin_
 <body class="bg-gray-100 flex min-h-screen">
 
   <!-- Sidebar -->
-  <aside id="sidebar" class="w-64 bg-pink-600 text-white flex flex-col transition-all duration-300 ease-in-out">
-    <div class="px-6 py-4 text-2xl font-bold border-b border-pink-500">
-      Super Admin
-    </div>
-    <nav class="flex-1 px-4 py-6 space-y-3">
-      <a href="superadmin_dashboard.php" class="block px-4 py-2 rounded-lg hover:bg-pink-500">📊 Dashboard</a>
-      <a href="manage_users.php" class="block px-4 py-2 rounded-lg hover:bg-pink-500">👥 Manage Users</a>
-      <a href="manage_roles.php" class="block px-4 py-2 rounded-lg hover:bg-pink-500">🔑 Manage Roles</a>
-      <a href="logs.php" class="block px-4 py-2 rounded-lg hover:bg-pink-500">📜 Logs</a>
-    </nav>
-    <div class="px-6 py-4 border-t border-pink-500">
-      <a href="logout.php" class="w-full inline-block text-center bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg font-medium">
-        🚪 Logout
-      </a>
-    </div>
-  </aside>
+<aside id="sidebar" class="w-64 bg-white border-r border-gray-200 text-gray-700 flex flex-col transition-all duration-300 ease-in-out">
+  <div class="px-6 py-4 text-2xl font-bold border-b border-gray-200 text-gray-800">
+    Super Admin
+  </div>
+  <nav class="flex-1 px-4 py-6 space-y-2">
+    <a href="superadmin_dashboard.php" class="block px-4 py-2 rounded-lg hover:bg-gray-100 hover:text-blue-600">📊 Dashboard</a>
+    <a href="manage_users.php" class="block px-4 py-2 rounded-lg hover:bg-gray-100 hover:text-blue-600">👥 Manage Users</a>
+    <a href="manage_roles.php" class="block px-4 py-2 rounded-lg hover:bg-gray-100 hover:text-blue-600">🔑 Manage Roles</a>
+    <a href="logs.php" class="block px-4 py-2 rounded-lg hover:bg-gray-100 hover:text-blue-600">📜 Logs</a>
+  </nav>
+  <div class="px-6 py-4 border-t border-gray-200">
+    <a href="logout.php" class="w-full inline-block text-center bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg font-medium text-white">
+      🚪 Logout
+    </a>
+  </div>
+</aside>
+
 
   <!-- Main Content -->
   <main class="flex-1 p-8 transition-all duration-300 ease-in-out">

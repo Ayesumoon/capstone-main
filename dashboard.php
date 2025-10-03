@@ -341,7 +341,6 @@ while ($row = $chartQuery->fetch_assoc()) {
 
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<canvas id="ordersChart"></canvas>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>

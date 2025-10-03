@@ -65,7 +65,16 @@ if ($search !== "") {
 
 <body class="bg-gray-100 font-poppins text-sm transition-all duration-300">
 
-<div class="flex h-screen" x-data="{ showAddModal: false, userMenu: false, productMenu: true }" @keydown.escape.window="showAddModal = false">
+<div class="flex h-screen"
+     x-data="{ 
+       showAddModal: false, 
+       showEditModal: false, 
+       showDeleteModal: false,
+       userMenu: false, 
+       productMenu: true,
+       selectedCategory: { id: null, code: '', name: '' }
+     }"
+     @keydown.escape.window="showAddModal = false; showEditModal = false; showDeleteModal = false">
 
   <!-- Sidebar -->
   <div class="w-64 bg-white shadow-md min-h-screen">
@@ -204,14 +213,17 @@ if ($search !== "") {
                 <td class="px-4 py-2 text-sm text-gray-700"><?= htmlspecialchars($row['category_code']) ?></td>
                 <td class="px-4 py-2 text-sm text-gray-700"><?= htmlspecialchars($row['category_name']) ?></td>
                 <td class="px-4 py-2 text-sm">
-                  <a href="edit_category.php?id=<?= urlencode($row['category_code']) ?>" class="text-blue-600 hover:underline mr-3">
-                    <i class="fas fa-edit"></i> Edit
-                  </a>
-                  <a href="delete_category.php?id=<?= urlencode($row['category_id']) ?>" 
-                     class="text-red-600 hover:underline" 
-                     onclick="return confirm('Are you sure you want to delete this category?');">
-                    <i class="fas fa-trash-alt"></i> Delete
-                  </a>
+                    <button 
+                      @click="showEditModal = true; selectedCategory = { id: '<?= $row['category_id'] ?>', code: '<?= $row['category_code'] ?>', name: '<?= htmlspecialchars($row['category_name']) ?>' }" 
+                      class="text-blue-600 hover:underline mr-3">
+                      <i class="fas fa-edit"></i> Edit
+                    </button>
+
+                    <button 
+                      @click="showDeleteModal = true; selectedCategory = { id: '<?= $row['category_id'] ?>', code: '<?= $row['category_code'] ?>', name: '<?= htmlspecialchars($row['category_name']) ?>' }" 
+                      class="text-red-600 hover:underline">
+                      <i class="fas fa-trash-alt"></i> Delete
+                    </button>
                 </td>
               </tr>
             <?php endwhile; ?>
@@ -226,7 +238,7 @@ if ($search !== "") {
       x-cloak
       x-transition
       class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
-    >
+      >
       <div
         @click.away="showAddModal = false"
         class="bg-white rounded-lg shadow-lg w-full max-w-md p-6 space-y-4"
@@ -263,6 +275,68 @@ if ($search !== "") {
         </form>
       </div>
     </div>
+
+    <!-- Edit Category Modal -->
+<div x-show="showEditModal" x-cloak x-transition 
+     class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+  <div @click.away="showEditModal = false"
+       class="bg-white rounded-lg shadow-lg w-full max-w-md p-6 space-y-4">
+
+    <h2 class="text-lg font-semibold text-gray-700">Edit Category</h2>
+
+    <form action="edit_category.php" method="POST">
+      <input type="hidden" name="category_id" :value="selectedCategory.id">
+
+      <div class="mb-4">
+        <label for="edit_category_name" class="block text-sm font-medium text-gray-700">Category Name</label>
+        <input type="text" name="category_name" id="edit_category_name"
+               x-model="selectedCategory.name"
+               required
+               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+      </div>
+
+      <div class="flex justify-end gap-2">
+        <button type="button" @click="showEditModal = false"
+                class="px-4 py-2 text-sm text-gray-600 bg-gray-200 rounded hover:bg-gray-300">
+          Cancel
+        </button>
+        <button type="submit"
+                class="px-4 py-2 text-sm text-white bg-indigo-600 rounded hover:bg-indigo-700">
+          Update
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Delete Category Modal -->
+<div x-show="showDeleteModal" x-cloak x-transition 
+     class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+  <div @click.away="showDeleteModal = false"
+       class="bg-white rounded-lg shadow-lg w-full max-w-sm p-6 space-y-4">
+
+    <h2 class="text-lg font-semibold text-gray-700">Delete Category</h2>
+    <p class="text-sm text-gray-600">
+      Are you sure you want to delete <strong x-text="selectedCategory.name"></strong>?
+    </p>
+
+    <form action="delete_category.php" method="POST">
+      <input type="hidden" name="category_id" :value="selectedCategory.id">
+
+      <div class="flex justify-end gap-2 mt-4">
+        <button type="button" @click="showDeleteModal = false"
+                class="px-4 py-2 text-sm text-gray-600 bg-gray-200 rounded hover:bg-gray-300">
+          Cancel
+        </button>
+        <button type="submit"
+                class="px-4 py-2 text-sm text-white bg-red-600 rounded hover:bg-red-700">
+          Delete
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
 
   </div>
 </div>

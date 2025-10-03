@@ -242,21 +242,6 @@ $store_settings = mysqli_fetch_assoc($result); // Fetch the data as an associati
 </div>
 
 
-
-
-       <!-- User & Security Settings Section -->
-<div class="section border rounded shadow p-4">
-    <h2 class="text-lg font-bold mb-4">User & Security Settings</h2>
-    <div class="settings-group mb-4">
-        <label class="block text-gray-700">Two Factor Authentication:</label>
-        <input type="checkbox" id="twoFactorAuth" <?php echo $store_settings['two_factor_auth'] ? 'checked' : ''; ?> onchange="toggleTwoFactorAuth()">
-    </div>
-    <div class="settings-group mb-4">
-        <label class="block text-gray-700">Password Reset Options:</label>
-        <button class="reset-btn bg-red-500 text-white px-4 py-2 rounded" onclick="resetPassword()">Reset Password</button>
-    </div>
-</div>
-
 <script>
     // Function to toggle Two Factor Authentication status
     function toggleTwoFactorAuth() {
