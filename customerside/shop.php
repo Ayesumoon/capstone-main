@@ -9,258 +9,219 @@ if ($conn->connect_error) {
 
 $isLoggedIn = isset($_SESSION['customer_id']);
 
-// 🔥 Handle profile picture (avatar) logic
-$avatar = 'assets/default-avatar.png'; // default avatar
-if (isset($_SESSION['customer_id'])) {
+// 🔥 Handle profile picture
+$avatar = 'assets/default-avatar.png';
+if ($isLoggedIn) {
   $customer_id = $_SESSION['customer_id'];
-
   $stmt = $conn->prepare("SELECT profile_picture FROM customers WHERE customer_id = ?");
   $stmt->bind_param("i", $customer_id);
   $stmt->execute();
   $resultProfile = $stmt->get_result();
   $customer = $resultProfile->fetch_assoc();
-
   if (!empty($customer['profile_picture'])) {
     $avatar = 'uploads/profiles/' . htmlspecialchars($customer['profile_picture']);
   }
 }
 
-// ✅ Now continue to build product shop query
-
-// Assuming you've connected to the database already
-if (isset($_GET['product_id'])) {
-  $product_id = $_GET['product_id'];
-  $stmt = $conn->prepare("SELECT * FROM products WHERE product_id = ?");
-  $stmt->bind_param("i", $product_id);
-  $stmt->execute();
-  $result = $stmt->get_result();
-  
-  if ($result->num_rows > 0) {
-      $product = $result->fetch_assoc();
-      // Now you can display the product details
-  } else {
-      echo "Product not found.";
-  }
-}
-
-// Initialize categories array
+// ✅ Filters
 $categories = [];
-
-// Get categories from the database
-$sql = "SELECT category_name FROM categories";
-$result = mysqli_query($conn, $sql);
-
-if ($result && mysqli_num_rows($result) > 0) {
-    while ($row = mysqli_fetch_assoc($result)) {
-        $categories[] = $row['category_name'];
-    }
-} else {
-    // Optionally, log an error or handle empty categories
-    // echo "No categories found or query failed.";
+$resultCats = $conn->query("SELECT category_name FROM categories ORDER BY category_name ASC");
+while ($row = $resultCats->fetch_assoc()) {
+  $categories[] = $row['category_name'];
 }
 
+$selectedCategory = $_GET['category'] ?? null;
+$sort = $_GET['sort'] ?? 'latest';
+$searchQuery = $_GET['search'] ?? null;
 
-// Get category, sort, and search filters from query string
-$selectedCategory = isset($_GET['category']) ? $_GET['category'] : null;
-$sort = isset($_GET['sort']) ? $_GET['sort'] : 'latest';
-$searchQuery = isset($_GET['search']) ? $_GET['search'] : null;
-
-/// Base SQL
-$sql = "SELECT p.product_name, p.description, p.price_id AS price, p.image_url, c.category_name, p.product_id
+// ✅ Build query
+$sql = "
+SELECT 
+    p.product_id,
+    p.product_name,
+    p.description,
+    p.price_id AS price,
+    p.image_url,
+    c.category_name,
+    COALESCE(SUM(st.current_qty), 0) AS total_stock
 FROM products p
 JOIN categories c ON p.category_id = c.category_id
-WHERE p.stocks > 0";
+LEFT JOIN stock st ON p.product_id = st.product_id
+WHERE 1=1
+";
 
-// Add category filter if selected
+$binds = [];
+$types = "";
+
+// Category filter
 if ($selectedCategory) {
-$sql .= " AND c.category_name = ?";
+  $sql .= " AND c.category_name = ?";
+  $binds[] = $selectedCategory;
+  $types .= "s";
 }
 
-// Add search filter if provided
+// Search filter
 if ($searchQuery) {
-$sql .= " AND p.product_name LIKE ?";
+  $sql .= " AND p.product_name LIKE ?";
+  $binds[] = "%$searchQuery%";
+  $types .= "s";
 }
 
-// Add sorting logic
+$sql .= "
+GROUP BY p.product_id, p.product_name, p.description, p.price_id, p.image_url, c.category_name
+";
+
+// Sorting
 switch ($sort) {
-case 'low_to_high':
-$sql .= " ORDER BY p.price_id ASC";
-break;
-case 'high_to_low':
-$sql .= " ORDER BY p.price_id DESC";
-break;
-default:
-$sql .= " ORDER BY p.product_id DESC"; // latest
+  case 'low_to_high':
+    $sql .= " ORDER BY p.price_id ASC";
+    break;
+  case 'high_to_low':
+    $sql .= " ORDER BY p.price_id DESC";
+    break;
+  default:
+    $sql .= " ORDER BY p.product_id DESC";
+    break;
 }
 
-// ✅ Prepare and execute query
 $stmt = $conn->prepare($sql);
-
-// Bind parameters based on which filters are applied
-if ($selectedCategory && $searchQuery) {
-$searchQuery = "%" . $searchQuery . "%"; // Wildcard for search
-$stmt->bind_param("ss", $selectedCategory, $searchQuery); // Two string parameters
-} elseif ($selectedCategory) {
-$stmt->bind_param("s", $selectedCategory); // Single string parameter
-} elseif ($searchQuery) {
-$searchQuery = "%" . $searchQuery . "%"; // Wildcard for search
-$stmt->bind_param("s", $searchQuery); // Single string parameter
+if (!empty($binds)) {
+  $stmt->bind_param($types, ...$binds);
 }
-
 $stmt->execute();
 $result = $stmt->get_result();
-
-if (!$result) {
-die("Query failed: " . $conn->error);
-}
-
-
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" x-data="{ showLogin: false, showSignup: false, cartCount: 0 }" @keydown.escape.window="showLogin = false; showSignup = false">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Shop | Seven Dwarfs Boutique</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+
+  <style>
+    :root {
+      --rose-muted: #d37689;
+      --rose-hover: #b75f6f;
+      --blush-bg: #faf7f8;
+      --soft-bg: #f5f2f3;
+      --text-gray: #444;
+    }
+
+    body {
+      background-color: var(--blush-bg);
+      color: var(--text-gray);
+      font-family: 'Poppins', sans-serif;
+    }
+
+    .btn-rose {
+      background-color: var(--rose-muted);
+      color: white;
+      transition: background-color 0.2s ease, transform 0.2s ease;
+    }
+
+    .btn-rose:hover {
+      background-color: var(--rose-hover);
+      transform: translateY(-1px);
+    }
+
+    .nav-link:hover {
+      color: var(--rose-muted);
+      transform: translateY(-1px);
+    }
+
+    .card {
+      transition: all 0.25s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 16px rgba(0,0,0,0.08);
+    }
+
+    [x-cloak] { display: none !important; }
+  </style>
 </head>
-<body class="bg-pink-50 text-gray-800" x-data="{ showLogin: false, showSignup: false, cartCount: 0 }" @keydown.escape.window="showLogin = false; showSignup = false">
-  <!-- Navbar -->
-  <nav class="bg-pink-100 shadow-md">
-    <div class="max-w-7xl mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-4">
-      
-  
 
-      <!-- Left side: Logo and Brand Name -->
-      <div class="flex items-center space-x-4">
-        <img src="logo.png" alt="User profile picture" class="rounded-full" width="60" height="50">
-      </div>                       
+<body>
 
-      <!-- Left: Logo + Search -->
-      <div class="flex flex-1 items-center gap-4">
-        <h1 class="text-2xl font-bold text-pink-600 whitespace-nowrap">Seven Dwarfs Boutique</h1>
-        <form action="shop.php" method="get" class="flex flex-1 max-w-sm">
-          <input type="text" name="search" placeholder="Search products..." 
-                class="w-full px-3 py-2 border border-pink-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-400 text-sm">
-        </form>
-      </div>
-      
-    
-    <div class="flex items-center justify-center space-x-8">
-  
- <!-- Center: Navigation Links -->
- <ul class="flex flex-wrap justify-center space-x-4 text-sm md:text-base">
-        <li><a href="homepage.php" class="hover:text-pink-500">Home</a></li>
-        <li><a href="shop.php" class="bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-full transition">Shop</a></li>
-        <li><a href="about" class="hover:text-pink-500">About</a></li>
-        <li><a href="contact" class="hover:text-pink-500">Contact</a></li>
-      </ul>
+<!-- 🌸 Navbar -->
+<nav class="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-50">
+  <div class="max-w-7xl mx-auto px-4 py-4 flex flex-wrap justify-between items-center gap-4">
 
-      
+    <!-- Left: Logo -->
+    <div class="flex items-center gap-3">
+      <img src="logo.png" alt="Logo" class="w-10 h-10 rounded-full">
+      <h1 class="text-xl font-semibold text-[var(--rose-muted)]">Seven Dwarfs Boutique</h1>
+    </div>
 
-      <!-- Right: Icons -->
-      <div class="flex items-center gap-4 text-pink-600">
-        <!-- Cart Icon -->
-        <a href="cart.php" class="hover:text-pink-500" title="Cart">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13l-1.5 6h11.1a1 1 0 001-.8l1.4-5.2H7zm0 0l-1-4H4" />
-          </svg>
-        </a>
-
-        <!-- Profile Icon -->
-    <!-- Profile -->
-    <div class="relative">
-  <?php if ($isLoggedIn): ?>
-  <div x-data="{ open: false }" class="relative">
-    <button @click="open = !open" class="hover:text-pink-500" title="Profile">
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-pink-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A4 4 0 0112 14a4 4 0 016.879 3.804M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-      </svg>
-    </button>
-    <div x-show="open" @click.away="open = false" class="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
-      <a href="profile.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-pink-100">My Profile</a>
-      <a href="purchases.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-pink-100">My Purchases</a>
-      <form action="logout.php" method="POST">
-        <button type="submit" class="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-pink-100">Logout</button>
+    <!-- Search -->
+    <div class="flex flex-1 items-center gap-4 max-w-lg">
+      <form action="shop.php" method="get" class="flex flex-1">
+        <input type="text" name="search" placeholder="Search products..."
+               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--rose-muted)] outline-none text-sm">
       </form>
     </div>
-  </div>
-  <?php else: ?>
-  <button @click="showLogin = true" class="hover:text-pink-500" title="Profile">
-    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A4 4 0 0112 14a4 4 0 016.879 3.804M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-    </svg>
-  </button>
-  <?php endif; ?>
-</div>
 
+    <!-- Links -->
+    <ul class="hidden md:flex space-x-5 text-sm font-medium">
+      <li><a href="homepage.php" class="nav-link">Home</a></li>
+      <li><a href="shop.php" class="text-white bg-[var(--rose-muted)] hover:bg-[var(--rose-hover)] px-4 py-2 rounded-full transition">Shop</a></li>
+      <li><a href="about.php" class="nav-link">About</a></li>
+      <li><a href="contact.php" class="nav-link">Contact</a></li>
+    </ul>
 
+    <!-- Icons -->
+    <div class="flex items-center gap-5">
+      <a href="cart.php" class="text-[var(--rose-muted)] hover:text-[var(--rose-hover)] relative">
+        <i class="fa-solid fa-cart-shopping text-lg"></i>
+      </a>
+
+      <!-- Profile -->
+      <div class="relative">
+        <?php if ($isLoggedIn): ?>
+        <div x-data="{ open: false }">
+          <img src="<?= $avatar ?>" alt="Profile" class="w-8 h-8 rounded-full border border-[var(--rose-muted)] cursor-pointer" @click="open=!open">
+          <div x-show="open" @click.away="open=false"
+               class="absolute right-0 mt-3 w-44 bg-white border border-gray-200 rounded-xl shadow-lg z-50">
+            <a href="profile.php" class="block px-4 py-2 text-sm hover:bg-[var(--soft-bg)]">My Profile</a>
+            <a href="purchases.php" class="block px-4 py-2 text-sm hover:bg-[var(--soft-bg)]">My Purchases</a>
+            <form action="logout.php" method="POST">
+              <button type="submit" class="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-[var(--soft-bg)]">Logout</button>
+            </form>
+          </div>
+        </div>
+        <?php else: ?>
+        <button @click="showLogin = true" class="text-[var(--rose-muted)] hover:text-[var(--rose-hover)]">
+          <i class="fa-solid fa-user text-xl"></i>
+        </button>
+        <?php endif; ?>
+      </div>
+    </div>
   </div>
 </nav>
 
-<!-- Login Modal -->
-<div x-show="showLogin" x-transition x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-  <div class="bg-white rounded-lg p-6 w-full max-w-md relative">
-    <button @click="showLogin = false" class="absolute top-3 right-3 text-gray-400 hover:text-pink-500 text-lg font-bold">&times;</button>
-    <h2 class="text-lg font-semibold mb-4 text-pink-600">Login</h2>
-    <form action="login_handler.php" method="POST">
-      <input type="email" name="email" placeholder="Email" required class="w-full border border-gray-300 p-2 rounded mb-3 focus:ring-2 focus:ring-pink-400">
-      <input type="password" name="password" placeholder="Password" required class="w-full border border-gray-300 p-2 rounded mb-3 focus:ring-2 focus:ring-pink-400">
-      <button type="submit" class="w-full bg-pink-500 text-white py-2 rounded hover:bg-pink-600 transition">Log In</button>
-    </form>
-    <p class="text-sm text-center mt-4">
-      Don't have an account? 
-      <button @click="showLogin = false; showSignup = true" class="text-pink-600 hover:underline">Sign up here</button>
-    </p>
-  </div>
-</div>
+<!-- 🛍️ Main Section -->
+<section class="max-w-7xl mx-auto px-4 py-12 flex flex-col md:flex-row gap-8">
 
-<!-- Signup Modal -->
-<div x-show="showSignup" x-transition x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-  <div class="bg-white rounded-lg p-6 w-full max-w-md relative" x-data="{ password: '', confirmPassword: '', mismatch: false }">
-    <button @click="showSignup = false" class="absolute top-3 right-3 text-gray-400 hover:text-pink-500 text-lg font-bold">&times;</button>
-    <h2 class="text-lg font-semibold mb-4 text-pink-600">Sign Up</h2>
-    <form action="signup_handler.php" method="POST" @submit.prevent="mismatch = password !== confirmPassword; if (!mismatch) $el.submit();">
-      <input type="text" name="first_name" placeholder="First Name" required class="w-full border border-gray-300 p-2 rounded mb-3 focus:ring-2 focus:ring-pink-400">
-      <input type="text" name="last_name" placeholder="Last Name" required class="w-full border border-gray-300 p-2 rounded mb-3 focus:ring-2 focus:ring-pink-400">
-      <input type="email" name="email" placeholder="Email" required class="w-full border border-gray-300 p-2 rounded mb-3 focus:ring-2 focus:ring-pink-400">
-      <input type="text" name="phone" placeholder="Phone" required class="w-full border border-gray-300 p-2 rounded mb-3 focus:ring-2 focus:ring-pink-400">
-      <input type="text" name="address" placeholder="Address" required class="w-full border border-gray-300 p-2 rounded mb-3 focus:ring-2 focus:ring-pink-400">
-      <input type="password" name="password" placeholder="Password" x-model="password" required class="w-full border border-gray-300 p-2 rounded mb-3 focus:ring-2 focus:ring-pink-400">
-      <input type="password" name="confirm_password" placeholder="Confirm Password" x-model="confirmPassword" required class="w-full border border-gray-300 p-2 rounded mb-3 focus:ring-2 focus:ring-pink-400">
-
-      <template x-if="mismatch">
-        <p class="text-red-500 text-sm mb-3">Passwords do not match.</p>
-      </template>
-
-      <button type="submit" class="w-full bg-pink-500 text-white py-2 rounded hover:bg-pink-600 transition">Sign Up</button>
-    </form>
-  </div>
-</div>
-
- <!-- Main Content -->
-<section class="max-w-7xl mx-auto px-4 py-12 flex gap-10">
-  <!-- Sidebar -->
-  <aside class="w-64 bg-white rounded-xl shadow-md p-6">
-    <h3 class="text-lg font-bold mb-4 text-pink-700">Filters</h3>
-    <ul class="space-y-2">
-      <li><a href="shop.php" class="text-gray-700 hover:text-pink-600">✨ New Arrivals</a></li>
-      <li><a href="#" class="text-gray-700 hover:text-pink-600">🔥 On Sale</a></li>
+  <!-- Sidebar Filters -->
+  <aside class="w-full md:w-64 bg-white rounded-xl shadow p-6">
+    <h3 class="text-lg font-semibold mb-4 text-[var(--rose-muted)]">Filters</h3>
+    <ul class="space-y-2 text-sm">
+      <li><a href="shop.php" class="hover:text-[var(--rose-muted)]">✨ New Arrivals</a></li>
+      <li><a href="#" class="hover:text-[var(--rose-muted)]">🔥 On Sale</a></li>
     </ul>
+
     <div class="mt-6">
-      <button class="w-full flex justify-between items-center font-semibold text-pink-600">
-        Categories
-        <svg class="w-4 h-4 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-      <ul class="mt-3 pl-2 text-sm text-gray-700 space-y-1">
+      <h4 class="font-semibold text-gray-700 mb-2">Categories</h4>
+      <ul class="space-y-1 text-sm">
         <?php foreach ($categories as $cat): ?>
           <li>
-            <a href="shop.php?category=<?= urlencode($cat) ?>" 
-              class="<?= $selectedCategory === $cat ? 'text-pink-600 font-semibold' : 'hover:text-pink-500' ?>">
-              <?= $cat ?>
+            <a href="shop.php?category=<?= urlencode($cat) ?>"
+              class="<?= $selectedCategory === $cat ? 'text-[var(--rose-muted)] font-semibold' : 'hover:text-[var(--rose-muted)]' ?>">
+              <?= htmlspecialchars($cat) ?>
             </a>
           </li>
         <?php endforeach; ?>
@@ -270,22 +231,74 @@ die("Query failed: " . $conn->error);
 
   <!-- Product Grid -->
   <div class="flex-1">
-    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
-      <?php if ($result && $result->num_rows > 0): ?>
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+      <?php if ($result->num_rows > 0): ?>
         <?php while ($product = $result->fetch_assoc()): ?>
-          <div class="bg-white rounded-xl shadow-md p-4 transform transition-transform duration-300 hover:scale-105 hover:-translate-y-2 hover:shadow-lg">
-            <a href="product_detail.php?product_id=<?php echo $product['product_id']; ?>" class="block">
-              <img src="<?php echo $product['image_url']; ?>" alt="<?php echo htmlspecialchars($product['product_name']); ?>" class="w-full h-48 object-cover rounded-lg mb-4">
-              <h4 class="text-lg font-semibold"><?php echo htmlspecialchars($product['product_name']); ?></h4>
-              <p class="text-sm text-gray-600 mt-2"><?php echo htmlspecialchars($product['category_name']); ?></p>
-              <p class="font-semibold text-pink-600 mt-2">₱<?php echo number_format($product['price'], 2); ?></p>
-            
-            </a>
-          </div>
+          <?php if ($product['total_stock'] > 0): ?>
+            <div class="card bg-white rounded-xl shadow p-4">
+              <a href="product_detail.php?product_id=<?= $product['product_id']; ?>">
+                <img src="<?= $product['image_url'] ?: 'assets/no-image.png' ?>"
+                     alt="<?= htmlspecialchars($product['product_name']); ?>"
+                     class="w-full h-48 object-cover rounded-lg mb-3">
+                <h4 class="text-lg font-semibold truncate"><?= htmlspecialchars($product['product_name']); ?></h4>
+                <p class="text-sm text-gray-500"><?= htmlspecialchars($product['category_name']); ?></p>
+                <p class="mt-2 font-bold text-[var(--rose-muted)]">₱<?= number_format($product['price'], 2); ?></p>
+              </a>
+            </div>
+          <?php endif; ?>
         <?php endwhile; ?>
       <?php else: ?>
-        <p class="text-gray-500 text-lg">No products found.</p>
+        <p class="col-span-full text-center text-gray-500">No products found.</p>
       <?php endif; ?>
     </div>
   </div>
 </section>
+
+<!-- 🔐 Login Modal -->
+<div x-show="showLogin" x-transition x-cloak
+     class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 backdrop-blur-sm">
+  <div class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md relative">
+    <button @click="showLogin = false" class="absolute top-4 right-4 text-gray-400 hover:text-[var(--rose-muted)] text-2xl font-bold">&times;</button>
+    <h2 class="text-2xl font-bold mb-6 text-center text-[var(--rose-muted)]">Welcome Back</h2>
+    <form action="login_handler.php" method="POST" class="space-y-4">
+      <input type="email" name="email" placeholder="Email" required class="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-[var(--rose-muted)] outline-none">
+      <input type="password" name="password" placeholder="Password" required class="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-[var(--rose-muted)] outline-none">
+      <button type="submit" class="btn-rose w-full py-3 rounded-lg font-medium">Log In</button>
+    </form>
+    <p class="text-sm text-center mt-6 text-gray-600">
+      Don’t have an account?
+      <button @click="showLogin = false; showSignup = true" class="text-[var(--rose-muted)] hover:underline font-medium">Sign up here</button>
+    </p>
+  </div>
+</div>
+
+<!-- 📝 Signup Modal -->
+<div x-show="showSignup" x-transition x-cloak
+     class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 backdrop-blur-sm">
+  <div class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md relative"
+       x-data="{ password: '', confirmPassword: '', mismatch: false }">
+    <button @click="showSignup = false" class="absolute top-4 right-4 text-gray-400 hover:text-[var(--rose-muted)] text-2xl font-bold">&times;</button>
+    <h2 class="text-2xl font-bold mb-6 text-center text-[var(--rose-muted)]">Create Account</h2>
+    <form action="signup_handler.php" method="POST" class="space-y-4"
+          @submit.prevent="mismatch = password !== confirmPassword; if (!mismatch) $el.submit();">
+      <div class="grid grid-cols-2 gap-4">
+        <input type="text" name="first_name" placeholder="First Name" required class="border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-[var(--rose-muted)] outline-none">
+        <input type="text" name="last_name" placeholder="Last Name" required class="border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-[var(--rose-muted)] outline-none">
+      </div>
+      <input type="email" name="email" placeholder="Email" required class="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-[var(--rose-muted)] outline-none">
+      <input type="text" name="phone" placeholder="Phone" required class="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-[var(--rose-muted)] outline-none">
+      <input type="text" name="address" placeholder="Address" required class="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-[var(--rose-muted)] outline-none">
+      <input type="password" name="password" placeholder="Password" x-model="password" required class="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-[var(--rose-muted)] outline-none">
+      <input type="password" name="confirm_password" placeholder="Confirm Password" x-model="confirmPassword" required class="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-[var(--rose-muted)] outline-none">
+      <template x-if="mismatch"><p class="text-red-500 text-sm -mt-2">⚠ Passwords do not match.</p></template>
+      <button type="submit" class="btn-rose w-full py-3 rounded-lg font-medium">Sign Up</button>
+    </form>
+    <p class="text-sm text-center mt-6 text-gray-600">
+      Already have an account?
+      <button @click="showSignup = false; showLogin = true" class="text-[var(--rose-muted)] hover:underline font-medium">Log in here</button>
+    </p>
+  </div>
+</div>
+
+</body>
+</html>

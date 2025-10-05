@@ -1,43 +1,34 @@
 <?php
 session_start();
+require 'conn.php';
 
-// Ensure the user is logged in
 if (!isset($_SESSION['customer_id'])) {
-    header('Location: login.php'); // Redirect to login page if not logged in
+    echo "<script>alert('Please login to add items to cart'); window.location.href='login.php';</script>";
     exit;
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['product_id'])) {
-    $productId = $_POST['product_id'];
-    $productName = $_POST['product_name'];
-    $price = $_POST['price_id']; // Inconsistent naming: price vs. price_id
-    $quantity = isset($_POST['quantity']) ? (int) $_POST['quantity'] : 1;
+$customer_id = $_SESSION['customer_id'];
+$product_id = $_POST['product_id'];
+$quantity = intval($_POST['quantity'] ?? 1);
 
-    // Initialize cart if not already
-    if (!isset($_SESSION['carts'])) { // Inconsistent naming: carts vs. cart
-        $_SESSION['carts'] = [];
-    }
+// Check if this product is already in the user's cart
+$stmt = $conn->prepare("SELECT cart_id, quantity FROM carts WHERE customer_id = ? AND product_id = ? AND cart_status = 'active'");
+$stmt->bind_param("ii", $customer_id, $product_id);
+$stmt->execute();
+$result = $stmt->get_result();
 
-    // Check if product is already in the cart
-    if (isset($_SESSION['carts'][$productId])) {
-        $_SESSION['carts'][$productId]['quantity'] += $quantity;
-    } else {
-        $_SESSION['carts'][$productId] = [
-            'product_name' => $productName,
-            'price_id' => $price, // Keep consistent: price_id
-            'quantity' => $quantity
-        ];
-    }
-
-    // Debugging line to see if the cart is updating correctly
-    // var_dump($_SESSION['carts']);  // Remove in production
-
-    // Redirect to cart page
-    header('Location: cart.php');
-    exit;
+if ($row = $result->fetch_assoc()) {
+    // Update quantity
+    $newQty = $row['quantity'] + $quantity;
+    $update = $conn->prepare("UPDATE carts SET quantity = ? WHERE cart_id = ?");
+    $update->bind_param("ii", $newQty, $row['cart_id']);
+    $update->execute();
 } else {
-    // Invalid access
-    header('Location: shop.php');
-    exit;
+    // Insert new item
+    $insert = $conn->prepare("INSERT INTO carts (customer_id, product_id, quantity, cart_status, created_at) VALUES (?, ?, ?, 'active', NOW())");
+    $insert->bind_param("iii", $customer_id, $product_id, $quantity);
+    $insert->execute();
 }
-?>
+
+header("Location: cart.php");
+exit;

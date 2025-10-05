@@ -1,13 +1,18 @@
 <?php
 session_start();
+require 'conn.php';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['product_id'])) {
-    $productId = $_POST['product_id'];
-
-    if (isset($_SESSION['carts'][$productId])) {
-        unset($_SESSION['carts'][$productId]);
-    }
+if (!isset($_SESSION['customer_id'])) {
+    header("Location: login.php");
+    exit;
 }
 
-header('Location: cart.php');
+$cart_id = $_POST['cart_id'] ?? null;
+if ($cart_id) {
+    $stmt = $conn->prepare("DELETE FROM carts WHERE cart_id = ? AND customer_id = ?");
+    $stmt->bind_param("ii", $cart_id, $_SESSION['customer_id']);
+    $stmt->execute();
+}
+
+header("Location: cart.php");
 exit;
