@@ -124,11 +124,6 @@ $suppliers = $conn->query("SELECT * FROM suppliers");
         </li>
 
         <li class="px-4 py-2 hover:bg-gray-200">
-          <a href="storesettings.php" class="flex items-center">
-            <i class="fas fa-cog mr-2"></i>Store Settings
-          </a>
-        </li>
-        <li class="px-4 py-2 hover:bg-gray-200">
           <a href="logout.php" class="flex items-center">
             <i class="fas fa-sign-out-alt mr-2"></i>Log out
           </a>
