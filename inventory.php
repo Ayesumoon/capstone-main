@@ -53,18 +53,17 @@ $selectedCategory = $_GET['category'] ?? 'all';
 $selectedColor    = $_GET['color'] ?? 'all';
 $selectedSize     = $_GET['size'] ?? 'all';
 
-// 🔹 Build query using stock.current_qty
+// 🔹 Build query (grouped per product)
 $sqlProducts = "
     SELECT 
         p.product_id,
         p.product_name,
         c.category_name,
-        st.current_qty AS stocks,  -- ✅ live stock value
+        GROUP_CONCAT(DISTINCT col.color ORDER BY col.color SEPARATOR ', ') AS colors,
+        GROUP_CONCAT(DISTINCT sz.size ORDER BY sz.size SEPARATOR ', ') AS sizes,
+        SUM(st.current_qty) AS total_stock,
         p.created_at,
-        s.supplier_name,
-        p.supplier_price,
-        col.color,
-        sz.size
+        s.supplier_name
     FROM products p
     INNER JOIN categories c ON p.category_id = c.category_id
     LEFT JOIN suppliers s ON p.supplier_id = s.supplier_id
@@ -98,15 +97,13 @@ if ($where) {
     $sqlProducts .= " WHERE " . implode(" AND ", $where);
 }
 
-$sqlProducts .= " ORDER BY p.product_id, col.color, sz.size";
+$sqlProducts .= " GROUP BY p.product_id ORDER BY p.product_id DESC";
 
 // 🔹 Execute query
 $stmt = $conn->prepare($sqlProducts);
-
 if (!empty($params)) {
     $stmt->bind_param($types, ...$params);
 }
-
 $stmt->execute();
 $resultProducts = $stmt->get_result();
 
@@ -121,7 +118,6 @@ if ($resultProducts && $resultProducts->num_rows > 0) {
 $stmt->close();
 $conn->close();
 ?>
-
 
 <!DOCTYPE html>
 <html lang="en">
@@ -138,7 +134,7 @@ $conn->close();
             poppins: ['Poppins', 'sans-serif'],
           },
           colors: {
-            primary: '#ec4899', // pink-500
+            primary: '#ec4899',
           }
         }
       }
@@ -173,7 +169,6 @@ $conn->close();
               <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
             </a>
           </li>
-          <!-- User Management -->
           <li class="px-4 py-2 hover:bg-gray-200 cursor-pointer" @click="userMenu = !userMenu">
             <div class="flex items-center justify-between">
               <span class="flex items-center">
@@ -186,7 +181,6 @@ $conn->close();
             <li><a href="users.php" class="block py-1 hover:text-pink-600"><i class="fas fa-user mr-2"></i>User</a></li>
             <li><a href="customers.php" class="block py-1 hover:text-pink-600"><i class="fas fa-users mr-2"></i>Customer</a></li>
           </ul>
-          <!-- Product Management -->
           <li class="px-4 py-2 hover:bg-gray-200 cursor-pointer" @click="productMenu = !productMenu">
             <div class="flex items-center justify-between">
               <span class="flex items-center">
@@ -201,130 +195,103 @@ $conn->close();
             <li><a href="inventory.php" class="block py-1 bg-pink-100 text-pink-600 rounded"><i class="fas fa-warehouse mr-2"></i>Inventory</a></li>
             <li class="py-1 hover:text-pink-600"><a href="stock_management.php" class="flex items-center"><i class="fas fa-boxes mr-2"></i>Stock Management</a></li>
           </ul>
-          
-<!-- Other Pages -->
-<li class="px-4 py-2 hover:bg-gray-200">
-  <a href="orders.php" class="flex items-center">
-    <i class="fas fa-shopping-cart mr-2"></i>Orders
-  </a>
-</li>
-
-<li class="px-4 py-2 hover:bg-gray-200">
-  <a href="refund_history.php" class="flex items-center">
-    <i class="fas fa-undo-alt mr-2"></i>Refund History
-  </a>
-</li>
-
-<li class="px-4 py-2 hover:bg-gray-200">
-  <a href="suppliers.php" class="flex items-center">
-    <i class="fas fa-industry mr-2"></i>Suppliers
-  </a>
-</li>
-
-
-<li class="px-4 py-2 hover:bg-gray-200">
-  <a href="logout.php" class="flex items-center">
-    <i class="fas fa-sign-out-alt mr-2"></i>Log out
-  </a>
-</li>
-
+          <li class="px-4 py-2 hover:bg-gray-200">
+            <a href="orders.php" class="flex items-center"><i class="fas fa-shopping-cart mr-2"></i>Orders</a>
+          </li>
+          <li class="px-4 py-2 hover:bg-gray-200">
+            <a href="suppliers.php" class="flex items-center"><i class="fas fa-industry mr-2"></i>Suppliers</a>
+          </li>
+          <li class="px-4 py-2 hover:bg-gray-200">
+            <a href="logout.php" class="flex items-center"><i class="fas fa-sign-out-alt mr-2"></i>Log out</a>
+          </li>
         </ul>
       </nav>
     </div>
 
-   <!-- Main Content -->
-<div class="flex-1 p-6 overflow-auto">
-  <div class="bg-pink-300 text-white p-4 rounded-t-2xl shadow-sm">
-    <h1 class="text-xl font-bold">Inventory Management</h1>
-  </div>
-  <div class="bg-white p-4 rounded-b shadow-md mb-6">
-  <form method="GET" action="inventory.php" class="flex flex-wrap items-center gap-4">
-    
-    <!-- Category Filter -->
-    <div>
-      <label for="category" class="font-medium text-sm">Category:</label>
-      <select name="category" id="category" onchange="this.form.submit()" class="border rounded-md p-2 text-sm">
-        <option value="all">All</option>
-        <?php foreach ($categories as $category) { ?>
-          <option value="<?php echo $category['category_name']; ?>" 
-            <?php echo ($selectedCategory == $category['category_name']) ? 'selected' : ''; ?>>
-            <?php echo $category['category_name']; ?>
-          </option>
-        <?php } ?>
-      </select>
+    <!-- Main Content -->
+    <div class="flex-1 p-6 overflow-auto">
+      <div class="bg-pink-300 text-white p-4 rounded-t-2xl shadow-sm">
+        <h1 class="text-xl font-bold">Inventory Management</h1>
+      </div>
+
+      <div class="bg-white p-4 rounded-b shadow-md mb-6">
+        <form method="GET" action="inventory.php" class="flex flex-wrap items-center gap-4">
+          <div>
+            <label for="category" class="font-medium text-sm">Category:</label>
+            <select name="category" id="category" onchange="this.form.submit()" class="border rounded-md p-2 text-sm">
+              <option value="all">All</option>
+              <?php foreach ($categories as $category) { ?>
+                <option value="<?php echo $category['category_name']; ?>" <?php echo ($selectedCategory == $category['category_name']) ? 'selected' : ''; ?>>
+                  <?php echo $category['category_name']; ?>
+                </option>
+              <?php } ?>
+            </select>
+          </div>
+          <div>
+            <label for="color" class="font-medium text-sm">Color:</label>
+            <select name="color" id="color" onchange="this.form.submit()" class="border rounded-md p-2 text-sm">
+              <option value="all">All</option>
+              <?php foreach ($colors as $color) { ?>
+                <option value="<?php echo $color['color']; ?>" <?php echo ($selectedColor == $color['color']) ? 'selected' : ''; ?>>
+                  <?php echo $color['color']; ?>
+                </option>
+              <?php } ?>
+            </select>
+          </div>
+          <div>
+            <label for="size" class="font-medium text-sm">Size:</label>
+            <select name="size" id="size" onchange="this.form.submit()" class="border rounded-md p-2 text-sm">
+              <option value="all">All</option>
+              <?php foreach ($sizes as $size) { ?>
+                <option value="<?php echo $size['size']; ?>" <?php echo ($selectedSize == $size['size']) ? 'selected' : ''; ?>>
+                  <?php echo $size['size']; ?>
+                </option>
+              <?php } ?>
+            </select>
+          </div>
+        </form>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm text-sm">
+          <thead class="bg-gray-100 text-gray-700">
+            <tr>
+              <th class="px-4 py-3 border text-left">Product Name</th>
+              <th class="px-4 py-3 border text-left">Category</th>
+              <th class="px-4 py-3 border text-left">Colors</th>
+              <th class="px-4 py-3 border text-left">Sizes</th>
+              <th class="px-4 py-3 border text-left">Created At</th>
+              <th class="px-4 py-3 border text-left">Stock</th>
+              <th class="px-4 py-3 border text-left">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php 
+            if (!empty($inventory)) { 
+              foreach ($inventory as $item) {
+                $stock = (int)$item['total_stock'];
+                $status = ($stock > 20) ? "In Stock" : (($stock > 0) ? "Low Stock" : "Out of Stock");
+            ?>
+            <tr class="hover:bg-gray-50 transition-all">
+              <td class="px-4 py-2 border"><?php echo $item['product_name']; ?></td>
+              <td class="px-4 py-2 border"><?php echo $item['category_name']; ?></td>
+              <td class="px-4 py-2 border"><?php echo $item['colors'] ?: '—'; ?></td>
+              <td class="px-4 py-2 border"><?php echo $item['sizes'] ?: '—'; ?></td>
+              <td class="px-4 py-2 border"><?php echo $item['created_at']; ?></td>
+              <td class="px-4 py-2 border text-center"><?php echo $stock; ?></td>
+              <td class="px-4 py-2 border font-semibold capitalize <?php echo ($status === 'In Stock') ? 'text-green-600' : (($status === 'Low Stock') ? 'text-yellow-600' : 'text-red-600'); ?>">
+                <?php echo $status; ?>
+              </td>
+            </tr>
+            <?php }} else { ?>
+            <tr>
+              <td colspan="7" class="text-center px-4 py-4 text-gray-500 border">No products found</td>
+            </tr>
+            <?php } ?>
+          </tbody>
+        </table>
+      </div>
     </div>
-
-    <!-- Color Filter -->
-    <div>
-      <label for="color" class="font-medium text-sm">Color:</label>
-      <select name="color" id="color" onchange="this.form.submit()" class="border rounded-md p-2 text-sm">
-        <option value="all">All</option>
-        <?php foreach ($colors as $color) { ?>
-          <option value="<?php echo $color['color']; ?>" 
-            <?php echo ($selectedColor == $color['color']) ? 'selected' : ''; ?>>
-            <?php echo $color['color']; ?>
-          </option>
-        <?php } ?>
-      </select>
-    </div>
-
-    <!-- Size Filter -->
-    <div>
-      <label for="size" class="font-medium text-sm">Size:</label>
-      <select name="size" id="size" onchange="this.form.submit()" class="border rounded-md p-2 text-sm">
-        <option value="all">All</option>
-        <?php foreach ($sizes as $size) { ?>
-          <option value="<?php echo $size['size']; ?>" 
-            <?php echo ($selectedSize == $size['size']) ? 'selected' : ''; ?>>
-            <?php echo $size['size']; ?>
-          </option>
-        <?php } ?>
-      </select>
-    </div>
-
-  </form>
-</div>
-
-  <div class="overflow-x-auto">
-    <table class="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm text-sm">
-      <thead class="bg-gray-100 text-gray-700">
-        <tr>
-          <th class="px-4 py-3 border text-left">Product Code</th>
-          <th class="px-4 py-3 border text-left">Category</th>
-          <th class="px-4 py-3 border text-left">Colors</th> 
-          <th class="px-4 py-3 border text-left">Sizes</th>
-          <th class="px-4 py-3 border text-left">Created At</th>
-          <th class="px-4 py-3 border text-left">Stock</th>
-          <th class="px-4 py-3 border text-left">Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        <?php 
-        if (!empty($inventory)) { 
-          foreach ($inventory as $item) {
-            $status = ($item['stocks'] > 20) ? "In Stock" : (($item['stocks'] > 0) ? "Low Stock" : "Out of Stock");
-        ?>
-        <tr class="hover:bg-gray-50 transition-all">
-          <td class="px-4 py-2 border"><?php echo $item['product_name']; ?></td>
-          <td class="px-4 py-2 border"><?php echo $item['category_name']; ?></td>
-          <td class="px-4 py-2 border"><?php echo $item['color'] ?: '—'; ?></td>
-          <td class="px-4 py-2 border"><?php echo $item['size'] ?: '—'; ?></td>
-          <td class="px-4 py-2 border"><?php echo $item['created_at']; ?></td>
-          <td class="px-4 py-2 border"><?php echo $item['stocks']; ?></td>
-          <td class="px-4 py-2 border font-semibold capitalize <?php echo ($status === 'In Stock') ? 'text-green-600' : (($status === 'Low Stock') ? 'text-yellow-600' : 'text-red-600'); ?>">
-            <?php echo $status; ?>
-          </td>
-        </tr>
-        <?php }} else { ?>
-        <tr>
-          <td colspan="7" class="text-center px-4 py-4 text-gray-500 border">No products found</td>
-        </tr>
-        <?php } ?>
-      </tbody>
-    </table>
-  </div>
-</div>
-
   </div>
 </body>
 </html>

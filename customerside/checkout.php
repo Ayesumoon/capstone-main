@@ -9,7 +9,6 @@ if (!isset($_SESSION['customer_id'])) {
 }
 
 $customer_id = $_SESSION['customer_id'];
-$isLoggedIn = true;
 
 // ✅ Fetch customer info
 $stmt = $conn->prepare("SELECT first_name, last_name, phone, address, profile_picture FROM customers WHERE customer_id = ?");
@@ -20,11 +19,21 @@ $stmt->close();
 
 $avatar = $customer['profile_picture'] ?? 'default-avatar.png';
 
-// ✅ Fetch cart items
+// ✅ Fetch cart items (linked to stock)
 $stmt = $conn->prepare("
-  SELECT c.cart_id, c.quantity, p.product_id, p.product_name, p.price_id, p.image_url
+  SELECT 
+      c.cart_id, 
+      c.quantity, 
+      c.color, 
+      c.size, 
+      s.stock_id,
+      p.product_id,
+      p.product_name, 
+      p.price_id AS price, 
+      p.image_url
   FROM carts c
-  JOIN products p ON c.product_id = p.product_id
+  INNER JOIN products p ON c.product_id = p.product_id
+  LEFT JOIN stock s ON s.product_id = p.product_id
   WHERE c.customer_id = ? AND c.cart_status = 'active'
 ");
 $stmt->bind_param("i", $customer_id);
@@ -35,7 +44,7 @@ $cartItems = [];
 $subtotal = 0;
 
 while ($row = $result->fetch_assoc()) {
-    $row['total'] = $row['price_id'] * $row['quantity'];
+    $row['total'] = $row['price'] * $row['quantity'];
     $subtotal += $row['total'];
     $cartItems[] = $row;
 }
@@ -45,38 +54,71 @@ $shippingFee = 69;
 $totalPayment = $subtotal + $shippingFee;
 
 // ✅ Get cart count for navbar
-$stmt = $conn->prepare("SELECT SUM(quantity) AS count FROM carts WHERE customer_id = ? AND cart_status = 'active'");
+$stmt = $conn->prepare("SELECT COUNT(*) AS count FROM carts WHERE customer_id = ? AND cart_status = 'active'");
 $stmt->bind_param("i", $customer_id);
 $stmt->execute();
 $stmt->bind_result($cartCount);
 $stmt->fetch();
 $stmt->close();
 
-// ✅ Handle place order
+// ✅ Handle checkout
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order'])) {
     $payment_method_id = intval($_POST['payment_method_id'] ?? 1);
 
-    foreach ($cartItems as $item) {
-        $product_id = $item['product_id'];
-        $quantity   = $item['quantity'];
-        $total      = $item['total'];
-
-        $stmt = $conn->prepare("
-            INSERT INTO orders (customer_id, product_id, quantity, total_amount, order_status_id, created_at, payment_method_id)
-            VALUES (?, ?, ?, ?, 1, NOW(), ?)
-        ");
-        $stmt->bind_param("iiidi", $customer_id, $product_id, $quantity, $total, $payment_method_id);
-        $stmt->execute();
+    if (empty($cartItems)) {
+        echo "<script>alert('Your cart is empty.'); window.location.href='cart.php';</script>";
+        exit;
     }
 
-    // ✅ Clear cart after checkout
-    $conn->query("UPDATE carts SET cart_status = 'checked_out' WHERE customer_id = $customer_id");
+    $conn->begin_transaction();
 
-    header("Location: thank_you.php");
-    exit;
+    try {
+        // 🔹 Insert into orders table
+        $stmt = $conn->prepare("
+            INSERT INTO orders (customer_id, total_amount, order_status_id, created_at, payment_method_id)
+            VALUES (?, ?, 1, NOW(), ?)
+        ");
+        $stmt->bind_param("idi", $customer_id, $totalPayment, $payment_method_id);
+        $stmt->execute();
+        $order_id = $stmt->insert_id;
+        $stmt->close();
+
+        // 🔹 Insert into order_items table (using stock_id)
+        $itemStmt = $conn->prepare("
+            INSERT INTO order_items (order_id, stock_id, qty, price)
+            VALUES (?, ?, ?, ?)
+        ");
+
+        foreach ($cartItems as $item) {
+            $itemStmt->bind_param(
+                "iiid",
+                $order_id,
+                $item['stock_id'],
+                $item['quantity'],
+                $item['price']
+            );
+            $itemStmt->execute();
+        }
+        $itemStmt->close();
+
+        // 🔹 Update cart status
+        $updateCart = $conn->prepare("UPDATE carts SET cart_status = 'checked_out' WHERE customer_id = ?");
+        $updateCart->bind_param("i", $customer_id);
+        $updateCart->execute();
+        $updateCart->close();
+
+        // 🔹 Commit
+        $conn->commit();
+
+        header("Location: thank_you.php?order_id=" . $order_id);
+        exit;
+    } catch (Exception $e) {
+        $conn->rollback();
+        echo "<script>alert('Order failed: " . addslashes($e->getMessage()) . "'); history.back();</script>";
+        exit;
+    }
 }
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -101,13 +143,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order'])) {
 <!-- ✅ Navbar -->
 <nav class="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-50">
   <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-    <!-- Logo -->
     <div class="flex items-center gap-3">
       <img src="logo.png" alt="Logo" class="w-10 h-10 rounded-full">
       <h1 class="text-xl font-semibold text-[var(--rose-muted)]">Seven Dwarfs Boutique</h1>
     </div>
 
-    <!-- Links -->
     <ul class="hidden md:flex space-x-5 text-sm font-medium">
       <li><a href="homepage.php" class="hover:text-[var(--rose-hover)]">Home</a></li>
       <li><a href="shop.php" class="text-[var(--rose-muted)] font-semibold">Shop</a></li>
@@ -115,9 +155,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order'])) {
       <li><a href="contact.php" class="hover:text-[var(--rose-hover)]">Contact</a></li>
     </ul>
 
-    <!-- Cart + Profile -->
     <div class="flex items-center gap-6">
-      <!-- Cart -->
       <a href="cart.php" class="relative text-[var(--rose-muted)] hover:text-[var(--rose-hover)] transition">
         <i class="fa-solid fa-cart-shopping text-lg"></i>
         <?php if ($cartCount > 0): ?>
@@ -127,7 +165,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order'])) {
         <?php endif; ?>
       </a>
 
-      <!-- Profile -->
       <div class="relative">
         <img src="<?= htmlspecialchars($avatar) ?>" 
              class="w-8 h-8 rounded-full border cursor-pointer" 
@@ -147,8 +184,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order'])) {
 <!-- ✅ Checkout -->
 <main class="max-w-6xl mx-auto mt-8 space-y-6 px-4">
   <form method="POST" class="space-y-6">
-
-    <!-- Shipping Address -->
     <section class="bg-white rounded-xl border p-5 shadow-sm">
       <h2 class="font-semibold text-gray-800 text-base mb-2">Shipping Address</h2>
       <div class="flex items-center justify-between">
@@ -163,7 +198,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order'])) {
       </div>
     </section>
 
-    <!-- Product List -->
+    <!-- Products -->
     <section class="bg-white rounded-xl border shadow-sm">
       <div class="p-4 border-b font-semibold text-gray-800">Products Ordered</div>
       <div class="divide-y">
@@ -173,6 +208,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order'])) {
             <img src="<?= htmlspecialchars($item['image_url']); ?>" alt="Product" class="w-16 h-16 border rounded">
             <div>
               <p class="font-medium"><?= htmlspecialchars($item['product_name']); ?></p>
+              <p class="text-gray-500 text-sm">Color: <?= htmlspecialchars($item['color']); ?> | Size: <?= htmlspecialchars($item['size']); ?></p>
               <p class="text-gray-500">Qty: <?= $item['quantity']; ?></p>
             </div>
           </div>
@@ -182,38 +218,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order'])) {
       </div>
     </section>
 
-    <!-- ✅ Dynamic Payment Methods -->
+    <!-- Payment -->
     <section class="bg-white rounded-xl border p-5 shadow-sm">
       <h2 class="font-semibold text-pink-800 text-base mb-3">Payment Method</h2>
       <div class="space-y-3">
         <?php
-        if (isset($conn) && $conn instanceof mysqli && $conn->ping()) {
-            $pm_query = $conn->query("SELECT payment_method_id, payment_method_name FROM payment_methods ORDER BY payment_method_id ASC");
-            if ($pm_query && $pm_query->num_rows > 0):
-                $first = true;
-                while ($pm = $pm_query->fetch_assoc()):
+        $pm_query = $conn->query("SELECT payment_method_id, payment_method_name FROM payment_methods ORDER BY payment_method_id ASC");
+        if ($pm_query && $pm_query->num_rows > 0):
+            $first = true;
+            while ($pm = $pm_query->fetch_assoc()):
         ?>
-                  <label class="flex items-center gap-2 cursor-pointer">
-                    <input type="radio" 
-                          name="payment_method_id" 
-                          value="<?= htmlspecialchars($pm['payment_method_id']); ?>" 
-                          <?= $first ? 'checked' : ''; ?>>
-                    <span><?= htmlspecialchars($pm['payment_method_name']); ?></span>
-                  </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="radio" name="payment_method_id" value="<?= htmlspecialchars($pm['payment_method_id']); ?>" <?= $first ? 'checked' : ''; ?>>
+            <span><?= htmlspecialchars($pm['payment_method_name']); ?></span>
+          </label>
         <?php 
-                    $first = false;
-                endwhile;
-            else:
-                echo '<p class="text-gray-500 text-sm">No available payment methods.</p>';
-            endif;
-        } else {
-            echo '<p class="text-gray-500 text-sm">Database connection unavailable.</p>';
-        }
+            $first = false;
+            endwhile;
+        else:
+            echo '<p class="text-gray-500 text-sm">No available payment methods.</p>';
+        endif;
         ?>
       </div>
     </section>
 
-    <!-- Order Summary -->
+    <!-- Summary -->
     <section class="bg-white rounded-xl border p-5 shadow-sm">
       <div class="flex justify-between py-2">
         <span>Merchandise Subtotal</span>
@@ -229,7 +258,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order'])) {
       </div>
     </section>
 
-    <!-- Place Order Button -->
     <div class="flex justify-end">
       <button type="submit" name="place_order"
         class="px-10 py-3 bg-[var(--rose-muted)] text-white font-semibold rounded-lg hover:bg-[var(--rose-hover)] shadow transition">

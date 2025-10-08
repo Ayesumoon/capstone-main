@@ -2,181 +2,143 @@
 session_start();
 require 'conn.php';
 
-if (!isset($_SESSION['customer_id'])) {
-  header("Location: login.php");
-  exit;
+// 🧠 Verify order ID and customer login
+if (!isset($_GET['order_id']) || !isset($_SESSION['customer_id'])) {
+    header("Location: shop.php");
+    exit;
 }
 
+$order_id = intval($_GET['order_id']);
 $customer_id = $_SESSION['customer_id'];
 
-// ✅ Fetch the latest order of this customer
-$sql = "
-SELECT o.order_id, o.created_at, o.total_amount, o.payment_method_id, pm.payment_method_name AS payment_method
-FROM orders o
-JOIN payment_methods pm ON o.payment_method_id = pm.payment_method_id
-WHERE o.customer_id = ?
-ORDER BY o.created_at DESC
-LIMIT 1
-";
-$stmt = $conn->prepare($sql);
-$stmt->bind_param("i", $customer_id);
-$stmt->execute();
-$order = $stmt->get_result()->fetch_assoc();
+// 🧾 Fetch order details
+$order_stmt = $conn->prepare("
+    SELECT 
+        o.order_id, 
+        o.total_amount, 
+        o.created_at, 
+        os.order_status_name, 
+        pm.payment_method_name
+    FROM orders o
+    JOIN order_status os ON o.order_status_id = os.order_status_id
+    JOIN payment_methods pm ON o.payment_method_id = pm.payment_method_id
+    WHERE o.order_id = ? AND o.customer_id = ?
+");
+$order_stmt->bind_param("ii", $order_id, $customer_id);
+$order_stmt->execute();
+$order = $order_stmt->get_result()->fetch_assoc();
+$order_stmt->close();
 
 if (!$order) {
-  echo "No recent order found.";
-  exit;
+    echo "<script>alert('Order not found.'); window.location.href='shop.php';</script>";
+    exit;
 }
 
-// ✅ Get order items (join directly with products)
-$sqlItems = "
-SELECT p.product_name, p.image_url, o.quantity AS qty, p.price_id AS price, (o.quantity * p.price_id) AS total
-FROM orders o
-JOIN products p ON o.product_id = p.product_id
-WHERE o.order_id = ?
-";
-$stmt = $conn->prepare($sqlItems);
-$stmt->bind_param("i", $order['order_id']);
-$stmt->execute();
-$items = $stmt->get_result();
-
-
+// 🛍 Fetch ordered products
+$item_stmt = $conn->prepare("
+    SELECT 
+        oi.product_id, 
+        oi.qty, 
+        oi.price, 
+        oi.color, 
+        oi.size, 
+        p.product_name, 
+        p.image_url
+    FROM order_items oi
+    JOIN products p ON oi.product_id = p.product_id
+    WHERE oi.order_id = ?
+");
+$item_stmt->bind_param("i", $order_id);
+$item_stmt->execute();
+$items = $item_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$item_stmt->close();
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
   <title>Thank You | Seven Dwarfs Boutique</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
-
   <style>
     :root {
-      --rose-muted: #d37689;
+      --rose: #d37689;
       --rose-hover: #b75f6f;
-      --soft-bg: #fef9fa;
+      --soft-bg: #fff7f8;
     }
     body {
       background-color: var(--soft-bg);
       font-family: 'Poppins', sans-serif;
-      color: #444;
     }
   </style>
 </head>
 
 <body class="text-gray-800">
 
-<!-- 🌸 Navbar -->
+<!-- ✅ Navbar -->
 <nav class="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-50">
-  <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between gap-6">
-    
-    <!-- Brand -->
+  <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
     <div class="flex items-center gap-3">
       <img src="logo.png" alt="Logo" class="w-10 h-10 rounded-full">
-      <h1 class="text-xl font-semibold text-[var(--rose-muted)]">Seven Dwarfs Boutique</h1>
-    </div>
-
-    <!-- Links -->
-    <ul class="hidden md:flex space-x-5 text-sm font-medium">
-      <li><a href="homepage.php" class="hover:text-[var(--rose-muted)]">Home</a></li>
-      <li><a href="shop.php" class="text-[var(--rose-muted)] font-semibold">Shop</a></li>
-      <li><a href="about.php" class="hover:text-[var(--rose-muted)]">About</a></li>
-      <li><a href="contact.php" class="hover:text-[var(--rose-muted)]">Contact</a></li>
-    </ul>
-
-    <!-- Icons -->
-    <div class="flex items-center gap-6 text-[var(--rose-muted)]">
-      <a href="cart.php" class="relative hover:text-[var(--rose-hover)] transition">
-        <i class="fa-solid fa-cart-shopping text-lg"></i>
-      </a>
-      <a href="profile.php" class="hover:text-[var(--rose-hover)] transition">
-        <i class="fa-solid fa-user text-lg"></i>
-      </a>
+      <h1 class="text-xl font-semibold text-[var(--rose)]">Seven Dwarfs Boutique</h1>
     </div>
   </div>
 </nav>
 
-<!-- ✅ Main Content -->
-<main class="max-w-5xl mx-auto px-6 py-12">
-  <div class="bg-white rounded-2xl shadow-lg p-10 text-center">
-    
-    <!-- Header -->
-    <div class="mb-8">
-      <div class="text-5xl mb-4">🎉</div>
-      <h2 class="text-3xl font-bold text-[var(--rose-muted)]">Thank You for Your Order!</h2>
-      <p class="text-gray-600 mt-2">Your order has been placed successfully. We’ll notify you once it’s on the way!</p>
+<!-- 🎉 Thank You Section -->
+<main class="max-w-4xl mx-auto px-6 py-16 text-center">
+  <div class="bg-white shadow-lg rounded-2xl p-10 border border-pink-100">
+    <i class="fa-solid fa-circle-check text-[var(--rose)] text-5xl mb-6"></i>
+    <h1 class="text-3xl font-bold text-[var(--rose)] mb-2">Thank You for Your Purchase!</h1>
+    <p class="text-gray-600 mb-8">Your order has been placed successfully. You can track its progress in <strong>My Purchases</strong>.</p>
+
+    <!-- 🧾 Order Details -->
+    <div class="text-left bg-pink-50 p-6 rounded-xl mb-8 shadow-inner">
+      <p><strong>Order Number:</strong> #<?= htmlspecialchars($order['order_id']); ?></p>
+      <p><strong>Date:</strong> <?= date('F j, Y, g:i A', strtotime($order['created_at'])); ?></p>
+      <p><strong>Payment Method:</strong> <?= htmlspecialchars($order['payment_method_name']); ?></p>
+      <p><strong>Status:</strong> <?= htmlspecialchars($order['order_status_name']); ?></p>
+      <p class="mt-2 font-semibold text-[var(--rose)]">Total: ₱<?= number_format($order['total_amount'], 2); ?></p>
     </div>
 
-    <!-- Order Info -->
-    <div class="bg-[var(--soft-bg)] border border-gray-200 rounded-xl p-6 text-left mb-8">
-      <h3 class="text-lg font-semibold text-[var(--rose-muted)] mb-3">Order Summary</h3>
-      <p><strong>Product Name:</strong> 
-        <?php 
-          $productNames = [];
-          mysqli_data_seek($items, 0); 
-          while ($r = $items->fetch_assoc()) { 
-            $productNames[] = htmlspecialchars($r['product_name']); 
-          }
-          echo implode(', ', $productNames);
-          mysqli_data_seek($items, 0);
-        ?>
-      </p>
-      <p><strong>Date Ordered:</strong> <?= date("F j, Y, g:i a", strtotime($order['created_at'])); ?></p>
-      <p><strong>Payment Method:</strong> <?= htmlspecialchars($order['payment_method']); ?></p>
+    <!-- 🛍 Ordered Items -->
+    <h2 class="text-lg font-semibold text-gray-700 mb-3">Items in Your Order</h2>
+    <div class="divide-y divide-gray-200 bg-white rounded-lg border border-gray-100">
+      <?php foreach ($items as $item): ?>
+      <div class="flex items-center justify-between p-4">
+        <div class="flex items-center gap-4">
+          <img src="<?= htmlspecialchars($item['image_url']); ?>" alt="Product" class="w-16 h-16 rounded-lg border">
+          <div>
+            <p class="font-medium"><?= htmlspecialchars($item['product_name']); ?></p>
+            <p class="text-gray-500 text-sm">
+              Color: <?= htmlspecialchars($item['color']); ?> | 
+              Size: <?= htmlspecialchars($item['size']); ?>
+            </p>
+            <p class="text-gray-500 text-sm">Qty: <?= $item['quantity']; ?></p>
+          </div>
+        </div>
+        <p class="text-gray-700 font-semibold">₱<?= number_format($item['price'] * $item['quantity'], 2); ?></p>
+      </div>
+      <?php endforeach; ?>
     </div>
 
-    <!-- Product List -->
-    <div class="overflow-hidden rounded-xl border border-gray-200 mb-6">
-      <table class="w-full text-left">
-        <thead class="bg-[var(--soft-bg)]">
-          <tr class="text-gray-700">
-            <th class="p-4 font-semibold">Product</th>
-            <th class="p-4 font-semibold">Price</th>
-            <th class="p-4 font-semibold">Qty</th>
-            <th class="p-4 font-semibold">Total</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y">
-          <?php 
-          $grandTotal = 0;
-          mysqli_data_seek($items, 0);
-          while ($item = $items->fetch_assoc()):
-            $grandTotal += $item['total'];
-          ?>
-            <tr class="hover:bg-[var(--soft-bg)] transition">
-              <td class="p-4 flex items-center gap-3">
-                <img src="<?= $item['image_url'] ?: 'assets/no-image.png' ?>" class="w-12 h-12 rounded object-cover shadow">
-                <?= htmlspecialchars($item['product_name']); ?>
-              </td>
-              <td class="p-4">₱<?= number_format($item['price'], 2); ?></td>
-              <td class="p-4"><?= $item['qty']; ?></td>
-              <td class="p-4 text-[var(--rose-muted)] font-semibold">₱<?= number_format($item['total'], 2); ?></td>
-            </tr>
-          <?php endwhile; ?>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- Grand Total -->
-    <div class="text-right text-lg font-semibold">
-      <p>Total: <span class="text-[var(--rose-muted)]">₱<?= number_format($grandTotal, 2); ?></span></p>
-    </div>
-
-    <!-- Button -->
-    <div class="mt-8">
+    <!-- 🩷 Buttons -->
+    <div class="mt-10 flex justify-center gap-6">
+      <a href="purchases.php" 
+         class="px-6 py-3 bg-[var(--rose)] text-white rounded-lg shadow hover:bg-[var(--rose-hover)] transition">
+        View My Purchases
+      </a>
       <a href="shop.php" 
-         class="inline-block bg-[var(--rose-muted)] text-white px-8 py-3 rounded-full font-medium shadow-md hover:bg-[var(--rose-hover)] transition">
+         class="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg shadow hover:bg-gray-300 transition">
         Continue Shopping
       </a>
     </div>
-
   </div>
 </main>
 
-<!-- Footer -->
-<footer class="bg-white border-t border-gray-200 py-6 mt-10 text-center text-sm text-gray-600">
-  © <?= date('Y') ?> Seven Dwarfs Boutique | All Rights Reserved.
+<footer class="text-center text-gray-500 text-sm py-6 mt-12">
+  © <?= date('Y') ?> Seven Dwarfs Boutique — All Rights Reserved.
 </footer>
 
 </body>

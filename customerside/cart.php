@@ -10,18 +10,54 @@ $cartCount = 0;
 if ($isLoggedIn) {
     $customer_id = $_SESSION['customer_id'];
 
+    // ✅ Fetch the customer's actual chosen color & size from the carts table
     $sql = "
-    SELECT c.cart_id, c.quantity, p.product_name, p.price_id, p.image_url
-    FROM carts c
-    JOIN products p ON c.product_id = p.product_id
-    WHERE c.customer_id = ? AND c.cart_status = 'active'
+        SELECT 
+            c.cart_id, 
+            c.quantity, 
+            c.color, 
+            c.size, 
+            p.product_name, 
+            p.price_id, 
+            p.image_url
+        FROM carts c
+        JOIN products p ON c.product_id = p.product_id
+        WHERE c.customer_id = ? AND c.cart_status = 'active'
     ";
+    
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("i", $customer_id);
     $stmt->execute();
     $result = $stmt->get_result();
 
     while ($row = $result->fetch_assoc()) {
+        // 🖼 Handle multiple images (JSON or comma-separated)
+        $images = [];
+        $raw = trim($row['image_url'] ?? '');
+
+        if ($raw && str_starts_with($raw, '[')) {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) $images = $decoded;
+        } elseif ($raw) {
+            $images = array_filter(array_map('trim', explode(',', $raw)));
+        }
+
+        $displayImages = [];
+        if (!empty($images)) {
+            foreach ($images as $img) {
+                $img = trim($img);
+                if (!str_contains($img, 'uploads/')) {
+                    $img = '../uploads/products/' . basename($img);
+                } elseif (str_starts_with($img, 'uploads/')) {
+                    $img = '../' . $img;
+                }
+                $displayImages[] = htmlspecialchars($img);
+            }
+        } else {
+            $displayImages[] = '../uploads/products/default.png';
+        }
+
+        $row['display_image'] = $displayImages[0];
         $row['total'] = $row['price_id'] * $row['quantity'];
         $grandTotal += $row['total'];
         $cartItems[] = $row;
@@ -121,63 +157,6 @@ if ($isLoggedIn) {
   </div>
 </nav>
 
-<!-- 🔐 Login Modal -->
-<div x-show="showLogin" x-transition x-cloak
-     class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 backdrop-blur-sm">
-  <div class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md relative">
-    <button @click="showLogin = false" 
-            class="absolute top-4 right-4 text-gray-400 hover:text-[#d76d7a] text-2xl font-bold">&times;</button>
-    <h2 class="text-2xl font-bold mb-6 text-center text-[#d76d7a]">Welcome Back</h2>
-    <form action="login_handler.php" method="POST" class="space-y-4">
-      <input type="email" name="email" placeholder="Email" required 
-             class="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-[#d76d7a] outline-none">
-      <input type="password" name="password" placeholder="Password" required 
-             class="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-[#d76d7a] outline-none">
-      <button type="submit" class="btn-rose w-full py-3 rounded-lg font-medium">Log In</button>
-    </form>
-    <p class="text-sm text-center mt-6 text-gray-600">
-      Don’t have an account?
-      <button @click="showLogin = false; showSignup = true" class="text-[#d76d7a] hover:underline font-medium">Sign up here</button>
-    </p>
-  </div>
-</div>
-
-<!-- 📝 Signup Modal -->
-<div x-show="showSignup" x-transition x-cloak
-     class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 backdrop-blur-sm">
-  <div class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md relative"
-       x-data="{ password: '', confirmPassword: '', mismatch: false }">
-    <button @click="showSignup = false" 
-            class="absolute top-4 right-4 text-gray-400 hover:text-[#d76d7a] text-2xl font-bold">&times;</button>
-    <h2 class="text-2xl font-bold mb-6 text-center text-[#d76d7a]">Create Account</h2>
-    <form action="signup_handler.php" method="POST" class="space-y-4"
-          @submit.prevent="mismatch = password !== confirmPassword; if (!mismatch) $el.submit();">
-      <div class="grid grid-cols-2 gap-4">
-        <input type="text" name="first_name" placeholder="First Name" required 
-               class="border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-[#d76d7a] outline-none">
-        <input type="text" name="last_name" placeholder="Last Name" required 
-               class="border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-[#d76d7a] outline-none">
-      </div>
-      <input type="email" name="email" placeholder="Email" required 
-             class="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-[#d76d7a] outline-none">
-      <input type="text" name="phone" placeholder="Phone" required 
-             class="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-[#d76d7a] outline-none">
-      <input type="text" name="address" placeholder="Address" required 
-             class="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-[#d76d7a] outline-none">
-      <input type="password" name="password" placeholder="Password" x-model="password" required 
-             class="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-[#d76d7a] outline-none">
-      <input type="password" name="confirm_password" placeholder="Confirm Password" x-model="confirmPassword" required 
-             class="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-[#d76d7a] outline-none">
-      <template x-if="mismatch"><p class="text-red-500 text-sm -mt-2">⚠ Passwords do not match.</p></template>
-      <button type="submit" class="btn-rose w-full py-3 rounded-lg font-medium">Sign Up</button>
-    </form>
-    <p class="text-sm text-center mt-6 text-gray-600">
-      Already have an account?
-      <button @click="showSignup = false; showLogin = true" class="text-[#d76d7a] hover:underline font-medium">Log in here</button>
-    </p>
-  </div>
-</div>
-
 <!-- 🛒 Main Cart Section -->
 <main class="max-w-6xl mx-auto px-4 py-12">
   <h1 class="text-3xl font-bold mb-8 brand-accent">My Cart</h1>
@@ -198,9 +177,14 @@ if ($isLoggedIn) {
           <?php foreach ($cartItems as $item): ?>
             <tr class="hover:bg-gray-50 transition">
               <td class="p-4 flex items-center gap-3">
-                <img src="<?= htmlspecialchars($item['image_url']); ?>" 
-                     class="w-12 h-12 object-cover rounded-md border border-gray-200">
-                <span class="font-medium text-gray-700"><?= htmlspecialchars($item['product_name']); ?></span>
+                <img src="<?= htmlspecialchars($item['display_image']); ?>" 
+                    class="w-14 h-14 object-cover rounded-md border border-gray-200">
+                <div>
+                  <p class="font-medium text-gray-800"><?= htmlspecialchars($item['product_name']); ?></p>
+                  <p class="text-sm text-gray-500">
+                    Color: <?= htmlspecialchars($item['color']); ?> | Size: <?= htmlspecialchars($item['size']); ?>
+                  </p>
+                </div>
               </td>
               <td class="p-4 text-gray-600">₱<?= number_format($item['price_id'], 2); ?></td>
               <td class="p-4 text-gray-600"><?= $item['quantity']; ?></td>

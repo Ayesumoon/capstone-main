@@ -10,12 +10,70 @@ if (!isset($_SESSION['customer_id'])) {
 $isLoggedIn = true;
 $user_id = $_SESSION['customer_id'];
 
-// Fetch user info
+// 🧾 Fetch user info
 $stmt = $conn->prepare("SELECT first_name, last_name, email, phone, address, profile_picture FROM customers WHERE customer_id = ?");
 $stmt->bind_param("i", $user_id);
 $stmt->execute();
-$result = $stmt->get_result();
-$user = $result->fetch_assoc();
+$user = $stmt->get_result()->fetch_assoc();
+$stmt->close();
+
+// 🧠 Fetch all orders for this user
+$orderQuery = $conn->prepare("
+  SELECT 
+      o.order_id, 
+      o.total_amount, 
+      o.created_at, 
+      os.order_status_name AS status_name,
+      o.order_status_id,
+      pm.payment_method_name
+  FROM orders o
+  LEFT JOIN order_status os ON o.order_status_id = os.order_status_id
+  LEFT JOIN payment_methods pm ON o.payment_method_id = pm.payment_method_id
+  WHERE o.customer_id = ?
+  ORDER BY o.created_at DESC
+");
+$orderQuery->bind_param("i", $user_id);
+$orderQuery->execute();
+$ordersResult = $orderQuery->get_result();
+$orders = [];
+
+if ($ordersResult) {
+    while ($row = $ordersResult->fetch_assoc()) {
+        $orders[] = $row;
+    }
+} else {
+    $orders = [];
+}
+$orderQuery->close();
+
+// ✅ Group orders by status
+$groupedOrders = [
+    'pay' => [],
+    'ship' => [],
+    'receive' => [],
+    'rate' => [],
+    'history' => []
+];
+
+foreach ($orders as $order) {
+    switch (strtolower($order['status_name'])) {
+        case 'to pay':
+            $groupedOrders['pay'][] = $order;
+            break;
+        case 'to ship':
+            $groupedOrders['ship'][] = $order;
+            break;
+        case 'to receive':
+            $groupedOrders['receive'][] = $order;
+            break;
+        case 'to rate':
+            $groupedOrders['rate'][] = $order;
+            break;
+        default:
+            $groupedOrders['history'][] = $order;
+            break;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -25,24 +83,21 @@ $user = $result->fetch_assoc();
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
-
   <style>
     :root {
       --rose-muted: #d37689;
       --rose-hover: #b75f6f;
-      --blush-bg: #faf7f8;
-      --soft-bg: #f5f2f3;
+      --soft-bg: #fef9fa;
     }
     body {
-      background-color: var(--blush-bg);
+      background-color: var(--soft-bg);
       color: #444;
       font-family: 'Poppins', sans-serif;
     }
     [x-cloak] { display: none !important; }
   </style>
 </head>
-
-<body x-data="{ showLogin: false, showSignup: false, cartCount: 0 }" @keydown.escape.window="showLogin = false; showSignup = false">
+<body x-data="{ tab: 'pay' }">
 
 <!-- 🌸 Navbar -->
 <nav class="bg-white border-b border-gray-200 shadow-sm">
@@ -88,21 +143,17 @@ $user = $result->fetch_assoc();
                 class="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-[var(--soft-bg)]">Logout</button>
             </form>
           </div>
-        <?php else: ?>
-          <button @click="showLogin = true" class="text-[var(--rose-muted)] hover:text-[var(--rose-hover)]">
-            <i class="fa-solid fa-user text-lg"></i>
-          </button>
         <?php endif; ?>
       </div>
     </div>
   </div>
 </nav>
 
-<!-- 🌿 Main Layout -->
+<!-- 🌿 Layout -->
 <div class="max-w-6xl mx-auto mt-10 bg-white shadow-lg rounded-2xl flex flex-col md:flex-row overflow-hidden">
 
   <!-- Sidebar -->
-  <aside class="w-full md:w-1/4 border-r border-gray-100 bg-[var(--soft-bg)] p-6">
+  <aside class="w-full md:w-1/4 border-r border-gray-100 bg-[#fef9fa] p-6">
     <div class="flex flex-col items-center text-center">
       <img src="<?= htmlspecialchars($user['profile_picture'] ?? 'default-avatar.png') ?>" 
            class="w-24 h-24 rounded-full object-cover mb-3 border-2 border-[var(--rose-muted)]" />
@@ -118,8 +169,8 @@ $user = $result->fetch_assoc();
     </nav>
   </aside>
 
-  <!-- Main Content -->
-  <section class="w-full md:w-3/4 p-8" x-data="{ tab: 'pay' }">
+  <!-- Purchases Content -->
+  <section class="w-full md:w-3/4 p-8">
     <h1 class="text-2xl font-bold text-[var(--rose-muted)] mb-6">My Purchases</h1>
 
     <!-- Tabs -->
@@ -136,18 +187,30 @@ $user = $result->fetch_assoc();
       </template>
     </div>
 
-    <!-- Tab Content -->
-    <div class="space-y-4">
-      <div x-show="tab === 'pay'"><p class="text-gray-600">You have no orders to pay at the moment.</p></div>
-      <div x-show="tab === 'ship'"><p class="text-gray-600">You have no items to be shipped.</p></div>
-      <div x-show="tab === 'receive'"><p class="text-gray-600">You have no items to receive.</p></div>
-      <div x-show="tab === 'rate'"><p class="text-gray-600">You have no items to rate.</p></div>
-      <div x-show="tab === 'history'"><p class="text-gray-600">Your past purchase history will appear here.</p></div>
-    </div>
+    <!-- Orders Display -->
+    <?php foreach ($groupedOrders as $key => $list): ?>
+      <div x-show="tab === '<?= $key ?>'" class="space-y-4">
+        <?php if (empty($list)): ?>
+          <p class="text-gray-600 text-sm">No orders under this status.</p>
+        <?php else: ?>
+          <?php foreach ($list as $order): ?>
+            <div class="p-4 border rounded-lg shadow-sm bg-white flex justify-between items-center">
+              <div>
+                <p class="font-semibold text-[var(--rose-muted)]">Order #<?= htmlspecialchars($order['order_id']); ?></p>
+                <p class="text-gray-600 text-sm"><?= htmlspecialchars($order['payment_method_name']); ?> • <?= htmlspecialchars($order['status_name']); ?></p>
+                <p class="text-gray-500 text-sm"><?= htmlspecialchars($order['created_at']); ?></p>
+              </div>
+              <div class="text-right">
+                <p class="font-bold text-[var(--rose-hover)]">₱<?= number_format($order['total_amount'], 2); ?></p>
+              </div>
+            </div>
+          <?php endforeach; ?>
+        <?php endif; ?>
+      </div>
+    <?php endforeach; ?>
   </section>
 </div>
 
-<!-- Footer -->
 <footer class="bg-white border-t border-gray-200 py-6 mt-10 text-center text-sm text-gray-600">
   © <?= date('Y') ?> Seven Dwarfs Boutique | All Rights Reserved.
 </footer>

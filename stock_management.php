@@ -24,6 +24,29 @@ if ($admin_id) {
     }
 }
 
+// ✅ AUTO-UPDATE STOCK BASED ON STOCK-IN AND SOLD ITEMS
+$updateStockSQL = "
+    UPDATE stock s
+    LEFT JOIN (
+        SELECT 
+            stock_id, 
+            SUM(quantity) AS total_in
+        FROM stock_in
+        GROUP BY stock_id
+    ) si ON s.stock_id = si.stock_id
+    LEFT JOIN (
+        SELECT 
+            oi.stock_id, 
+            SUM(oi.qty) AS total_sold
+        FROM order_items oi
+        INNER JOIN orders o ON oi.order_id = o.order_id
+        WHERE o.order_status_id IN (2, 3, 4) -- 2=Completed, 3=Delivered, 4=Paid (adjust as needed)
+        GROUP BY oi.stock_id
+    ) so ON s.stock_id = so.stock_id
+    SET s.current_qty = GREATEST(COALESCE(si.total_in, 0) - COALESCE(so.total_sold, 0), 0)
+";
+$conn->query($updateStockSQL);
+
 // Get selected category
 $selected_category = isset($_GET['category_id']) ? intval($_GET['category_id']) : 0;
 
@@ -37,7 +60,7 @@ while ($p = $product_query->fetch_assoc()) {
     $products[] = $p;
 }
 
-// Build stock query
+// Build stock query (now reading updated current_qty)
 $stock_query = "
     SELECT 
         p.product_id,
@@ -45,23 +68,23 @@ $stock_query = "
         c.category_name,
         col.color,
         sz.size,
-        COALESCE(st.current_qty, 0) AS current_qty,
+        COALESCE(s.current_qty, 0) AS current_qty,
         MAX(sup.supplier_name) AS supplier_name,
         MAX(si.date_added) AS date_added
     FROM products p
     INNER JOIN categories c ON p.category_id = c.category_id
-    LEFT JOIN stock st ON p.product_id = st.product_id
-    LEFT JOIN colors col ON st.color_id = col.color_id
-    LEFT JOIN sizes sz ON st.size_id = sz.size_id
-    LEFT JOIN stock_in si ON si.stock_id = st.stock_id
+    LEFT JOIN stock s ON p.product_id = s.product_id
+    LEFT JOIN colors col ON s.color_id = col.color_id
+    LEFT JOIN sizes sz ON s.size_id = sz.size_id
+    LEFT JOIN stock_in si ON si.stock_id = s.stock_id
     LEFT JOIN suppliers sup ON si.supplier_id = sup.supplier_id
     " . ($selected_category ? "WHERE p.category_id = $selected_category" : "") . "
-    GROUP BY p.product_id, p.product_name, c.category_name, col.color, sz.size, st.current_qty
+    GROUP BY p.product_id, p.product_name, c.category_name, col.color, sz.size, s.current_qty
     ORDER BY date_added DESC
 ";
 $result_stock = $conn->query($stock_query);
 
-// buffer rows so we can scan + display
+// Buffer rows for display + low/out-of-stock alerts
 $stock_rows = [];
 $lowStock = false;
 $outStock = false;
@@ -81,6 +104,7 @@ while ($sup = $supplier_query->fetch_assoc()) {
     $supplier_list[] = $sup;
 }
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -152,7 +176,6 @@ while ($sup = $supplier_query->fetch_assoc()) {
           <li class="py-1 bg-pink-100 text-pink-600 rounded"><a href="stock_management.php" class="flex items-center"><i class="fas fa-boxes mr-2"></i>Stock Management</a></li>
         </ul>
         <li class="px-4 py-2 hover:bg-gray-200"><a href="orders.php" class="flex items-center"><i class="fas fa-shopping-cart mr-2"></i>Orders</a></li>
-        <li class="px-4 py-2 hover:bg-gray-200"><a href="refund_history.php" class="flex items-center"><i class="fas fa-undo-alt mr-2"></i>Refund History</a></li>
         <li class="px-4 py-2 hover:bg-gray-200"><a href="suppliers.php" class="flex items-center"><i class="fas fa-industry mr-2"></i>Suppliers</a></li>
         <li class="px-4 py-2 hover:bg-gray-200"><a href="logout.php" class="flex items-center"><i class="fas fa-sign-out-alt mr-2"></i>Log out</a></li>
       </ul>

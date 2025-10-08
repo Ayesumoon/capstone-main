@@ -1,232 +1,195 @@
 <?php
-require 'conn.php';
 session_start();
+require 'conn.php'; // Database connection
 
-if (!isset($_GET['id']) || empty($_GET['id'])) {
-    echo "<script>alert('Invalid product ID!'); window.location.href='products.php';</script>";
-    exit;
+// ✅ Get product ID safely
+$product_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+if ($product_id <= 0) {
+    echo "Invalid product ID.";
+    exit();
 }
 
-$product_id = intval($_GET['id']);
+// ✅ Fetch categories for dropdown
+$categories = [];
+$catQuery = $conn->query("SELECT category_id, category_name FROM categories ORDER BY category_name ASC");
+while ($row = $catQuery->fetch_assoc()) {
+    $categories[] = $row;
+}
 
-// Fetch product
-$sql = "SELECT * FROM products WHERE product_id = ?";
-$stmt = $conn->prepare($sql);
+// ✅ Fetch suppliers for dropdown
+$suppliers = [];
+$supplierQuery = $conn->query("SELECT supplier_id, supplier_name FROM suppliers ORDER BY supplier_name ASC");
+while ($row = $supplierQuery->fetch_assoc()) {
+    $suppliers[] = $row;
+}
+
+// ✅ Fetch product details
+$stmt = $conn->prepare("SELECT * FROM products WHERE product_id = ?");
 $stmt->bind_param("i", $product_id);
 $stmt->execute();
-$result = $stmt->get_result();
-if ($result->num_rows === 0) {
-    echo "<script>alert('Product not found!'); window.location.href='products.php';</script>";
-    exit;
-}
-$product = $result->fetch_assoc();
+$product = $stmt->get_result()->fetch_assoc();
 $stmt->close();
 
-// Categories & Suppliers
-$category_result = $conn->query("SELECT category_id, category_name FROM categories");
-$supplier_result = $conn->query("SELECT supplier_id, supplier_name FROM suppliers");
+if (!$product) {
+    echo "Product not found!";
+    exit();
+}
 
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $product_name = trim($_POST['product_name']);
-    $sizes_input = trim($_POST['sizes_input'] ?? '');
-    $colors_input = trim($_POST['colors_input'] ?? '');
-    $sizes = array_filter(array_map('trim', explode(',', $sizes_input)));
-    $colors = array_filter(array_map('trim', explode(',', $colors_input)));
+// ✅ Handle multiple image formats (JSON or comma-separated)
+$existingImages = [];
+if (!empty($product['image_url'])) {
+    $trimmed = trim($product['image_url']);
+    if (str_starts_with($trimmed, '[')) {
+        $decoded = json_decode($trimmed, true);
+        if (is_array($decoded)) {
+            $existingImages = $decoded;
+        }
+    } else {
+        $existingImages = array_filter(array_map('trim', explode(',', $product['image_url'])));
+    }
+}
 
-    $description = "Sizes: " . implode(", ", $sizes) . " | Colors: " . implode(", ", $colors);
+// ✅ Handle form submission
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $product_name   = trim($_POST['product_name']);
+    $description    = trim($_POST['description']);
+    $price          = (float)$_POST['price'];
+    $supplier_price = (float)$_POST['supplier_price'];
+    $category_id    = (int)$_POST['category_id'];
+    $supplier_id    = (int)$_POST['supplier_id'];
 
-    $price_id = floatval($_POST['price']);
-    $category_id = intval($_POST['category']);
-    $supplier_id = intval($_POST['supplier']);
-    $supplier_price = floatval($_POST['supplier_price']);
+    // 🖼 Handle image uploads
+    $uploadedImages = [];
+    $uploadDir = 'uploads/products/';
+    if (!is_dir($uploadDir)) mkdir($uploadDir, 0777, true);
 
-    // Handle images
-    $image_urls = [];
-    if (isset($_FILES["images"]) && count($_FILES["images"]["name"]) > 0) {
-        $target_dir = "uploads/products/";
-        if (!is_dir($target_dir)) mkdir($target_dir, 0777, true);
+    if (!empty($_FILES['images']['name'][0])) {
+        foreach ($_FILES['images']['tmp_name'] as $key => $tmp_name) {
+            if ($_FILES['images']['error'][$key] === UPLOAD_ERR_OK) {
+                $fileName = basename($_FILES['images']['name'][$key]);
+                $targetPath = $uploadDir . uniqid() . '_' . $fileName;
 
-        foreach ($_FILES["images"]["tmp_name"] as $index => $tmp_name) {
-            $file_name = $_FILES["images"]["name"][$index];
-            $file_error = $_FILES["images"]["error"][$index];
-            if ($file_error === 0) {
-                $unique_name = uniqid() . "_" . basename($file_name);
-                $target_file = $target_dir . $unique_name;
-                $ext = strtolower(pathinfo($target_file, PATHINFO_EXTENSION));
-                $allowed = ["jpg","jpeg","png","gif"];
-                if (in_array($ext, $allowed)) {
-                    move_uploaded_file($tmp_name, $target_file);
-                    $image_urls[] = $target_file;
+                if (move_uploaded_file($tmp_name, $targetPath)) {
+                    $uploadedImages[] = $targetPath;
                 }
             }
         }
-    }
-    $image_url = !empty($image_urls) ? implode(",", $image_urls) : $product['image_url'];
 
-    // Save sizes if not exists
-    $size_ids = [];
-    foreach ($sizes as $size) {
-        $stmt = $conn->prepare("SELECT size_id FROM sizes WHERE size = ?");
-        $stmt->bind_param("s", $size);
-        $stmt->execute();
-        $stmt->bind_result($size_id);
-        if ($stmt->fetch()) {
-            $size_ids[] = $size_id;
-        } else {
-            $stmt->close();
-            $stmt = $conn->prepare("INSERT INTO sizes (size) VALUES (?)");
-            $stmt->bind_param("s", $size);
-            $stmt->execute();
-            $size_ids[] = $stmt->insert_id;
-        }
-        $stmt->close();
+        // Replace old images with new ones
+        $finalImages = $uploadedImages;
+    } else {
+        $finalImages = $existingImages; // keep existing if no new upload
     }
 
-    // Save colors if not exists
-    $color_ids = [];
-    foreach ($colors as $color) {
-        $stmt = $conn->prepare("SELECT color_id FROM colors WHERE color = ?");
-        $stmt->bind_param("s", $color);
-        $stmt->execute();
-        $stmt->bind_result($color_id);
-        if ($stmt->fetch()) {
-            $color_ids[] = $color_id;
-        } else {
-            $stmt->close();
-            $stmt = $conn->prepare("INSERT INTO colors (color) VALUES (?)");
-            $stmt->bind_param("s", $color);
-            $stmt->execute();
-            $color_ids[] = $stmt->insert_id;
-        }
-        $stmt->close();
-    }
+    $imageString = json_encode($finalImages, JSON_UNESCAPED_SLASHES);
 
-    // Update product
-    $update_sql = "UPDATE products SET product_name=?, description=?, price_id=?, category_id=?, stocks=?, image_url=?, supplier_id=?, supplier_price=? WHERE product_id=?";
-    $stmt = $conn->prepare($update_sql);
-    if ($stmt) {
-        $stmt->bind_param("ssdissdii", $product_name, $description, $price_id, $category_id, $stocks, $image_url, $supplier_id, $supplier_price, $product_id);
-        if ($stmt->execute()) {
-            echo "<script>alert('Product updated successfully!'); window.location.href='products.php';</script>";
-        } else {
-            echo "Error updating product: " . $stmt->error;
-        }
-        $stmt->close();
-    }
+    // ✅ Update database
+    $updateStmt = $conn->prepare("
+        UPDATE products 
+        SET product_name = ?, description = ?, price_id = ?, supplier_price = ?, 
+            category_id = ?, supplier_id = ?, image_url = ?
+        WHERE product_id = ?
+    ");
+    $updateStmt->bind_param(
+        "ssddiisi",
+        $product_name,
+        $description,
+        $price,
+        $supplier_price,
+        $category_id,
+        $supplier_id,
+        $imageString,
+        $product_id
+    );
+    $updateStmt->execute();
+    $updateStmt->close();
+
+    header("Location: products.php?updated=1");
+    exit();
 }
+
+$conn->close();
 ?>
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Edit Product</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
-  <style>
-    body {
-      font-family: 'Inter', sans-serif;
-    }
-  </style>
+<meta charset="UTF-8">
+<title>Edit Product - Seven Dwarfs Boutique</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
 </head>
-<body class="bg-gradient-to-br from-gray-100 to-gray-200 min-h-screen flex items-center justify-center p-6">
+<body class="bg-gray-100 font-poppins">
 
-  <div class="max-w-3xl w-full bg-white p-8 rounded-2xl shadow-lg transform transition duration-500 hover:shadow-xl">
-    <h2 class="text-3xl font-bold text-pink-600 mb-6 tracking-tight">✏️ Edit Product</h2>
+<div class="max-w-4xl mx-auto bg-white shadow-md rounded-2xl mt-10 p-8">
+  <h2 class="text-2xl font-semibold text-pink-500 mb-6">✏️ Edit Product</h2>
 
-    <form action="edit_product.php?id=<?php echo $product_id; ?>" method="POST" enctype="multipart/form-data" class="space-y-10">
+  <form method="POST" enctype="multipart/form-data" class="space-y-6">
 
-      <!-- Product Info -->
+    <!-- Product Name -->
+    <div>
+      <label class="block text-gray-700 font-medium mb-1">Product Name</label>
+      <input type="text" name="product_name" value="<?= htmlspecialchars($product['product_name']); ?>" required
+             class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-pink-400 outline-none">
+    </div>
+
+    <!-- Price Fields -->
+    <div class="grid grid-cols-2 gap-6">
       <div>
-        <h3 class="text-lg font-semibold text-gray-800 border-b pb-2 mb-4">Product Information</h3>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <!-- Product Name -->
-          <div class="flex flex-col">
-            <label class="text-sm font-medium text-gray-700">Product Name</label>
-            <input type="text" name="product_name" required value="<?php echo htmlspecialchars($product['product_name']); ?>"
-              class="mt-2 block w-full rounded-lg border border-gray-300 p-3 shadow-sm focus:ring-2 focus:ring-pink-400 focus:border-pink-400 transition duration-200">
-          </div>
-          <!-- Supplier Price -->
-          <div class="flex flex-col">
-            <label class="text-sm font-medium text-gray-700">Supplier Price</label>
-            <input type="number" step="0.01" name="supplier_price" required value="<?php echo $product['supplier_price']; ?>"
-              class="mt-2 block w-full rounded-lg border border-gray-300 p-3 shadow-sm focus:ring-2 focus:ring-pink-400 focus:border-pink-400 transition duration-200">
-          </div>
-          <!-- Selling Price -->
-          <div class="flex flex-col">
-            <label class="text-sm font-medium text-gray-700">Selling Price</label>
-            <input type="number" step="0.01" name="price" required value="<?php echo htmlspecialchars($product['price_id']); ?>"
-              class="mt-2 block w-full rounded-lg border border-gray-300 p-3 shadow-sm focus:ring-2 focus:ring-pink-400 focus:border-pink-400 transition duration-200">
-          </div>
-        </div>
+        <label class="block text-gray-700 font-medium mb-1">Selling Price (₱)</label>
+        <input type="number" name="price" step="0.01" value="<?= htmlspecialchars($product['price_id']); ?>" required
+               class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-pink-400 outline-none">
       </div>
-
-      <!-- Category and Supplier -->
       <div>
-        <h3 class="text-lg font-semibold text-gray-800 border-b pb-2 mb-4">Category & Supplier</h3>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <!-- Category -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700">Category</label>
-            <select name="category" required
-              class="mt-2 block w-full rounded-lg border border-gray-300 p-3 bg-white shadow-sm focus:ring-2 focus:ring-pink-400 focus:border-pink-400 transition">
-              <option value="">Select Category</option>
-              <?php
-              while ($row = $category_result->fetch_assoc()) {
-                  $selected = ($product['category_id'] == $row['category_id']) ? "selected" : "";
-                  echo "<option value='{$row['category_id']}' $selected>" . htmlspecialchars($row['category_name']) . "</option>";
-              }
-              ?>
-            </select>
-          </div>
-          <!-- Supplier -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700">Supplier</label>
-            <select name="supplier" required
-              class="mt-2 block w-full rounded-lg border border-gray-300 p-3 bg-white shadow-sm focus:ring-2 focus:ring-pink-400 focus:border-pink-400 transition">
-              <option value="">Select Supplier</option>
-              <?php
-              while ($row = $supplier_result->fetch_assoc()) {
-                  $selected = ($product['supplier_id'] == $row['supplier_id']) ? "selected" : "";
-                  echo "<option value='{$row['supplier_id']}' $selected>" . htmlspecialchars($row['supplier_name']) . "</option>";
-              }
-              ?>
-            </select>
-          </div>
-        </div>
+        <label class="block text-gray-700 font-medium mb-1">Supplier Price (₱)</label>
+        <input type="number" name="supplier_price" step="0.01" value="<?= htmlspecialchars($product['supplier_price'] ?? 0); ?>"
+               class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-pink-400 outline-none">
       </div>
+    </div>
 
-      <!-- Media Upload -->
+    <!-- Category & Supplier -->
+    <div class="grid grid-cols-2 gap-6">
       <div>
-        <h3 class="text-lg font-semibold text-gray-800 border-b pb-2 mb-4">Product Images</h3>
-        <input type="file" name="images[]" accept="image/*" multiple
-          class="block w-full text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-pink-500 file:text-white hover:file:bg-pink-600 cursor-pointer transition">
-
-        <?php if (!empty($product['image_url'])): 
-          $imageArray = explode(",", $product['image_url']);
-        ?>
-          <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mt-6">
-            <?php foreach ($imageArray as $img): ?>
-              <div class="relative group">
-                <img src="<?php echo htmlspecialchars(trim($img)); ?>" alt="Product Image"
-                  class="w-full h-28 object-cover rounded-lg shadow border transform group-hover:scale-105 transition duration-300">
-              </div>
-            <?php endforeach; ?>
-          </div>
-        <?php endif; ?>
+        <label class="block text-gray-700 font-medium mb-1">Category</label>
+        <select name="category_id" required
+                class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-pink-400 outline-none">
+          <?php foreach ($categories as $cat): ?>
+            <option value="<?= $cat['category_id']; ?>" <?= ($product['category_id'] == $cat['category_id']) ? 'selected' : ''; ?>>
+              <?= htmlspecialchars($cat['category_name']); ?>
+            </option>
+          <?php endforeach; ?>
+        </select>
       </div>
 
-      <!-- Action Buttons -->
-      <div class="flex gap-6 pt-6">
-        <input type="submit" value="Update Product"
-          class="bg-pink-500 text-white px-6 py-3 rounded-lg shadow-md hover:bg-pink-600 transform hover:scale-105 transition-all cursor-pointer">
-        <a href="products.php"
-          class="text-pink-600 font-medium hover:underline self-center transition">← Back to Products</a>
+      <div>
+        <label class="block text-gray-700 font-medium mb-1">Supplier</label>
+        <select name="supplier_id" required
+                class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-pink-400 outline-none">
+          <option value="">Select Supplier</option>
+          <?php foreach ($suppliers as $sup): ?>
+            <option value="<?= $sup['supplier_id']; ?>" <?= ($product['supplier_id'] == $sup['supplier_id']) ? 'selected' : ''; ?>>
+              <?= htmlspecialchars($sup['supplier_name']); ?>
+            </option>
+          <?php endforeach; ?>
+        </select>
       </div>
-    </form>
-  </div>
+    </div>
+
+    <!-- Upload New Images -->
+    <div>
+      <label class="block text-gray-700 font-medium mb-1">Upload New Images</label>
+      <input type="file" name="images[]" multiple accept="image/*"
+             class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-pink-400 outline-none">
+      <p class="text-xs text-gray-500 mt-1">Uploading new images will replace the old ones.</p>
+    </div>
+
+    <!-- Buttons -->
+    <div class="flex items-center justify-between mt-8">
+      <a href="products.php" class="bg-gray-200 text-gray-700 px-5 py-2 rounded-lg hover:bg-gray-300 transition">← Back</a>
+      <button type="submit" class="bg-pink-500 hover:bg-pink-600 text-white px-6 py-2 rounded-lg shadow">Save Changes</button>
+    </div>
+
+  </form>
+</div>
 
 </body>
 </html>
