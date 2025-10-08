@@ -4,7 +4,7 @@ require 'conn.php';
 
 // 🧍 Check login
 if (!isset($_SESSION['customer_id'])) {
-    echo "<script>alert('Please login to add items to cart'); window.location.href='login.php';</script>";
+    echo "<script>alert('Please login to add items to cart'); window.location.href='homepage.php';</script>";
     exit;
 }
 

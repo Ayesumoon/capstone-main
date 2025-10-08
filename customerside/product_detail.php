@@ -169,7 +169,7 @@ $conn->close();
         <?php if ($isLoggedIn): ?>
           <img src="<?= $avatar ?>" class="w-8 h-8 rounded-full border cursor-pointer">
         <?php else: ?>
-          <a href="login.php" class="text-[var(--rose)] hover:text-[var(--rose-hover)]">
+          <a href="homepage.php" class="text-[var(--rose)] hover:text-[var(--rose-hover)]">
             <i class="fa-solid fa-user text-xl"></i>
           </a>
         <?php endif; ?>

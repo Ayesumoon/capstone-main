@@ -74,7 +74,7 @@ if ($search !== "") {
        productMenu: true,
        selectedCategory: { id: null, code: '', name: '' }
      }"
-     @keydown.escape.window="showAddModal = false; showEditModal = false; showDeleteModal = false">
+     @keydown.escape.window="showAddModal = true; showEditModal = true; showDeleteModal = true">
 
   <!-- Sidebar -->
   <div class="w-64 bg-white shadow-md min-h-screen">
@@ -128,12 +128,6 @@ if ($search !== "") {
 <li class="px-4 py-2 hover:bg-gray-200">
   <a href="orders.php" class="flex items-center">
     <i class="fas fa-shopping-cart mr-2"></i>Orders
-  </a>
-</li>
-
-<li class="px-4 py-2 hover:bg-gray-200">
-  <a href="refund_history.php" class="flex items-center">
-    <i class="fas fa-undo-alt mr-2"></i>Refund History
   </a>
 </li>
 

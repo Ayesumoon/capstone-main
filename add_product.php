@@ -8,14 +8,14 @@ $category_result = $conn->query("SELECT category_id, category_name FROM categori
 $supplier_result = $conn->query("SELECT supplier_id, supplier_name FROM suppliers ORDER BY supplier_name ASC");
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $product_name   = trim($_POST['product_name'] ?? "");
-    $price          = floatval($_POST['price'] ?? 0);
-    $supplier_price = floatval($_POST['supplier_price'] ?? 0);
-    $category_id    = intval($_POST['category'] ?? 0);
-    $supplier_id    = intval($_POST['supplier_id'] ?? 0);
-
+    $product_name   = trim($_POST['product_name']);
+    $price          = floatval($_POST['price_id']);
+    $supplier_price = floatval($_POST['supplier_price']);
+    $category_id    = intval($_POST['category']);
+    $supplier_id    = intval($_POST['supplier_id']);
+    // var_dump($_POST);
     // Basic validation
-    if (empty($product_name) || $price <= 0 || $supplier_price <= 0 || $category_id <= 0 || $supplier_id <= 0) {
+    if ($product_name=="" || $price == "" || $supplier_price == "" || $category_id == "" || $supplier_id == "") {
         echo "<script>alert('⚠️ All fields are required and must be valid!');</script>";
     } else {
         // ✅ Handle multiple image uploads
@@ -100,7 +100,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
                     <div>
                         <label class="block text-sm font-medium text-gray-700">Selling Price</label>
-                        <input type="number" step="0.01" name="price" required
+                        <input type="number" step="0.01" name="price_id" required
                             class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:ring-pink-500 focus:border-pink-500">
                     </div>
                 </div>

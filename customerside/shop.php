@@ -242,6 +242,10 @@ $conn->close();
       <input type="password" name="password" placeholder="Password" required class="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-[var(--rose)] outline-none">
       <button type="submit" class="bg-[var(--rose)] text-white w-full py-3 rounded-lg font-medium hover:bg-[var(--rose-hover)]">Log In</button>
     </form>
+    <p class="text-sm text-center mt-6 text-gray-600">
+      Don’t have an account?
+      <button @click="showLogin = false; showSignup = true" class="text-[var(--rose-muted)] hover:underline font-medium">Sign up here</button>
+    </p>
   </div>
 </div>
 
