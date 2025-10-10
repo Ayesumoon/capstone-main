@@ -43,7 +43,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             } elseif ($role_id == 3) {
                 header("Location: manager_dashboard.php"); // Manager
             } elseif ($role_id == 0) {
-                header("Location: pointofsale.php"); // Cashier
+                header("Location: cashier_pos.php"); // Cashier
             } else {
                 header("Location: dashboard.php"); // Fallback
             }
@@ -138,16 +138,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
            class="w-full bg-pink-500 text-white py-2 rounded-md font-semibold hover:bg-pink-600 transition-colors" />
   </div>
 </form>
-
-
-    <!-- Sign Up button -->
-    <div class="mt-6 text-center">
-      <p class="text-sm text-gray-600">Don't have an account?</p>
-      <a href="signup.php" class="inline-block mt-2 px-4 py-2 bg-white border border-pink-500 text-pink-600 rounded-md font-semibold hover:bg-pink-50 transition-colors">
-        Sign Up
-      </a>
-    </div>
-  </div>
 
   <script>
     function togglePassword() {

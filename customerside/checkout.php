@@ -75,27 +75,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order'])) {
     $conn->begin_transaction();
 
     try {
-        // 🔹 Insert order (without 'changes')
+        // 🔹 Insert order (include changes = 0.00 to satisfy DB)
         $stmt = $conn->prepare("
-            INSERT INTO orders (customer_id, total_amount, order_status_id, created_at, payment_method_id)
-            VALUES (?, ?, 1, NOW(), ?)
+            INSERT INTO orders (customer_id, total_amount, changes, order_status_id, created_at, payment_method_id)
+            VALUES (?, ?, 0.00, 1, NOW(), ?)
         ");
         $stmt->bind_param("idi", $customer_id, $totalPayment, $payment_method_id);
         $stmt->execute();
         $order_id = $stmt->insert_id;
         $stmt->close();
 
-        // 🔹 Insert order items (no stock_id)
+        // 🔹 Insert order items (include stock_id)
         $itemStmt = $conn->prepare("
-            INSERT INTO order_items (order_id, product_id, qty, price, color, size)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO order_items (order_id, product_id, stock_id, qty, price, color, size)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         ");
 
         foreach ($cartItems as $item) {
+            // ✅ Find matching stock_id based on product_id + color + size
+            $stockStmt = $conn->prepare("
+                SELECT s.stock_id
+                FROM stock s
+                LEFT JOIN colors c ON s.color_id = c.color_id
+                LEFT JOIN sizes sz ON s.size_id = sz.size_id
+                WHERE s.product_id = ? 
+                  AND (c.color = ? OR ? = '')
+                  AND (sz.size = ? OR ? = '')
+                LIMIT 1
+            ");
+            $stockStmt->bind_param("issss", $item['product_id'], $item['color'], $item['color'], $item['size'], $item['size']);
+            $stockStmt->execute();
+            $stockResult = $stockStmt->get_result();
+            $stock = $stockResult->fetch_assoc();
+            $stockStmt->close();
+
+            if (!$stock) {
+                throw new Exception("No matching stock found for {$item['product_name']} ({$item['color']} - {$item['size']}).");
+            }
+
+            $stock_id = $stock['stock_id'];
+
+            // ✅ Insert item
             $itemStmt->bind_param(
-                "iiidss",
+                "iiidsss",
                 $order_id,
                 $item['product_id'],
+                $stock_id,
                 $item['quantity'],
                 $item['price'],
                 $item['color'],
@@ -123,6 +148,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order'])) {
     }
 }
 ?>
+
 
 <!DOCTYPE html>
 <html lang="en">

@@ -115,10 +115,10 @@ $item_stmt->close();
               Color: <?= htmlspecialchars($item['color']); ?> | 
               Size: <?= htmlspecialchars($item['size']); ?>
             </p>
-            <p class="text-gray-500 text-sm">Qty: <?= $item['quantity']; ?></p>
+            <p class="text-gray-500 text-sm">Qty: <?= $item['qty']; ?></p>
           </div>
         </div>
-        <p class="text-gray-700 font-semibold">₱<?= number_format($item['price'] * $item['quantity'], 2); ?></p>
+        <p class="text-gray-700 font-semibold">₱<?= number_format($item['price'] * $item['qty'], 2); ?></p>
       </div>
       <?php endforeach; ?>
     </div>
