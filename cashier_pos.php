@@ -12,7 +12,7 @@ if (!isset($_SESSION['admin_id'])) {
 
 $admin_id = $_SESSION['admin_id'];
 
-// 🧩 Fetch cashier name from actual table: `admins`
+// 🧩 Fetch cashier info
 $cashierRes = $conn->prepare("SELECT first_name FROM adminusers WHERE admin_id = ?");
 $cashierRes->bind_param("i", $admin_id);
 $cashierRes->execute();
@@ -34,7 +34,7 @@ $products = $conn->query("
 // ✅ Fetch payment methods
 $payments = $conn->query("SELECT payment_method_id, payment_method_name FROM payment_methods ORDER BY payment_method_id ASC");
 
-// 🧩 Fetch today's transactions (JOIN admins table)
+// ✅ Fetch today's transactions
 $todayStmt = $conn->prepare("
     SELECT 
         o.order_id,
@@ -75,7 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
     $conn->begin_transaction();
 
     try {
-        // 🔹 Insert order (linked to cashier)
+        // 🔹 Insert order
         $stmt = $conn->prepare("
             INSERT INTO orders (admin_id, total_amount, cash_given, changes, order_status_id, created_at, payment_method_id)
             VALUES (?, ?, ?, ?, 0, NOW(), ?)
@@ -110,7 +110,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
             $itemStmt->bind_param("iiiid", $order_id, $product_id, $stock_id, $qty, $price);
             $itemStmt->execute();
 
-            // 🔹 Update stock quantity
+            // 🔹 Update stock
             $newQty = $stockData['current_qty'] - $qty;
             $updateStock = $conn->prepare("UPDATE stock SET current_qty = ? WHERE stock_id = ?");
             $updateStock->bind_param("ii", $newQty, $stock_id);
@@ -130,7 +130,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
 
         $conn->commit();
 
-        echo "<script>alert('Transaction successful! Change: ₱" . number_format($changes, 2) . "'); window.location.href='cashier_pos.php';</script>";
+echo "<script>window.location.href='receipt.php?order_id=$order_id';</script>";
         exit;
     } catch (Exception $e) {
         $conn->rollback();
@@ -186,7 +186,7 @@ body { background:#fef9fa; font-family:'Poppins',sans-serif; }
 </head>
 <body class="text-gray-800">
 
-<!-- Sidebar -->
+<!-- 🌸 Sidebar -->
 <aside class="sidebar">
   <div>
     <div class="flex items-center gap-3 mb-6">
@@ -196,25 +196,25 @@ body { background:#fef9fa; font-family:'Poppins',sans-serif; }
     <nav>
       <a href="cashier_pos.php" class="active-link">🛍️ POS</a>
       <a href="cashier_transactions.php">💰 Transactions</a>
-      <a href="inventory.php">📦 Inventory</a>
+      <a href="cashier_inventory.php">📦 Inventory</a>
     </nav>
   </div>
 
   <div class="mt-auto border-t pt-3">
-    <p class="text-sm text-gray-600 mb-2">Cashier: <span class="font-medium text-[var(--rose)]"><?= htmlspecialchars($cashier_name); ?></span></p>
+    <p class="text-sm text-gray-600 mb-2">Cashier:
+      <span class="font-medium text-[var(--rose)]"><?= htmlspecialchars($cashier_name); ?></span>
+    </p>
     <form action="logout.php" method="POST">
       <button class="w-full text-left text-red-500 hover:text-red-600 font-medium">🚪 Logout</button>
     </form>
   </div>
 </aside>
 
-<!-- Main Content -->
+<!-- 🌸 Main Content -->
 <div class="main-content">
-
-  <!-- 🛍️ Product List + Cart -->
   <div class="grid grid-cols-3 gap-4">
 
-    <!-- Product List -->
+    <!-- 🛍️ Product List -->
     <div class="col-span-2 bg-white rounded-lg shadow border">
       <div class="p-4 border-b flex justify-between items-center">
         <h2 class="font-semibold text-lg">Products</h2>
@@ -225,14 +225,34 @@ body { background:#fef9fa; font-family:'Poppins',sans-serif; }
           <?php endwhile; ?>
         </select>
       </div>
+
       <div id="productGrid" class="grid grid-cols-3 gap-4 p-4 max-h-[70vh] overflow-y-auto">
         <?php while ($p = $products->fetch_assoc()): ?>
+        <?php
+        // 🖼️ Fix image display (handles JSON, CSV, or single path)
+        $imagePath = $p['image_url'];
+        if (!empty($imagePath)) {
+            if (str_starts_with(trim($imagePath), '[')) {
+                $decoded = json_decode($imagePath, true);
+                $img = is_array($decoded) && count($decoded) > 0 ? $decoded[0] : 'uploads/default.png';
+            } elseif (str_contains($imagePath, ',')) {
+                $parts = explode(',', $imagePath);
+                $img = trim($parts[0]);
+            } else {
+                $img = trim($imagePath);
+            }
+        } else {
+            $img = 'uploads/default.png';
+        }
+        ?>
         <div class="border rounded-lg p-3 hover:shadow transition cursor-pointer product"
              data-category="<?= htmlspecialchars($p['category_name']) ?>"
              data-id="<?= $p['product_id'] ?>"
              data-name="<?= htmlspecialchars($p['product_name']) ?>"
              data-price="<?= $p['price'] ?>">
-          <img src="<?= htmlspecialchars(trim($p['image_url'], '[]')) ?>" class="w-full h-32 object-cover rounded mb-2">
+          <img src="<?= htmlspecialchars($img); ?>"
+               onerror="this.src='uploads/default.png';"
+               class="w-full h-32 object-cover rounded mb-2">
           <p class="font-semibold"><?= htmlspecialchars($p['product_name']); ?></p>
           <p class="text-[var(--rose)] font-medium">₱<?= number_format($p['price'], 2); ?></p>
           <button class="mt-2 w-full bg-[var(--rose)] text-white rounded py-1 text-sm addToCart hover:bg-[var(--rose-hover)]">Add</button>
@@ -241,7 +261,7 @@ body { background:#fef9fa; font-family:'Poppins',sans-serif; }
       </div>
     </div>
 
-    <!-- Cart + Transactions -->
+    <!-- 🧾 Cart + Transactions -->
     <div class="bg-white rounded-lg shadow border p-4 flex flex-col justify-between">
       <div class="mb-5">
         <h2 class="font-semibold text-lg mb-2">Cart</h2>
@@ -270,35 +290,6 @@ body { background:#fef9fa; font-family:'Poppins',sans-serif; }
         <button type="submit" name="checkout" class="w-full py-2 bg-[var(--rose)] text-white rounded hover:bg-[var(--rose-hover)]">Checkout</button>
       </form>
 
-      <div class="mt-6">
-        <h2 class="font-semibold text-lg mb-2 border-t pt-3">Today's Transactions</h2>
-        <div class="max-h-[200px] overflow-y-auto text-sm">
-          <?php if ($todayTrans->num_rows > 0): ?>
-          <table class="w-full border-collapse">
-            <thead>
-              <tr class="border-b">
-                <th class="text-left px-2 py-1">#</th>
-                <th class="text-left px-2 py-1">Total</th>
-                <th class="text-left px-2 py-1">Method</th>
-                <th class="text-left px-2 py-1">Time</th>
-              </tr>
-            </thead>
-            <tbody>
-              <?php while ($t = $todayTrans->fetch_assoc()): ?>
-              <tr class="border-b hover:bg-pink-50">
-                <td class="px-2 py-1 font-medium">#<?= $t['order_id']; ?></td>
-                <td class="px-2 py-1 text-[var(--rose)]">₱<?= number_format($t['total_amount'], 2); ?></td>
-                <td class="px-2 py-1"><?= htmlspecialchars($t['payment_method_name']); ?></td>
-                <td class="px-2 py-1"><?= date('h:i A', strtotime($t['created_at'])); ?></td>
-              </tr>
-              <?php endwhile; ?>
-            </tbody>
-          </table>
-          <?php else: ?>
-            <p class="text-gray-500 text-sm">No transactions yet today.</p>
-          <?php endif; ?>
-        </div>
-      </div>
     </div>
   </div>
 </div>

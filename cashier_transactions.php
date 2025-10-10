@@ -20,7 +20,25 @@ $cashierRow = $cashierRes->get_result()->fetch_assoc();
 $cashier_name = $cashierRow ? $cashierRow['first_name'] : 'Unknown Cashier';
 $cashierRes->close();
 
-// ✅ Fetch today's transactions (summary per order)
+// ✅ Determine selected filter (today, week, month)
+$filter = isset($_GET['filter']) ? $_GET['filter'] : 'today';
+
+// ✅ Build query based on filter
+switch ($filter) {
+    case 'week':
+        $dateCondition = "YEARWEEK(o.created_at, 1) = YEARWEEK(CURDATE(), 1)";
+        $label = "This Week";
+        break;
+    case 'month':
+        $dateCondition = "YEAR(o.created_at) = YEAR(CURDATE()) AND MONTH(o.created_at) = MONTH(CURDATE())";
+        $label = "This Month";
+        break;
+    default:
+        $dateCondition = "DATE(o.created_at) = CURDATE()";
+        $label = "Today";
+}
+
+// ✅ Fetch filtered transactions
 $stmt = $conn->prepare("
     SELECT 
         o.order_id,
@@ -35,15 +53,24 @@ $stmt = $conn->prepare("
     LEFT JOIN order_items oi ON o.order_id = oi.order_id
     LEFT JOIN payment_methods pm ON o.payment_method_id = pm.payment_method_id
     LEFT JOIN adminusers a ON o.admin_id = a.admin_id
-    WHERE DATE(o.created_at) = CURDATE() AND o.admin_id = ?
+    WHERE $dateCondition AND o.admin_id = ?
     GROUP BY o.order_id
     ORDER BY o.created_at DESC
 ");
 $stmt->bind_param("i", $admin_id);
 $stmt->execute();
 $result = $stmt->get_result();
-?>
 
+// ✅ Compute total sales for selected filter
+$totalStmt = $conn->prepare("
+    SELECT COALESCE(SUM(total_amount), 0) AS total_sales
+    FROM orders o
+    WHERE $dateCondition AND o.admin_id = ?
+");
+$totalStmt->bind_param("i", $admin_id);
+$totalStmt->execute();
+$totalSales = $totalStmt->get_result()->fetch_assoc()['total_sales'] ?? 0;
+?>
 
 <!DOCTYPE html>
 <html lang="en">
@@ -103,7 +130,7 @@ body { background-color: #fef9fa; font-family: 'Poppins', sans-serif; }
     <nav>
       <a href="cashier_pos.php">🛍️ POS</a>
       <a href="cashier_transactions.php" class="active-link">💰 Transactions</a>
-      <a href="inventory.php">📦 Inventory</a>
+      <a href="cashier_inventory.php">📦 Inventory</a>
     </nav>
   </div>
 
@@ -119,10 +146,29 @@ body { background-color: #fef9fa; font-family: 'Poppins', sans-serif; }
 
 <!-- 🌸 Main Content -->
 <div class="main-content">
-  <h1 class="text-2xl font-semibold text-[var(--rose)] mb-6">Cashier Transactions (Today)</h1>
+  <div class="flex justify-between items-center mb-6">
+    <h1 class="text-2xl font-semibold text-[var(--rose)]">Cashier Transactions (<?= $label; ?>)</h1>
 
+    <!-- 🔽 Filter Dropdown -->
+    <form method="GET" class="flex items-center space-x-2">
+      <label for="filter" class="text-gray-600 font-medium">Filter:</label>
+      <select name="filter" id="filter" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--rose)]" onchange="this.form.submit()">
+        <option value="today" <?= $filter === 'today' ? 'selected' : ''; ?>>Today</option>
+        <option value="week" <?= $filter === 'week' ? 'selected' : ''; ?>>This Week</option>
+        <option value="month" <?= $filter === 'month' ? 'selected' : ''; ?>>This Month</option>
+      </select>
+    </form>
+  </div>
+
+  <!-- 💰 Total Sales Summary -->
+  <div class="bg-white rounded-lg shadow p-6 mb-6 text-center">
+    <h2 class="font-semibold text-lg text-gray-700 mb-2">Total Sales (<?= $label; ?>)</h2>
+    <p class="text-3xl font-bold text-[var(--rose)]">₱<?= number_format($totalSales, 2); ?></p>
+  </div>
+
+  <!-- 📋 Transactions Table -->
   <div class="bg-white rounded-lg shadow p-6">
-    <h2 class="font-semibold text-lg mb-4">Today's Sales Summary</h2>
+    <h2 class="font-semibold text-lg mb-4"><?= $label; ?> Sales Summary</h2>
 
     <?php if ($result->num_rows > 0): ?>
     <table class="w-full text-sm text-left border-collapse">
@@ -139,11 +185,7 @@ body { background-color: #fef9fa; font-family: 'Poppins', sans-serif; }
         </tr>
       </thead>
       <tbody>
-        <?php 
-        $grandTotal = 0;
-        while ($row = $result->fetch_assoc()):
-          $grandTotal += $row['total_amount'];
-        ?>
+        <?php while ($row = $result->fetch_assoc()): ?>
         <tr class="border-b hover:bg-pink-50 transition">
           <td class="px-3 py-2 font-medium">#<?= $row['order_id']; ?></td>
           <td class="px-3 py-2"><?= $row['total_items']; ?></td>
@@ -157,13 +199,8 @@ body { background-color: #fef9fa; font-family: 'Poppins', sans-serif; }
         <?php endwhile; ?>
       </tbody>
     </table>
-
-    <div class="text-right mt-4 font-semibold text-lg">
-      Total Sales: <span class="text-[var(--rose)]">₱<?= number_format($grandTotal, 2); ?></span>
-    </div>
-
     <?php else: ?>
-      <p class="text-gray-500">No transactions yet for today.</p>
+      <p class="text-gray-500">No transactions found for <?= strtolower($label); ?>.</p>
     <?php endif; ?>
   </div>
 </div>
@@ -173,5 +210,6 @@ body { background-color: #fef9fa; font-family: 'Poppins', sans-serif; }
 
 <?php 
 $stmt->close(); 
+$totalStmt->close();
 $conn->close(); 
 ?>
