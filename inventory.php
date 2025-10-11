@@ -178,7 +178,8 @@ $conn->close();
             </div>
           </li>
           <ul x-show="userMenu" x-transition x-cloak class="pl-8 text-sm text-gray-700 space-y-1">
-            <li><a href="users.php" class="block py-1 hover:text-pink-600"><i class="fas fa-user mr-2"></i>User</a></li>
+            <li><a href="manage_users.php" class="block py-1 hover:text-pink-600"><i class="fas fa-user mr-2"></i>Manage Users</a></li>
+            <a href="manage_roles.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-id-badge mr-2"></i>Manage Roles</a>
             <li><a href="customers.php" class="block py-1 hover:text-pink-600"><i class="fas fa-users mr-2"></i>Customer</a></li>
           </ul>
           <li class="px-4 py-2 hover:bg-gray-200 cursor-pointer" @click="productMenu = !productMenu">

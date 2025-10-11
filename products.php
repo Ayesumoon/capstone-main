@@ -146,7 +146,8 @@ $conn->close();
           </div>
         </li>
         <ul x-show="userMenu" x-transition class="pl-8 text-sm text-gray-700 space-y-1">
-          <li class="py-1 hover:text-pink-600"><a href="users.php"><i class="fas fa-user mr-2"></i>User</a></li>
+          <li class="py-1 hover:text-pink-600"><a href="manage_users.php"><i class="fas fa-user mr-2"></i>Manage Users</a></li>
+          <a href="manage_roles.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-id-badge mr-2"></i>Manage Roles</a>
           <li class="py-1 hover:text-pink-600"><a href="customers.php"><i class="fas fa-users mr-2"></i>Customer</a></li>
         </ul>
 

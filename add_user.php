@@ -205,7 +205,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           class="flex-1 bg-pink-500 text-white px-6 py-3 rounded-lg font-medium shadow-md hover:bg-pink-600 active:scale-95 transition-all">
           Add User
         </button>
-        <button type="button" onclick="window.location.href='users.php'"
+        <button type="button" onclick="window.location.href='manage_users.php'"
           class="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-lg font-medium shadow hover:bg-gray-300 active:scale-95 transition-all">
           Cancel
         </button>

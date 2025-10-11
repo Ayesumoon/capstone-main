@@ -2,10 +2,10 @@
 -- version 5.2.1
 -- https://www.phpmyadmin.net/
 --
--- Host: localhost
--- Generation Time: Oct 07, 2025 at 02:45 PM
--- Server version: 10.4.28-MariaDB
--- PHP Version: 8.2.4
+-- Host: 127.0.0.1
+-- Generation Time: Oct 11, 2025 at 01:28 PM
+-- Server version: 10.4.32-MariaDB
+-- PHP Version: 8.2.12
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
@@ -46,10 +46,9 @@ CREATE TABLE `adminusers` (
 --
 
 INSERT INTO `adminusers` (`admin_id`, `username`, `admin_email`, `password_hash`, `role_id`, `status_id`, `created_at`, `first_name`, `last_name`, `last_logged_in`, `last_logged_out`) VALUES
-(1, 'Ayesu', 'nicholedeguzman@yahoo.com', '$2y$10$ENseQNg1WhLbfCjBEi3P4ezFAjuxciD8TWR/KoKqSUAKRJAR8HiKu', 0, 1, '2025-03-30 04:35:12', 'Nichole', 'De Guzman', '2025-09-23 21:44:38', '2025-09-23 21:55:11'),
-(2, 'admin1', 'johndoe@email.com', '$2y$10$QK6Rk0JKDBunJfvZZJf/PuNTO7QuyRGv1Igs99GS/wDKE2wo5369a', 1, 1, '2025-04-13 22:22:07', 'John', 'Doe', '2025-09-24 10:32:35', '2025-09-24 11:37:12'),
-(3, 'admin2', 'lilysmith1@email.com', '$2y$10$nO07giUvM0zjpiUREi6chOSWSRxuqRqKgT2ds6sPY0EyE93x1c6Mm', 2, 1, '2025-08-21 20:35:19', 'Lily', 'Smith', '2025-10-07 20:22:52', NULL),
-(4, 'Lylee', 'lilylee@gmail.com', '$2y$10$gfr9VheWjsUvkClI9IF7QOOOaiTyVtjuF41/0.WMcJzQLjtxbbsY.', 2, 1, '2025-09-08 13:30:22', 'Lily', 'Lee', '2025-09-08 21:34:36', '2025-09-08 21:44:37');
+(1, 'Ayesu', 'nicholedeguzman@yahoo.com', '$2y$10$ENseQNg1WhLbfCjBEi3P4ezFAjuxciD8TWR/KoKqSUAKRJAR8HiKu', 0, 1, '2025-03-30 04:35:12', 'Nichole', 'De Guzman', '2025-10-10 20:26:46', '2025-10-10 20:54:48'),
+(3, 'admin2', 'lilysmith1@email.com', '$2y$10$nO07giUvM0zjpiUREi6chOSWSRxuqRqKgT2ds6sPY0EyE93x1c6Mm', 2, 1, '2025-08-21 20:35:19', 'Lily', 'Smith', '2025-10-11 19:23:25', NULL),
+(4, 'Lylee', 'lilylee@gmail.com', '$2y$10$gfr9VheWjsUvkClI9IF7QOOOaiTyVtjuF41/0.WMcJzQLjtxbbsY.', 2, 2, '2025-09-08 13:30:22', 'Lily', 'Lee', '2025-09-08 21:34:36', '2025-09-08 21:44:37');
 
 -- --------------------------------------------------------
 
@@ -63,20 +62,23 @@ CREATE TABLE `carts` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `cart_status` enum('active','inactive') DEFAULT 'active',
   `product_id` int(11) DEFAULT NULL,
-  `quantity` int(11) DEFAULT 1
+  `quantity` int(11) DEFAULT 1,
+  `color` varchar(50) DEFAULT NULL,
+  `size` varchar(50) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `carts`
 --
 
-INSERT INTO `carts` (`cart_id`, `customer_id`, `created_at`, `cart_status`, `product_id`, `quantity`) VALUES
-(1, 1, '2025-05-05 16:25:46', '', 4, 1),
-(2, 1, '2025-05-05 16:56:11', '', 3, 10),
-(3, 1, '2025-05-05 17:06:38', '', 2, 13),
-(4, 1, '2025-05-06 01:48:01', '', 4, 6),
-(6, 1, '2025-05-06 01:57:39', 'active', 2, 4),
-(7, 1, '2025-05-06 02:02:59', '', 4, 1);
+INSERT INTO `carts` (`cart_id`, `customer_id`, `created_at`, `cart_status`, `product_id`, `quantity`, `color`, `size`) VALUES
+(2, 1, '2025-05-05 16:56:11', '', 3, 10, NULL, NULL),
+(3, 1, '2025-05-05 17:06:38', '', 2, 13, NULL, NULL),
+(6, 1, '2025-05-06 01:57:39', 'active', 2, 4, NULL, NULL),
+(10, 3, '2025-10-06 13:40:42', '', 3, 1, NULL, NULL),
+(13, 3, '2025-10-08 02:51:20', '', 3, 1, 'Yellow', 'S'),
+(15, 3, '2025-10-08 03:21:51', '', 7, 1, 'Pink', 'M'),
+(16, 3, '2025-10-09 07:16:40', '', 3, 1, 'Yellow', 'S');
 
 -- --------------------------------------------------------
 
@@ -120,7 +122,8 @@ INSERT INTO `categories` (`category_id`, `category_code`, `category_name`) VALUE
 (9, '009', 'Perfume'),
 (10, '0010', 'Test1'),
 (11, '0011', 'Bags'),
-(12, '012', 'Test 2');
+(12, '012', 'Test 2'),
+(13, '013', 'category1');
 
 -- --------------------------------------------------------
 
@@ -145,7 +148,8 @@ INSERT INTO `colors` (`color_id`, `color`) VALUES
 (5, 'Black'),
 (6, 'Green'),
 (7, 'Yellow'),
-(8, 'Violet');
+(8, 'Violet'),
+(9, 'Brown');
 
 -- --------------------------------------------------------
 
@@ -171,7 +175,9 @@ CREATE TABLE `customers` (
 --
 
 INSERT INTO `customers` (`customer_id`, `first_name`, `last_name`, `email`, `phone`, `password_hash`, `address`, `status_id`, `created_at`, `profile_picture`) VALUES
-(1, 'Jane', 'Smith', 'janesmith@email.com', '0987654321', '$2y$10$wwJN5JbK5dyz5VJH7jcgkuaII8ytWuWRJ2YpVgiIoR6Px6qd9IIBK', 'Manila', 1, '2025-04-28 13:15:37', NULL);
+(1, 'Jane', 'Smith', 'janesmith@email.com', '0987654321', '$2y$10$wwJN5JbK5dyz5VJH7jcgkuaII8ytWuWRJ2YpVgiIoR6Px6qd9IIBK', 'Manila', 1, '2025-04-28 13:15:37', NULL),
+(2, 'Lily', 'White', 'whitelily@gmail.com', '0987654321', '$2y$10$UFGysWcd5tyteTyN7qM6zO.e0Vip6hBU0N8gS.a0iOkm3daO0YUTS', 'San Francisco, California', 1, '2025-10-03 13:03:34', NULL),
+(3, 'Eya Nichole', 'Barcena', 'email@gmail.com', '099887766554', '$2y$10$nfaZ1PAqAZnlRxfnmipnKON/BSs9AZ3heP1O9flBZhweDU/dzSVLe', 'Bayambang, Pangasinan', 1, '2025-10-05 14:47:33', NULL);
 
 -- --------------------------------------------------------
 
@@ -185,10 +191,10 @@ CREATE TABLE `orders` (
   `customer_id` int(11) DEFAULT NULL,
   `total_amount` decimal(10,2) NOT NULL,
   `cash_given` decimal(10,2) DEFAULT NULL,
-  `changes` decimal(10,2) NOT NULL,
+  `changes` decimal(10,2) DEFAULT 0.00,
   `order_status_id` int(11) DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `product_id` int(11) NOT NULL,
+  `quantity` int(11) NOT NULL DEFAULT 1,
   `payment_method_id` int(10) UNSIGNED DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -196,14 +202,25 @@ CREATE TABLE `orders` (
 -- Dumping data for table `orders`
 --
 
-INSERT INTO `orders` (`order_id`, `admin_id`, `customer_id`, `total_amount`, `cash_given`, `changes`, `order_status_id`, `created_at`, `product_id`, `payment_method_id`) VALUES
-(5, 1, NULL, 350.00, 500.00, 150.00, 0, '2025-08-19 10:42:32', 3, 3),
-(6, 1, NULL, 350.00, 500.00, 150.00, 0, '2025-08-19 10:43:48', 3, 3),
-(7, 1, NULL, 350.00, 500.00, 150.00, 0, '2025-08-19 10:45:37', 3, 3),
-(9, 1, NULL, 550.00, 1000.00, 450.00, 0, '2025-08-20 01:17:52', 4, 3),
-(10, 1, NULL, 800.00, 1000.00, 200.00, 0, '2025-08-20 01:22:25', 5, 3),
-(11, 1, NULL, 1000.00, 1000.00, 0.00, 0, '2025-08-20 11:45:33', 2, 3),
-(15, NULL, NULL, 850.00, 1000.00, 150.00, 0, '2025-09-08 13:18:13', 2, 3);
+INSERT INTO `orders` (`order_id`, `admin_id`, `customer_id`, `total_amount`, `cash_given`, `changes`, `order_status_id`, `created_at`, `quantity`, `payment_method_id`) VALUES
+(5, 1, NULL, 350.00, 500.00, 150.00, 0, '2025-08-19 10:42:32', 1, 3),
+(6, 1, NULL, 350.00, 500.00, 150.00, 0, '2025-08-19 10:43:48', 1, 3),
+(7, 1, NULL, 350.00, 500.00, 150.00, 0, '2025-08-19 10:45:37', 1, 3),
+(11, 1, NULL, 1000.00, 1000.00, 0.00, 0, '2025-08-20 11:45:33', 1, 3),
+(15, NULL, NULL, 850.00, 1000.00, 150.00, 0, '2025-09-08 13:18:13', 1, 3),
+(17, 1, NULL, 350.00, 500.00, 150.00, 4, '2025-09-29 13:40:25', 1, 3),
+(18, 1, NULL, 500.00, 1000.00, 500.00, 4, '2025-09-29 13:45:13', 1, 3),
+(20, 1, NULL, 1050.00, 1100.00, 50.00, 0, '2025-10-03 03:44:44', 1, 2),
+(24, 1, NULL, 700.00, 1000.00, 300.00, 4, '2025-10-03 05:10:55', 1, 3),
+(25, 1, NULL, 1100.00, 1500.00, 400.00, 4, '2025-10-03 05:33:23', 1, 3),
+(26, 1, NULL, 1400.00, 1500.00, 100.00, 4, '2025-10-03 05:39:09', 1, 3),
+(31, NULL, 3, 350.00, NULL, 0.00, 1, '2025-10-06 13:44:03', 1, 3),
+(32, NULL, 3, 350.00, NULL, 0.00, 1, '2025-10-08 02:55:07', 1, 3),
+(41, NULL, 3, 869.00, NULL, 0.00, 1, '2025-10-08 04:15:08', 1, 1),
+(46, NULL, 3, 419.00, NULL, 0.00, 1, '2025-10-09 07:29:06', 1, 3),
+(48, 1, NULL, 350.00, 500.00, 150.00, 0, '2025-10-09 07:41:49', 1, 3),
+(49, 3, NULL, 750.00, 1000.00, 250.00, 0, '2025-10-09 08:35:03', 1, 3),
+(50, 1, NULL, 1050.00, 1100.00, 50.00, 0, '2025-10-10 12:53:07', 1, 3);
 
 -- --------------------------------------------------------
 
@@ -214,6 +231,9 @@ INSERT INTO `orders` (`order_id`, `admin_id`, `customer_id`, `total_amount`, `ca
 CREATE TABLE `order_items` (
   `id` int(11) NOT NULL,
   `order_id` int(11) NOT NULL,
+  `product_id` int(11) DEFAULT NULL,
+  `color` varchar(50) DEFAULT NULL,
+  `size` varchar(50) DEFAULT NULL,
   `stock_id` int(11) NOT NULL,
   `qty` int(11) NOT NULL,
   `price` double NOT NULL
@@ -223,15 +243,27 @@ CREATE TABLE `order_items` (
 -- Dumping data for table `order_items`
 --
 
-INSERT INTO `order_items` (`id`, `order_id`, `stock_id`, `qty`, `price`) VALUES
-(2, 5, 1, 1, 350),
-(3, 6, 1, 1, 350),
-(4, 7, 1, 1, 350),
-(6, 9, 7, 1, 550),
-(7, 10, 9, 4, 200),
-(8, 11, 8, 2, 500),
-(15, 15, 8, 1, 500),
-(16, 15, 14, 1, 350);
+INSERT INTO `order_items` (`id`, `order_id`, `product_id`, `color`, `size`, `stock_id`, `qty`, `price`) VALUES
+(2, 5, NULL, NULL, NULL, 1, 1, 350),
+(3, 6, NULL, NULL, NULL, 1, 1, 350),
+(4, 7, NULL, NULL, NULL, 1, 1, 350),
+(8, 11, NULL, NULL, NULL, 8, 2, 500),
+(15, 15, NULL, NULL, NULL, 8, 1, 500),
+(16, 15, NULL, NULL, NULL, 14, 1, 350),
+(18, 17, NULL, NULL, NULL, 14, 1, 350),
+(19, 18, NULL, NULL, NULL, 8, 1, 500),
+(22, 20, NULL, NULL, NULL, 1, 3, 350),
+(25, 24, NULL, NULL, NULL, 1, 2, 350),
+(26, 25, NULL, NULL, NULL, 12, 1, 350),
+(29, 26, NULL, NULL, NULL, 8, 1, 500),
+(30, 26, NULL, NULL, NULL, 14, 1, 350),
+(32, 41, NULL, NULL, NULL, 16, 1, 400),
+(33, 41, NULL, NULL, NULL, 17, 1, 400),
+(38, 46, 3, 'Yellow', 'S', 1, 1, 350),
+(40, 48, 3, NULL, NULL, 1, 1, 350),
+(41, 49, 3, NULL, NULL, 1, 1, 350),
+(42, 49, 7, NULL, NULL, 16, 1, 400),
+(43, 50, 3, NULL, NULL, 1, 3, 350);
 
 -- --------------------------------------------------------
 
@@ -304,10 +336,10 @@ CREATE TABLE `products` (
 --
 
 INSERT INTO `products` (`product_id`, `product_name`, `description`, `price_id`, `stocks`, `category_id`, `image_url`, `created_at`, `supplier_id`, `supplier_price`, `sizes`, `colors`) VALUES
-(2, '002', '', 500, -1, 1, 'uploads/products/686e07e6b1848_blouse3.jpg,uploads/products/686e07e6b1b3b_blouse2.jpg,uploads/products/686e07e6b1d2c_blouse1.jpg', '2025-05-01 13:25:54', 2, 250.00, NULL, NULL),
-(3, '6776', '', 350, 2, 7, 'uploads/products/686ca8149794f_6776.jpg', '2025-05-01 13:50:35', 2, 3000.00, NULL, NULL),
-(4, '013', '', 550, 6, 11, 'uploads/katespade.jpg', '2025-05-05 14:11:33', 1, 450.00, NULL, NULL),
-(5, '005', '', 200, NULL, 3, 'uploads/products/686ca7d4f0ecc_short1.jpg', '2025-07-08 05:04:36', 1, 150.00, NULL, NULL);
+(2, '002', 'Sizes:  | Colors: ', 500, NULL, 1, 'uploads/products/68e5a7012c3d3_blouse3.jpg,uploads/products/68e5a7012c5eb_blouse2.jpg,uploads/products/68e5a7012c7b1_blouse1.jpg', '2025-05-01 13:25:54', 2, 250.00, NULL, NULL),
+(3, '6776', '', 350, NULL, 7, '[\"uploads/products/68e5aa731bec3_6776.jpg\"]', '2025-05-01 13:50:35', 2, 3000.00, NULL, NULL),
+(6, '9619', '', 400, 40, 6, '[\"uploads/products/prod_68e5b157d80e1.jpg\",\"uploads/products/prod_68e5b157d8372.jpg\"]', '2025-10-08 00:33:14', 2, 300.00, NULL, NULL),
+(7, '6868', '', 350, 30, 1, '[\"uploads/products/68e5c96927865_newblouse.jpg\"]', '2025-10-08 02:14:56', 2, 300.00, NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -331,9 +363,7 @@ INSERT INTO `product_colors` (`id`, `product_id`, `color_id`) VALUES
 (3, 2, 2),
 (4, 2, 3),
 (5, 3, 3),
-(6, 5, 3),
 (7, 3, 5),
-(8, 5, 5),
 (9, 3, 6),
 (10, 3, 7);
 
@@ -360,12 +390,37 @@ INSERT INTO `product_sizes` (`id`, `product_id`, `size_id`) VALUES
 (4, 3, 1),
 (5, 3, 2),
 (6, 3, 3),
-(7, 3, 4),
-(8, 4, 1),
-(9, 5, 1),
-(10, 5, 2),
-(11, 5, 3),
-(12, 5, 4);
+(7, 3, 4);
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `refunds`
+--
+
+CREATE TABLE `refunds` (
+  `refund_id` int(11) NOT NULL,
+  `order_id` int(11) NOT NULL,
+  `order_item_id` int(11) DEFAULT NULL,
+  `product_id` int(11) NOT NULL,
+  `stock_id` int(11) DEFAULT NULL,
+  `size_id` int(11) DEFAULT NULL,
+  `color_id` int(11) DEFAULT NULL,
+  `refund_amount` decimal(10,2) NOT NULL,
+  `refunded_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `refunded_by` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `refunds`
+--
+
+INSERT INTO `refunds` (`refund_id`, `order_id`, `order_item_id`, `product_id`, `stock_id`, `size_id`, `color_id`, `refund_amount`, `refunded_at`, `refunded_by`) VALUES
+(1, 18, NULL, 2, 8, 2, 2, 500.00, '2025-09-29 14:24:34', 1),
+(2, 17, NULL, 3, 14, 1, 8, 350.00, '2025-09-29 14:49:21', 1),
+(10, 24, 25, 3, 1, 1, 7, 700.00, '2025-10-03 05:32:56', 1),
+(11, 25, 26, 3, 12, 1, 6, 350.00, '2025-10-03 05:33:41', 1),
+(14, 26, 30, 3, 14, 1, 8, 350.00, '2025-10-03 05:47:55', 1);
 
 -- --------------------------------------------------------
 
@@ -383,10 +438,8 @@ CREATE TABLE `roles` (
 --
 
 INSERT INTO `roles` (`role_id`, `role_name`) VALUES
-(0, 'Cashier'),
-(3, 'Manager'),
-(2, 'Staff'),
-(1, 'Super Admin');
+(2, 'Admin'),
+(0, 'Cashier');
 
 -- --------------------------------------------------------
 
@@ -448,15 +501,16 @@ CREATE TABLE `stock` (
 --
 
 INSERT INTO `stock` (`stock_id`, `product_id`, `current_qty`, `color_id`, `size_id`) VALUES
-(1, 3, 3, 7, 1),
-(7, 4, 5, 6, 4),
-(8, 2, 3, 2, 2),
-(9, 5, 2, 5, 2),
-(11, 5, 2, 5, 2),
+(1, 3, 140, 7, 1),
+(8, 2, 18, 2, 2),
 (12, 3, 5, 6, 1),
-(13, 4, 3, 1, 2),
 (14, 3, 2, 8, 1),
-(15, 4, 3, 5, 2);
+(16, 7, 15, 1, 2),
+(17, 7, 15, 5, 2),
+(18, 6, 5, 5, 2),
+(19, 6, 5, 9, 2),
+(20, 6, 10, 9, 3),
+(21, 6, 20, 5, 3);
 
 -- --------------------------------------------------------
 
@@ -481,15 +535,23 @@ INSERT INTO `stock_in` (`stock_in_id`, `stock_id`, `quantity`, `date_added`, `su
 (1, 1, 30, '2025-08-11', 1, NULL),
 (2, 1, 40, '2025-08-11', 1, NULL),
 (3, 1, 40, '2025-08-11', 1, NULL),
-(4, 7, 10, '2025-08-11', 2, NULL),
 (5, 8, 20, '2025-08-11', 2, NULL),
 (6, 1, 20, '2025-08-11', 1, NULL),
-(7, 9, 30, '2025-08-17', 2, NULL),
-(9, 11, 2, '2025-09-07', 1, NULL),
 (10, 12, 5, '2025-09-08', 2, NULL),
-(11, 13, 3, '2025-09-08', 2, NULL),
 (12, 14, 3, '2025-09-08', 1, NULL),
-(13, 15, 3, '2025-09-08', 2, NULL);
+(14, 1, 10, '2025-10-03', 2, NULL),
+(15, 1, 2, '2025-10-03', NULL, NULL),
+(16, 12, 1, '2025-10-03', NULL, NULL),
+(19, 14, 1, '2025-10-03', NULL, NULL),
+(20, 16, 5, '2025-10-08', 2, NULL),
+(21, 17, 5, '2025-10-08', 2, NULL),
+(22, 18, 5, '2025-10-08', 1, NULL),
+(23, 19, 5, '2025-10-08', 1, NULL),
+(24, 20, 10, '2025-10-08', 1, NULL),
+(25, 21, 10, '2025-10-08', 1, NULL),
+(26, 21, 10, '2025-10-08', 1, NULL),
+(27, 17, 10, '2025-10-08', 2, NULL),
+(28, 16, 10, '2025-10-08', 2, NULL);
 
 -- --------------------------------------------------------
 
@@ -572,11 +634,33 @@ INSERT INTO `system_logs` (`log_id`, `user_id`, `username`, `role_id`, `action`,
 (6, 1, 'Ayesu', 0, 'User logged out', '2025-09-08 13:19:07'),
 (7, 1, 'Ayesu', 0, 'User logged out', '2025-09-08 13:29:24'),
 (8, 4, 'Lylee', 2, 'User logged out', '2025-09-08 13:44:37'),
-(9, 2, 'admin1', 1, 'User logged out', '2025-09-23 13:44:31'),
 (10, 1, 'Ayesu', 0, 'User logged out', '2025-09-23 13:55:11'),
-(11, 2, 'admin1', 1, 'User logged out', '2025-09-24 01:51:22'),
 (12, 3, 'admin2', 2, 'User logged out', '2025-09-24 02:32:27'),
-(13, 2, 'admin1', 1, 'User logged out', '2025-09-24 03:37:12');
+(14, 1, 'Ayesu', 0, 'User logged out', '2025-09-29 13:11:57'),
+(15, 3, 'admin2', 2, 'User logged out', '2025-09-29 13:12:27'),
+(16, 1, 'Ayesu', 0, 'User logged out', '2025-09-29 13:40:39'),
+(17, 3, 'admin2', 2, 'User logged out', '2025-09-29 13:44:33'),
+(18, 1, 'Ayesu', 0, 'User logged out', '2025-09-29 13:45:19'),
+(19, 3, 'admin2', 2, 'User logged out', '2025-09-29 14:03:08'),
+(20, 1, 'Ayesu', 0, 'User logged out', '2025-09-29 14:29:56'),
+(22, 1, 'Ayesu', 0, 'User logged out', '2025-09-29 14:40:04'),
+(23, 1, 'Ayesu', 0, 'User logged out', '2025-09-29 14:59:35'),
+(24, 3, 'admin2', 2, 'User logged out', '2025-10-03 02:11:17'),
+(25, 1, 'Ayesu', 0, 'User logged out', '2025-10-03 02:19:21'),
+(26, 3, 'admin2', 2, 'User logged out', '2025-10-03 03:44:21'),
+(27, 1, 'Ayesu', 0, 'User logged out', '2025-10-03 03:44:49'),
+(28, 3, 'admin2', 2, 'User logged out', '2025-10-03 03:54:35'),
+(29, 1, 'Ayesu', 0, 'User logged out', '2025-10-03 03:55:07'),
+(30, 3, 'admin2', 2, 'User logged out', '2025-10-03 03:55:29'),
+(31, 1, 'Ayesu', 0, 'User logged out', '2025-10-03 03:55:45'),
+(32, 3, 'admin2', 2, 'User logged out', '2025-10-03 03:58:21'),
+(33, 1, 'Ayesu', 0, 'User logged out', '2025-10-03 05:53:20'),
+(34, 3, 'admin2', 2, 'User logged out', '2025-10-03 14:36:33'),
+(35, 1, 'Ayesu', 0, 'User logged out', '2025-10-09 07:38:24'),
+(36, 1, 'Ayesu', 0, 'User logged out', '2025-10-09 08:02:49'),
+(38, 3, 'admin2', 2, 'User logged out', '2025-10-09 09:40:30'),
+(39, 1, 'Ayesu', 0, 'User logged out', '2025-10-10 12:54:48'),
+(40, 3, 'admin2', 2, 'User logged out', '2025-10-10 13:05:02');
 
 -- --------------------------------------------------------
 
@@ -587,7 +671,7 @@ INSERT INTO `system_logs` (`log_id`, `user_id`, `username`, `role_id`, `action`,
 CREATE TABLE `transactions` (
   `transaction_id` int(11) NOT NULL,
   `order_id` int(11) NOT NULL,
-  `customer_id` int(11) NOT NULL,
+  `customer_id` int(11) DEFAULT NULL,
   `payment_method_id` int(10) UNSIGNED DEFAULT NULL,
   `total` decimal(10,2) NOT NULL,
   `order_status_id` int(10) UNSIGNED NOT NULL,
@@ -599,7 +683,21 @@ CREATE TABLE `transactions` (
 --
 
 INSERT INTO `transactions` (`transaction_id`, `order_id`, `customer_id`, `payment_method_id`, `total`, `order_status_id`, `date_time`) VALUES
-(3, 15, 1, 3, 850.00, 0, '2025-09-08 21:18:13');
+(3, 15, 1, 3, 850.00, 0, '2025-09-08 21:18:13'),
+(5, 17, 1, 3, 350.00, 1, '2025-09-29 21:40:25'),
+(6, 18, 1, 3, 500.00, 2, '2025-09-29 21:45:13'),
+(7, 18, 1, 3, 500.00, 1, '2025-09-29 21:45:13'),
+(10, 20, 1, 2, 1050.00, 2, '2025-10-03 11:44:44'),
+(11, 20, 1, 2, 1050.00, 1, '2025-10-03 11:44:44'),
+(17, 24, 1, 3, 700.00, 2, '2025-10-03 13:10:55'),
+(18, 24, 1, 3, 700.00, 1, '2025-10-03 13:10:55'),
+(19, 25, 1, 3, 1100.00, 2, '2025-10-03 13:33:23'),
+(20, 25, 1, 3, 1100.00, 1, '2025-10-03 13:33:23'),
+(21, 26, 1, 3, 1400.00, 2, '2025-10-03 13:39:09'),
+(22, 26, 1, 3, 1400.00, 1, '2025-10-03 13:39:10'),
+(24, 48, NULL, 3, 350.00, 0, '2025-10-09 15:41:49'),
+(25, 49, NULL, 3, 750.00, 0, '2025-10-09 16:35:03'),
+(26, 50, NULL, 3, 1050.00, 0, '2025-10-10 20:53:07');
 
 --
 -- Indexes for dumped tables
@@ -658,7 +756,6 @@ ALTER TABLE `orders`
   ADD PRIMARY KEY (`order_id`),
   ADD KEY `customer_id` (`customer_id`),
   ADD KEY `fk_orders_status` (`order_status_id`),
-  ADD KEY `fk_orders_products` (`product_id`),
   ADD KEY `fk_orders_payment_method` (`payment_method_id`);
 
 --
@@ -706,6 +803,19 @@ ALTER TABLE `product_sizes`
   ADD PRIMARY KEY (`id`),
   ADD KEY `product_id` (`product_id`),
   ADD KEY `size_id` (`size_id`);
+
+--
+-- Indexes for table `refunds`
+--
+ALTER TABLE `refunds`
+  ADD PRIMARY KEY (`refund_id`),
+  ADD KEY `order_id` (`order_id`),
+  ADD KEY `order_item_id` (`order_item_id`),
+  ADD KEY `product_id` (`product_id`),
+  ADD KEY `stock_id` (`stock_id`),
+  ADD KEY `size_id` (`size_id`),
+  ADD KEY `color_id` (`color_id`),
+  ADD KEY `refunded_by` (`refunded_by`);
 
 --
 -- Indexes for table `roles`
@@ -785,7 +895,7 @@ ALTER TABLE `adminusers`
 -- AUTO_INCREMENT for table `carts`
 --
 ALTER TABLE `carts`
-  MODIFY `cart_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
+  MODIFY `cart_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
 
 --
 -- AUTO_INCREMENT for table `cart_items`
@@ -797,31 +907,31 @@ ALTER TABLE `cart_items`
 -- AUTO_INCREMENT for table `categories`
 --
 ALTER TABLE `categories`
-  MODIFY `category_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
+  MODIFY `category_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
 
 --
 -- AUTO_INCREMENT for table `colors`
 --
 ALTER TABLE `colors`
-  MODIFY `color_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
+  MODIFY `color_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
 
 --
 -- AUTO_INCREMENT for table `customers`
 --
 ALTER TABLE `customers`
-  MODIFY `customer_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `customer_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT for table `orders`
 --
 ALTER TABLE `orders`
-  MODIFY `order_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=16;
+  MODIFY `order_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=51;
 
 --
 -- AUTO_INCREMENT for table `order_items`
 --
 ALTER TABLE `order_items`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=44;
 
 --
 -- AUTO_INCREMENT for table `payment_methods`
@@ -833,7 +943,7 @@ ALTER TABLE `payment_methods`
 -- AUTO_INCREMENT for table `products`
 --
 ALTER TABLE `products`
-  MODIFY `product_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+  MODIFY `product_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
 
 --
 -- AUTO_INCREMENT for table `product_colors`
@@ -846,6 +956,12 @@ ALTER TABLE `product_colors`
 --
 ALTER TABLE `product_sizes`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
+
+--
+-- AUTO_INCREMENT for table `refunds`
+--
+ALTER TABLE `refunds`
+  MODIFY `refund_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
 
 --
 -- AUTO_INCREMENT for table `sizes`
@@ -863,13 +979,13 @@ ALTER TABLE `status`
 -- AUTO_INCREMENT for table `stock`
 --
 ALTER TABLE `stock`
-  MODIFY `stock_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=16;
+  MODIFY `stock_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=22;
 
 --
 -- AUTO_INCREMENT for table `stock_in`
 --
 ALTER TABLE `stock_in`
-  MODIFY `stock_in_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
+  MODIFY `stock_in_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=29;
 
 --
 -- AUTO_INCREMENT for table `store_settings`
@@ -887,13 +1003,13 @@ ALTER TABLE `suppliers`
 -- AUTO_INCREMENT for table `system_logs`
 --
 ALTER TABLE `system_logs`
-  MODIFY `log_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
+  MODIFY `log_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=42;
 
 --
 -- AUTO_INCREMENT for table `transactions`
 --
 ALTER TABLE `transactions`
-  MODIFY `transaction_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `transaction_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=27;
 
 --
 -- Constraints for dumped tables
@@ -931,7 +1047,6 @@ ALTER TABLE `customers`
 --
 ALTER TABLE `orders`
   ADD CONSTRAINT `fk_orders_payment_method` FOREIGN KEY (`payment_method_id`) REFERENCES `payment_methods` (`payment_method_id`) ON DELETE SET NULL,
-  ADD CONSTRAINT `fk_orders_products` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`) ON DELETE CASCADE,
   ADD CONSTRAINT `fk_orders_status` FOREIGN KEY (`order_status_id`) REFERENCES `order_status` (`order_status_id`) ON DELETE CASCADE,
   ADD CONSTRAINT `orders_ibfk_1` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`customer_id`);
 
@@ -962,6 +1077,18 @@ ALTER TABLE `product_colors`
 ALTER TABLE `product_sizes`
   ADD CONSTRAINT `product_sizes_ibfk_1` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`) ON DELETE CASCADE,
   ADD CONSTRAINT `product_sizes_ibfk_2` FOREIGN KEY (`size_id`) REFERENCES `sizes` (`size_id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `refunds`
+--
+ALTER TABLE `refunds`
+  ADD CONSTRAINT `refunds_ibfk_1` FOREIGN KEY (`order_id`) REFERENCES `orders` (`order_id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `refunds_ibfk_2` FOREIGN KEY (`order_item_id`) REFERENCES `order_items` (`id`) ON DELETE SET NULL,
+  ADD CONSTRAINT `refunds_ibfk_3` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `refunds_ibfk_4` FOREIGN KEY (`stock_id`) REFERENCES `stock` (`stock_id`) ON DELETE SET NULL,
+  ADD CONSTRAINT `refunds_ibfk_5` FOREIGN KEY (`size_id`) REFERENCES `sizes` (`size_id`) ON DELETE SET NULL,
+  ADD CONSTRAINT `refunds_ibfk_6` FOREIGN KEY (`color_id`) REFERENCES `colors` (`color_id`) ON DELETE SET NULL,
+  ADD CONSTRAINT `refunds_ibfk_7` FOREIGN KEY (`refunded_by`) REFERENCES `adminusers` (`admin_id`) ON DELETE SET NULL;
 
 --
 -- Constraints for table `stock`

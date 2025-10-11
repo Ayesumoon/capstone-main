@@ -1,29 +1,29 @@
 <?php
 include 'conn.php';
 
-$admin_id = $_SESSION['admin_id'] ?? null;
-$admin_name = "Admin";
-$admin_role = "Admin";
+    $admin_id = $_SESSION['admin_id'] ?? null;
+    $admin_name = "Admin";
+    $admin_role = "Admin";
 
-if ($admin_id) {
-    $query = "
-        SELECT 
-            CONCAT(first_name, ' ', last_name) AS full_name, 
-            r.role_name 
-        FROM adminusers a
-        LEFT JOIN roles r ON a.role_id = r.role_id
-        WHERE a.admin_id = ?
-    ";
-    $stmt = $conn->prepare($query);
-    $stmt->bind_param("i", $admin_id);
-    $stmt->execute();
-    $result = $stmt->get_result();
+    if ($admin_id) {
+        $query = "
+            SELECT 
+                CONCAT(first_name, ' ', last_name) AS full_name, 
+                r.role_name 
+            FROM adminusers a
+            LEFT JOIN roles r ON a.role_id = r.role_id
+            WHERE a.admin_id = ?
+        ";
+        $stmt = $conn->prepare($query);
+        $stmt->bind_param("i", $admin_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
 
-    if ($row = $result->fetch_assoc()) {
-        $admin_name = $row['full_name'];
-        $admin_role = $row['role_name'] ?? 'Admin';
+        if ($row = $result->fetch_assoc()) {
+            $admin_name = $row['full_name'];
+            $admin_role = $row['role_name'] ?? 'Admin';
+        }
     }
-}
 
 // === FILTER HANDLING ===
 $filter = $_GET['filter'] ?? 'today';
@@ -145,11 +145,13 @@ while ($row = $chartQuery->fetch_assoc()) {
 </li>
 <ul x-show="userMenu" x-transition.duration.300ms class="pl-8 text-sm text-gray-700 space-y-1 overflow-hidden">
   <li class="py-1">
-    <a href="users.php" class="flex items-center space-x-2 hover:text-pink-600">
+    <a href="manage_users.php" class="flex items-center space-x-2 hover:text-pink-600">
       <i class="fas fa-user"></i>
-      <span>User</span>
+      <span>Manage Users</span>
     </a>
   </li>
+    <a href="manage_roles.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-id-badge mr-2"></i>Manage Roles</a>
+
   <li class="py-1">
     <a href="customers.php" class="flex items-center space-x-2 hover:text-pink-600">
       <i class="fas fa-users"></i>
