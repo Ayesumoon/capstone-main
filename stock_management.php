@@ -104,7 +104,6 @@ while ($sup = $supplier_query->fetch_assoc()) {
     $supplier_list[] = $sup;
 }
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -112,187 +111,176 @@ while ($sup = $supplier_query->fetch_assoc()) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Stock Management</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: { poppins: ['Poppins', 'sans-serif'] },
-          colors: { primary: '#ec4899' }
-        }
-      }
-    };
-  </script>
   <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet" />
-  <style>[x-cloak]{ display:none !important; }</style>
+  <style>
+    :root {
+      --rose: #e5a5b2;
+      --rose-hover: #d48b98;
+    }
+    body {
+      font-family: 'Poppins', sans-serif;
+      background-color: #f9fafb;
+      color: #374151;
+    }
+    [x-cloak] { display: none !important; }
+    .active-link {
+      background-color: #fef3f5;
+      color: var(--rose);
+      font-weight: 600;
+      border-radius: 0.5rem;
+    }
+  </style>
 </head>
-<body class="bg-gray-100 font-poppins text-sm" 
-      x-data="{ userMenu:false, productMenu:true, stockInOpen:false }">
 
-<div class="flex h-screen">
+<body class="font-poppins text-sm" x-data="{ userMenu:false, productMenu:true, stockInOpen:false }">
+<div class="flex min-h-screen">
+
   <!-- Sidebar -->
-  <div class="w-64 bg-white shadow-md min-h-screen">
-    <div class="p-4">
-      <div class="flex items-center space-x-4">
-        <img src="logo2.png" alt="Logo" class="rounded-full w-12 h-12" />
-        <h2 class="text-lg font-semibold">SevenDwarfs</h2>
+  <aside class="w-64 bg-white shadow-md min-h-screen">
+    <div class="p-5 border-b">
+      <div class="flex items-center space-x-3">
+        <img src="logo2.png" alt="Logo" class="rounded-full w-10 h-10" />
+        <h2 class="text-lg font-semibold text-[var(--rose)]">SevenDwarfs</h2>
       </div>
-      <div class="mt-4 flex items-center space-x-4">
+      <div class="mt-4 flex items-center space-x-3">
         <img src="newID.jpg" alt="Admin" class="rounded-full w-10 h-10" />
         <div>
-          <h3 class="text-sm font-semibold"><?= htmlspecialchars($admin_name) ?></h3>
+          <h3 class="text-sm font-semibold text-gray-800"><?= htmlspecialchars($admin_name) ?></h3>
           <p class="text-xs text-gray-500"><?= htmlspecialchars($admin_role) ?></p>
         </div>
       </div>
     </div>
 
     <!-- Navigation -->
-    <nav class="mt-6">
-      <ul>
-        <li class="px-4 py-2 hover:bg-gray-200">
-          <a href="dashboard.php" class="flex items-center"><i class="fas fa-tachometer-alt mr-2"></i>Dashboard</a>
-        </li>
-        <li class="px-4 py-2 hover:bg-gray-200 cursor-pointer" @click="userMenu = !userMenu">
-          <div class="flex items-center justify-between">
-            <span class="flex items-center"><i class="fas fa-users-cog mr-2"></i>User Management</span>
-            <i class="fas fa-chevron-down transition-transform duration-200" :class="{ 'rotate-180': userMenu }"></i>
-          </div>
-        </li>
-        <ul x-show="userMenu" x-transition class="pl-8 text-sm text-gray-700 space-y-1">
-          <li class="py-1 hover:text-pink-600"><a href="manage_users.php" class="flex items-center"><i class="fas fa-user mr-2"></i>Manage User</a></li>
-          <a href="manage_roles.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-id-badge mr-2"></i>Manage Roles</a>
-          <li class="py-1"><a href="customers.php" class="flex items-center space-x-2 hover:text-pink-600"><i class="fas fa-users"></i><span>Customer</span></a></li>
-        </ul>
-        <li class="px-4 py-2 hover:bg-gray-200 cursor-pointer" @click="productMenu = !productMenu">
-          <div class="flex items-center justify-between">
-            <span class="flex items-center"><i class="fas fa-box-open mr-2"></i>Product Management</span>
-            <i class="fas fa-chevron-down transition-transform duration-200" :class="{ 'rotate-180': productMenu }"></i>
-          </div>
-        </li>
-        <ul x-show="productMenu" x-transition class="pl-8 text-sm text-gray-700 space-y-1">
-          <li class="py-1 hover:text-pink-600"><a href="categories.php" class="flex items-center"><i class="fas fa-tags mr-2"></i>Category</a></li>
-          <li class="py-1 hover:text-pink-600"><a href="products.php" class="flex items-center"><i class="fas fa-box mr-2"></i>Product</a></li>
-          <li class="py-1 hover:text-pink-600"><a href="inventory.php" class="flex items-center"><i class="fas fa-warehouse mr-2"></i>Inventory</a></li>
-          <li class="py-1 bg-pink-100 text-pink-600 rounded"><a href="stock_management.php" class="flex items-center"><i class="fas fa-boxes mr-2"></i>Stock Management</a></li>
-        </ul>
-        <li class="px-4 py-2 hover:bg-gray-200"><a href="orders.php" class="flex items-center"><i class="fas fa-shopping-cart mr-2"></i>Orders</a></li>
-        <li class="px-4 py-2 hover:bg-gray-200"><a href="suppliers.php" class="flex items-center"><i class="fas fa-industry mr-2"></i>Suppliers</a></li>
-        <li class="px-4 py-2 hover:bg-gray-200"><a href="logout.php" class="flex items-center"><i class="fas fa-sign-out-alt mr-2"></i>Log out</a></li>
+    <nav class="p-4 space-y-1">
+      <a href="dashboard.php" class="block px-4 py-2 rounded hover:bg-gray-100 transition"><i class="fas fa-tachometer-alt mr-2"></i>Dashboard</a>
+
+      <button @click="userMenu = !userMenu" class="w-full text-left px-4 py-2 flex justify-between items-center hover:bg-gray-100 rounded transition">
+        <span><i class="fas fa-users-cog mr-2"></i>User Management</span>
+        <i class="fas fa-chevron-down transition-transform duration-200" :class="{ 'rotate-180': userMenu }"></i>
+      </button>
+      <ul x-show="userMenu" x-transition class="pl-8 text-sm space-y-1">
+        <li><a href="manage_users.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-user mr-2"></i>Manage Users</a></li>
+        <a href="manage_roles.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-id-badge mr-2"></i>Manage Roles</a>
+        <li><a href="customers.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-users mr-2"></i>Customer</a></li>
       </ul>
+
+      <button @click="productMenu = !productMenu" class="w-full text-left px-4 py-2 flex justify-between items-center hover:bg-gray-100 rounded transition">
+        <span><i class="fas fa-box-open mr-2"></i>Product Management</span>
+        <i class="fas fa-chevron-down transition-transform duration-200" :class="{ 'rotate-180': productMenu }"></i>
+      </button>
+      <ul x-show="productMenu" x-transition class="pl-8 text-sm space-y-1">
+        <li><a href="categories.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-tags mr-2"></i>Category</a></li>
+        <li><a href="products.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-box mr-2"></i>Product</a></li>
+        <li><a href="inventory.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-warehouse mr-2"></i>Inventory</a></li>
+        <li><a href="stock_management.php" class="block py-1 active-link"><i class="fas fa-boxes mr-2"></i>Stock Management</a></li>
+      </ul>
+
+      <a href="orders.php" class="block px-4 py-2 rounded hover:bg-gray-100 transition"><i class="fas fa-shopping-cart mr-2"></i>Orders</a>
+      <a href="system_logs.php" class="block px-4 py-2 hover:bg-gray-100 rounded transition"><i class="fas fa-file-alt mr-2"></i>System Logs</a>
+            <a href="system_logs.php" class="block px-4 text-red-600 hover:bg-red-50 rounded transition"><i class="fas fa-file-alt mr-2"></i>System Logs</a>
+
+      <a href="logout.php" class="block px-4 py-2 text-red-600 hover:bg-red-50 rounded transition"><i class="fas fa-sign-out-alt mr-2"></i>Log out</a>
     </nav>
-  </div> 
+  </aside>
 
   <!-- Main Content -->
-  <div class="flex-1 p-6 space-y-6">
-    <div class="bg-pink-300 text-white p-4 rounded-t-2xl shadow-sm">
+  <main class="flex-1 p-8 bg-gray-50 space-y-6 overflow-auto">
+
+    <!-- Header -->
+    <div class="bg-[var(--rose)] text-white p-5 rounded-t-2xl shadow-sm">
       <h1 class="text-2xl font-semibold">Stock Management</h1>
     </div>
 
-    <!-- Flash Alerts -->
+    <!-- Alerts -->
     <?php if ($outStock): ?>
-      <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative animate-pulse" role="alert">
-        <strong class="font-bold">⚠ Out of Stock:</strong>
-        <span class="block sm:inline">Some products are completely out of stock!</span>
+      <div class="bg-red-50 border border-red-400 text-red-700 px-4 py-3 rounded-md shadow-sm">
+        <strong class="font-semibold">⚠ Out of Stock:</strong> Some products are completely out of stock!
       </div>
     <?php endif; ?>
     <?php if ($lowStock): ?>
-      <div class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded relative animate-pulse" role="alert">
-        <strong class="font-bold">⚠ Low Stock:</strong>
-        <span class="block sm:inline">Some products are running low (≤ 20 items left).</span>
+      <div class="bg-yellow-50 border border-yellow-400 text-yellow-700 px-4 py-3 rounded-md shadow-sm">
+        <strong class="font-semibold">⚠ Low Stock:</strong> Some products are running low (≤ 20 items left).
       </div>
     <?php endif; ?>
 
-    <!-- Category Filter -->
-    <form method="GET" class="mb-4">
-      <label class="block text-sm font-medium mb-1">Filter by Category:</label>
-      <select name="category_id" class="border p-2 rounded" onchange="this.form.submit()">
-        <option value="0">All Categories</option>
-        <?php 
-        $categories->data_seek(0);
-        while ($cat=$categories->fetch_assoc()): ?>
-          <option value="<?= $cat['category_id'] ?>" <?= ($cat['category_id']==$selected_category)?'selected':'' ?>>
-            <?= htmlspecialchars($cat['category_name']) ?>
-          </option>
-        <?php endwhile; ?>
-      </select>
-    </form>
+    <!-- Filter + Stock In Button -->
+    <div class="flex flex-wrap justify-between items-center bg-white p-5 rounded-lg shadow">
+      <form method="GET" class="flex items-center gap-2">
+        <label class="font-medium text-sm text-gray-700">Filter by Category:</label>
+        <select name="category_id" onchange="this.form.submit()" class="p-2 border rounded-md focus:ring-2 focus:ring-[var(--rose)]">
+          <option value="0">All Categories</option>
+          <?php 
+          $categories->data_seek(0);
+          while ($cat = $categories->fetch_assoc()): ?>
+            <option value="<?= $cat['category_id'] ?>" <?= ($cat['category_id']==$selected_category)?'selected':'' ?>>
+              <?= htmlspecialchars($cat['category_name']) ?>
+            </option>
+          <?php endwhile; ?>
+        </select>
+      </form>
 
-    <!-- Stock In Button -->
-    <button type="button"
-      @click="stockInOpen = true"
-      class="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white text-sm rounded-md px-4 py-2">
-      <i class="fas fa-plus"></i> Stock In
-    </button>
+      <button type="button" @click="stockInOpen = true"
+        class="flex items-center gap-2 bg-[var(--rose)] hover:bg-[var(--rose-hover)] text-white text-sm font-medium rounded-md px-4 py-2 shadow transition">
+        <i class="fas fa-plus"></i> Stock In
+      </button>
+    </div>
 
     <!-- Stock Table -->
-    <div class="bg-white p-8 rounded-lg shadow w-full">
-      <h2 class="text-lg font-semibold mb-3">Current Stock</h2>
-      <table class="w-full border border-gray-300 text-sm">
-        <thead>
-          <tr class="border-b bg-gray-100">
-            <th class="px-4 py-3 text-left">Product</th>
-            <th class="px-4 py-3 text-left">Color</th>
-            <th class="px-4 py-3 text-left">Size</th>
-            <th class="px-4 py-3 text-left">Quantity</th>
-            <th class="px-4 py-3 text-left">Supplier</th>
-            <th class="px-4 py-3 text-left">Date Added</th>
-          </tr>
-        </thead>
-        <tbody>
-          <?php if(count($stock_rows) > 0): foreach($stock_rows as $row): ?>
-            <tr class="border-b hover:bg-gray-50">
-              <td class="px-4 py-3"><?= htmlspecialchars($row['product_name']) ?></td>
-              <td class="px-4 py-3"><?= htmlspecialchars($row['color'] ?: '—') ?></td>
-              <td class="px-4 py-3"><?= htmlspecialchars($row['size'] ?: '—') ?></td>
-              <td class="px-4 py-3 font-semibold"><?= htmlspecialchars($row['current_qty']) ?></td>
-              <td class="px-4 py-3"><?= htmlspecialchars($row['supplier_name'] ?? 'N/A') ?></td>
-              <td class="px-4 py-3"><?= htmlspecialchars($row['date_added'] ?? 'N/A') ?></td>
+    <div class="bg-white p-6 rounded-2xl shadow">
+      <h2 class="text-lg font-semibold mb-4 text-gray-800">Current Stock</h2>
+      <div class="overflow-x-auto">
+        <table class="min-w-full border border-gray-200 rounded-lg text-sm">
+          <thead class="bg-gray-100 text-gray-600 uppercase text-xs">
+            <tr>
+              <th class="px-4 py-3 text-left">Product</th>
+              <th class="px-4 py-3 text-left">Color</th>
+              <th class="px-4 py-3 text-left">Size</th>
+              <th class="px-4 py-3 text-left">Quantity</th>
+              <th class="px-4 py-3 text-left">Supplier</th>
+              <th class="px-4 py-3 text-left">Date Added</th>
             </tr>
-          <?php endforeach; else: ?>
-            <tr><td colspan="6" class="text-center py-4 text-gray-500">No stock records found.</td></tr>
-          <?php endif; ?>
-        </tbody>
-      </table>
+          </thead>
+          <tbody class="divide-y divide-gray-100 text-gray-700">
+            <?php if (count($stock_rows) > 0): foreach ($stock_rows as $row): ?>
+              <tr class="hover:bg-gray-50 transition">
+                <td class="px-4 py-3"><?= htmlspecialchars($row['product_name']) ?></td>
+                <td class="px-4 py-3"><?= htmlspecialchars($row['color'] ?: '—') ?></td>
+                <td class="px-4 py-3"><?= htmlspecialchars($row['size'] ?: '—') ?></td>
+                <td class="px-4 py-3 font-semibold"><?= htmlspecialchars($row['current_qty']) ?></td>
+                <td class="px-4 py-3"><?= htmlspecialchars($row['supplier_name'] ?? 'N/A') ?></td>
+                <td class="px-4 py-3"><?= htmlspecialchars($row['date_added'] ?? 'N/A') ?></td>
+              </tr>
+            <?php endforeach; else: ?>
+              <tr><td colspan="6" class="text-center py-6 text-gray-500">No stock records found.</td></tr>
+            <?php endif; ?>
+          </tbody>
+        </table>
+      </div>
     </div>
-  </div>
+
+  </main>
 </div>
 
-<!-- Modal -->
-<div x-show="stockInOpen" x-cloak
-     class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50"
-     x-transition:enter="ease-out duration-300"
-     x-transition:enter-start="opacity-0"
-     x-transition:enter-end="opacity-100"
-     x-transition:leave="ease-in duration-200"
-     x-transition:leave-start="opacity-100"
-     x-transition:leave-end="opacity-0">
-  <div @click.away="stockInOpen=false"
-       class="bg-white p-6 rounded-lg shadow-lg w-1/3 transform transition-all"
-       x-transition:enter="ease-out duration-300"
-       x-transition:enter-start="opacity-0 scale-95"
-       x-transition:enter-end="opacity-100 scale-100"
-       x-transition:leave="ease-in duration-200"
-       x-transition:leave-start="opacity-100 scale-100"
-       x-transition:leave-end="opacity-0 scale-95">
-
-    <h3 class="text-lg font-semibold mb-4">Stock In</h3>
+<!-- Stock In Modal -->
+<div x-show="stockInOpen" x-cloak class="fixed inset-0 flex items-center justify-center bg-black/50 z-50 p-4" x-transition>
+  <div @click.away="stockInOpen = false" class="bg-white rounded-lg shadow-lg w-full max-w-md p-6 space-y-4">
+    <h3 class="text-lg font-semibold text-gray-800">Stock In</h3>
     <form action="process_stock_in.php" method="POST" class="space-y-4">
-      <!-- Product -->
       <div>
         <label class="block text-sm mb-1">Product</label>
-        <select name="product_id" class="border w-full p-2 rounded" required>
+        <select name="product_id" class="border w-full p-2 rounded focus:ring-2 focus:ring-[var(--rose)]" required>
           <option value="">Select Product</option>
           <?php foreach($products as $p): ?>
             <option value="<?= $p['product_id'] ?>"><?= htmlspecialchars($p['product_name']) ?></option>
           <?php endforeach; ?>
         </select>
       </div>
-
-      <!-- Color -->
       <div>
         <label class="block text-sm mb-1">Color</label>
-        <select id="colorSelect" name="color_id" class="border w-full p-2 rounded" required>
+        <select id="colorSelect" name="color_id" class="border w-full p-2 rounded focus:ring-2 focus:ring-[var(--rose)]" required>
           <option value="">Select Color</option>
           <?php 
           $colors = $conn->query("SELECT color_id,color FROM colors ORDER BY color ASC");
@@ -300,19 +288,15 @@ while ($sup = $supplier_query->fetch_assoc()) {
             <option value="<?= $c['color_id'] ?>"><?= htmlspecialchars($c['color']) ?></option>
           <?php endwhile; ?>
         </select>
-
-        <!-- Add new color -->
         <div class="mt-2 flex gap-2">
-          <input type="text" id="newColorInput" placeholder="New color" class="border p-2 rounded w-full">
-          <button type="button" id="addColorBtn" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded">Add</button>
+          <input type="text" id="newColorInput" placeholder="New color" class="border p-2 rounded w-full focus:ring-2 focus:ring-[var(--rose)]">
+          <button type="button" id="addColorBtn" class="bg-[var(--rose)] hover:bg-[var(--rose-hover)] text-white px-3 py-2 rounded text-sm">Add</button>
         </div>
         <p id="colorMessage" class="text-xs mt-1"></p>
       </div>
-
-      <!-- Size -->
       <div>
         <label class="block text-sm mb-1">Size</label>
-        <select name="size_id" class="border w-full p-2 rounded" required>
+        <select name="size_id" class="border w-full p-2 rounded focus:ring-2 focus:ring-[var(--rose)]" required>
           <option value="">Select Size</option>
           <?php 
           $sizes = $conn->query("SELECT size_id,size FROM sizes ORDER BY size ASC");
@@ -321,35 +305,28 @@ while ($sup = $supplier_query->fetch_assoc()) {
           <?php endwhile; ?>
         </select>
       </div>
-
-      <!-- Quantity -->
       <div>
         <label class="block text-sm mb-1">Quantity</label>
-        <input type="number" name="quantity" min="1" class="border p-2 w-full rounded" required>
+        <input type="number" name="quantity" min="1" class="border p-2 w-full rounded focus:ring-2 focus:ring-[var(--rose)]" required>
       </div>
-
-      <!-- Supplier -->
       <div>
         <label class="block text-sm mb-1">Supplier</label>
-        <select name="supplier_id" class="border w-full p-2 rounded" required>
+        <select name="supplier_id" class="border w-full p-2 rounded focus:ring-2 focus:ring-[var(--rose)]" required>
           <option value="">Select Supplier</option>
           <?php foreach($supplier_list as $sup): ?>
             <option value="<?= $sup['supplier_id'] ?>"><?= htmlspecialchars($sup['supplier_name']) ?></option>
           <?php endforeach; ?>
         </select>
       </div>
-
-      <!-- Actions -->
-      <div class="flex justify-end space-x-2">
-        <button type="button" @click="stockInOpen=false" class="bg-gray-300 px-4 py-2 rounded">Cancel</button>
-        <button type="submit" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">Save</button>
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" @click="stockInOpen=false" class="bg-gray-200 hover:bg-gray-300 px-4 py-2 rounded text-sm">Cancel</button>
+        <button type="submit" class="bg-[var(--rose)] hover:bg-[var(--rose-hover)] text-white px-4 py-2 rounded text-sm">Save</button>
       </div>
     </form>
   </div>
 </div>
 
 <script>
-// Handle adding new color
 document.getElementById("addColorBtn").addEventListener("click", function () {
   const colorName = document.getElementById("newColorInput").value.trim();
   const msg = document.getElementById("colorMessage");
@@ -372,7 +349,6 @@ document.getElementById("addColorBtn").addEventListener("click", function () {
       option.textContent = data.color;
       option.selected = true;
       select.appendChild(option);
-
       msg.textContent = "Color added!";
       msg.className = "text-green-500 text-xs";
       document.getElementById("newColorInput").value = "";

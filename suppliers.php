@@ -1,11 +1,13 @@
 <?php
 require 'conn.php';
+require 'auth_session.php';
 
 
-$admin_id = $_SESSION['admin_id'] ?? null;
+$admin_id   = $_SESSION['admin_id'] ?? null;
 $admin_name = "Admin";
 $admin_role = "Admin";
 
+// 🔹 Fetch admin details if logged in
 if ($admin_id) {
     $query = "
         SELECT 
@@ -30,383 +32,250 @@ if ($admin_id) {
 $suppliers = $conn->query("SELECT * FROM suppliers");
 ?>
 
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta content="width=device-width, initial-scale=1" name="viewport" />
-  <title>Suppliers Information</title>
+  <title>Suppliers Information | Seven Dwarfs Boutique</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: {
-            poppins: ['Poppins', 'sans-serif'],
-          },
-          colors: {
-            primary: '#ec4899',
-          }
-        }
-      }
-    };
-  </script>
   <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --rose: #e5a5b2;
+      --rose-hover: #d48b98;
+    }
+    body {
+      font-family: 'Poppins', sans-serif;
+      background-color: #f9fafb;
+      color: #374151;
+    }
+    [x-cloak] { display: none !important; }
+    .active-link {
+      background-color: #fef3f5;
+      color: var(--rose);
+      font-weight: 600;
+      border-radius: 0.5rem;
+    }
+  </style>
 </head>
-<body class="bg-gray-100 font-poppins text-sm">
+
+<body class="text-sm" x-data="{ userMenu: false, productMenu: false }">
 <div class="flex min-h-screen">
-  <!-- Sidebar -->
-  <div class="w-64 bg-white shadow-md" x-data="{ userMenu: false, productMenu: false }">
-    <div class="p-4">
-      <div class="flex items-center space-x-4">
-        <img src="logo2.png" alt="Logo" class="rounded-full w-12 h-12" />
-        <h2 class="text-lg font-semibold">SevenDwarfs</h2>
-      </div>
 
-      <div class="mt-4 flex items-center space-x-4">
-        <img src="newID.jpg" alt="Admin" class="rounded-full w-10 h-10" />
+  <!-- 🧭 Sidebar -->
+  <aside class="w-64 bg-white shadow-md">
+    <div class="p-5 border-b">
+      <div class="flex items-center gap-3">
+        <img src="logo2.png" alt="Logo" class="w-10 h-10 rounded-full">
+        <h2 class="text-lg font-semibold text-[var(--rose)]">SevenDwarfs</h2>
+      </div>
+      <div class="mt-4 flex items-center gap-3">
+        <img src="newID.jpg" alt="Admin" class="w-10 h-10 rounded-full">
         <div>
-            <h3 class="text-sm font-semibold"><?php echo htmlspecialchars($admin_name); ?></h3>
-            <p class="text-xs text-gray-500"><?php echo htmlspecialchars($admin_role); ?></p>
-          </div>
+          <h3 class="text-sm font-semibold"><?= htmlspecialchars($admin_name); ?></h3>
+          <p class="text-xs text-gray-500"><?= htmlspecialchars($admin_role); ?></p>
+        </div>
       </div>
     </div>
 
-    <nav class="mt-6">
-      <ul>
-        <li class="px-4 py-2 hover:bg-gray-200">
-          <a href="dashboard.php" class="flex items-center">
-            <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
-          </a>
-        </li>
-        <li class="px-4 py-2 hover:bg-gray-200 cursor-pointer" @click="userMenu = !userMenu">
-          <div class="flex items-center justify-between">
-            <span class="flex items-center">
-              <i class="fas fa-users-cog mr-2"></i>User Management
-            </span>
-            <i class="fas fa-chevron-down transition-transform duration-200" :class="{ 'rotate-180': userMenu }"></i>
-          </div>
-        </li>
-        <ul x-show="userMenu" x-transition class="pl-8 text-sm text-gray-700 space-y-1">
-          <li><a href="manage_users.php" class="hover:text-pink-600 flex items-center"><i class="fas fa-user mr-2"></i>Manage Users</a></li>
-          <a href="manage_roles.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-id-badge mr-2"></i>Manage Roles</a>
-          <li><a href="customers.php" class="hover:text-pink-600 flex items-center"><i class="fas fa-users mr-2"></i>Customer</a></li>
-        </ul>
-        <li class="px-4 py-2 hover:bg-gray-200 cursor-pointer" @click="productMenu = !productMenu">
-          <div class="flex items-center justify-between">
-            <span class="flex items-center">
-              <i class="fas fa-box-open mr-2"></i>Product Management
-            </span>
-            <i class="fas fa-chevron-down transition-transform duration-200" :class="{ 'rotate-180': productMenu }"></i>
-          </div>
-        </li>
-        <ul x-show="productMenu" x-transition class="pl-8 text-sm text-gray-700 space-y-1">
-          <li><a href="categories.php" class="hover:text-pink-600 flex items-center"><i class="fas fa-tags mr-2"></i>Category</a></li>
-          <li><a href="products.php" class="hover:text-pink-600 flex items-center"><i class="fas fa-box mr-2"></i>Product</a></li>
-          <li><a href="inventory.php" class="hover:text-pink-600 flex items-center"><i class="fas fa-warehouse mr-2"></i>Inventory</a></li>
-         <li class="py-1 hover:text-pink-600"><a href="stock_management.php" class="flex items-center"><i class="fas fa-boxes mr-2"></i>Stock Management</a></li>
-        </ul>
-        <li class="px-4 py-2 hover:bg-gray-200">
-          <a href="orders.php" class="flex items-center">
-            <i class="fas fa-shopping-cart mr-2"></i>Orders
-          </a>
-        </li>
-        
-        <li class="px-4 py-2 hover:bg-gray-200 bg-pink-100 text-pink-600 rounded-r-lg">
-          <a href="suppliers.php" class="flex items-center">
-            <i class="fas fa-industry mr-2"></i>Suppliers
-          </a>
-        </li>
+    <!-- Navigation -->
+    <nav class="p-4 space-y-1">
+      <a href="dashboard.php" class="block px-4 py-2 rounded hover:bg-gray-100 transition"><i class="fas fa-tachometer-alt mr-2"></i>Dashboard</a>
 
-        <li class="px-4 py-2 hover:bg-gray-200">
-          <a href="logout.php" class="flex items-center">
-            <i class="fas fa-sign-out-alt mr-2"></i>Log out
-          </a>
-        </li>
+      <button @click="userMenu = !userMenu" class="w-full text-left px-4 py-2 flex justify-between items-center hover:bg-gray-100 rounded transition">
+        <span><i class="fas fa-users-cog mr-2"></i>User Management</span>
+        <i class="fas fa-chevron-down transition-transform duration-200" :class="{ 'rotate-180': userMenu }"></i>
+      </button>
+      <ul x-show="userMenu" x-transition class="pl-8 text-sm space-y-1">
+        <li><a href="manage_users.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-user mr-2"></i>Manage Users</a></li>
+        <a href="manage_roles.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-id-badge mr-2"></i>Manage Roles</a>
+        <li><a href="customers.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-users mr-2"></i>Customer</a></li>
       </ul>
-    </nav>
-  </div>
 
-  <!-- Main Content -->
-  <div class="flex-1 p-6 overflow-auto">
-    <!-- Header -->
-    <div class="bg-pink-300 text-white p-4 rounded-t-2xl shadow-sm mb-4">
+      <button @click="productMenu = !productMenu" class="w-full text-left px-4 py-2 flex justify-between items-center hover:bg-gray-100 rounded transition">
+        <span><i class="fas fa-box-open mr-2"></i>Product Management</span>
+        <i class="fas fa-chevron-down transition-transform duration-200" :class="{ 'rotate-180': productMenu }"></i>
+      </button>
+      <ul x-show="productMenu" x-transition class="pl-8 text-sm space-y-1">
+        <li><a href="categories.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-tags mr-2"></i>Category</a></li>
+        <li><a href="products.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-box mr-2"></i>Product</a></li>
+        <li><a href="inventory.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-warehouse mr-2"></i>Inventory</a></li>
+        <li><a href="stock_management.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-boxes mr-2"></i>Stock Management</a></li>
+      </ul>
+
+      <a href="orders.php" class="block px-4 py-2 hover:bg-gray-100 rounded transition"><i class="fas fa-shopping-cart mr-2"></i>Orders</a>
+      <a href="suppliers.php" class="block px-4 py-2 active-link"><i class="fas fa-industry mr-2"></i>Suppliers</a>
+      <a href="system_logs.php" class="block px-4 py-2 hover:bg-gray-100 rounded transition"><i class="fas fa-file-alt mr-2"></i>System Logs</a>
+      <a href="logout.php" class="block px-4 py-2 text-red-600 hover:bg-red-50 rounded transition"><i class="fas fa-sign-out-alt mr-2"></i>Log out</a>
+    </nav>
+  </aside>
+
+  <!-- 🌸 Main Content -->
+  <main class="flex-1 p-8 bg-gray-50 overflow-auto">
+    <div class="bg-[var(--rose)] text-white p-5 rounded-t-2xl shadow-sm flex justify-between items-center">
       <h1 class="text-2xl font-semibold">Suppliers Information</h1>
+
+      <!-- Add Supplier Button -->
+      <div x-data="{ addModal: false }">
+        <button 
+          @click="addModal = true"
+          class="flex items-center gap-2 bg-[var(--rose-hover)] hover:bg-[var(--rose)] text-white px-4 py-2 rounded-lg shadow transition"
+        >
+          <i class="fas fa-plus"></i> Add Supplier
+        </button>
+
+        <!-- Add Supplier Modal -->
+        <div x-show="addModal" @click.away="addModal = false" x-transition.opacity x-cloak
+             class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div class="bg-white rounded-xl shadow-lg max-w-md w-full p-6 transform transition-all">
+          <h2 class="text-xl font-semibold text-[#c97f91] mb-4">Add Supplier</h2>
+
+            <form action="add_supplier.php" method="POST" class="space-y-4">
+              <div>
+                <label class="block text-gray-700 font-medium">Supplier Name</label>
+                <input type="text" name="supplier_name" required class="w-full border p-2 rounded-lg focus:ring-2 focus:ring-[var(--rose)]">
+              </div>
+
+              <div>
+                <label class="block text-gray-700 font-medium">Category</label>
+                <select name="category_id" required class="w-full border p-2 rounded-lg focus:ring-2 focus:ring-[var(--rose)]">
+                  <option disabled selected>Select Category</option>
+                  <?php
+                    require 'conn.php';
+                    $catRes = $conn->query("SELECT * FROM categories");
+                    while ($cat = $catRes->fetch_assoc()):
+                  ?>
+                    <option value="<?= $cat['category_id'] ?>"><?= htmlspecialchars($cat['category_name']) ?></option>
+                  <?php endwhile; ?>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-gray-700 font-medium">Email</label>
+                <input type="email" name="supplier_email" class="w-full border p-2 rounded-lg focus:ring-2 focus:ring-[var(--rose)]">
+              </div>
+
+              <div>
+                <label class="block text-gray-700 font-medium">Phone</label>
+                <input type="text" name="supplier_phone" class="w-full border p-2 rounded-lg focus:ring-2 focus:ring-[var(--rose)]">
+              </div>
+
+              <div class="flex justify-end gap-3 pt-2">
+                <button type="button" @click="addModal=false" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-md">Cancel</button>
+                <button type="submit" class="px-4 py-2 bg-[var(--rose-hover)] hover:bg-[var(--rose)] text-white rounded-md">Save</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
     </div>
 
-    </head>
- <body class="bg-white text-gray-900 font-sans">
-  <div class="max-w-full mx-4 my-6">
-   <div class="flex justify-between items-center border-b border-gray-200 pb-3 mb-4">
-    <h2 class="text-lg font-extrabold text-gray-900">
-    
-    </h2>
-    <!-- Add Supplier Button -->
-<div x-data="{ addModal: false }">
-  <button 
-    @click="addModal = true"
-    class="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-  >
-    <i class="fas fa-plus"></i>
-    Add Supplier
-  </button>
-
-  <!-- Add Supplier Modal -->
-  <div 
-    x-show="addModal"
-    @click.away="addModal = false"
-    x-transition.opacity
-    x-cloak
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
-  >
-    <div 
-      class="bg-white rounded-lg shadow-lg max-w-md w-full p-6"
-      x-transition:enter="transition ease-out duration-300"
-      x-transition:enter-start="opacity-0 scale-90"
-      x-transition:enter-end="opacity-100 scale-100"
-      x-transition:leave="transition ease-in duration-200"
-      x-transition:leave-start="opacity-100 scale-100"
-      x-transition:leave-end="opacity-0 scale-90"
-    >
-      <h2 class="text-xl font-bold text-indigo-600 mb-4">Add Supplier</h2>
-      
-      <form action="add_supplier.php" method="POST">
-        <!-- Supplier Name -->
-        <div class="mb-4">
-          <label class="block text-gray-700 font-semibold">Supplier Name</label>
-          <input type="text" name="supplier_name" required class="w-full border p-2 rounded-md focus:ring-indigo-500">
+    <!-- Supplier Table -->
+    <section class="bg-white p-6 rounded-b-2xl shadow mt-6">
+      <div class="flex justify-between items-center mb-4">
+        <div class="text-gray-700 font-medium">All Registered Suppliers</div>
+        <div class="flex items-center gap-2">
+          <label for="search" class="text-sm text-gray-600">Search:</label>
+          <input id="search" name="search" type="search"
+                 class="border border-gray-300 rounded-lg px-3 py-1 text-sm focus:ring-2 focus:ring-[var(--rose)] focus:outline-none">
         </div>
+      </div>
 
-        <!-- Category Dropdown -->
-        <div class="mb-4">
-          <label class="block text-gray-700 font-semibold">Category</label>
-          <select name="category_id" required class="w-full border p-2 rounded-md focus:ring-indigo-500">
-            <option disabled selected>Select Category</option>
+      <div class="overflow-x-auto">
+        <table class="min-w-full border border-gray-200 rounded-lg text-sm">
+          <thead class="bg-gray-100 text-gray-600 uppercase text-xs font-semibold">
+            <tr>
+              <th class="px-4 py-3 text-left">ID</th>
+              <th class="px-4 py-3 text-left">Category</th>
+              <th class="px-4 py-3 text-left">Suppliers</th>
+              <th class="px-4 py-3 text-left">Reg Date</th>
+              <th class="px-4 py-3 text-left">Email</th>
+              <th class="px-4 py-3 text-left">Phone</th>
+              <th class="px-4 py-3 text-left">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100 text-gray-700">
             <?php
               require 'conn.php';
-              $catRes = $conn->query("SELECT * FROM categories");
-              while ($cat = $catRes->fetch_assoc()):
+              $sql = "SELECT s.*, c.category_name FROM suppliers s LEFT JOIN categories c ON s.category_id = c.category_id";
+              $result = $conn->query($sql);
+              if ($result->num_rows > 0):
+                while ($row = $result->fetch_assoc()):
             ?>
-              <option value="<?= $cat['category_id'] ?>"><?= htmlspecialchars($cat['category_name']) ?></option>
-            <?php endwhile; ?>
-          </select>
-        </div>
+            <tr class="hover:bg-gray-50 transition">
+              <td class="px-4 py-2"><?= htmlspecialchars($row['supplier_id']); ?></td>
+              <td class="px-4 py-2"><?= htmlspecialchars($row['category_name']); ?></td>
+              <td class="px-4 py-2 font-semibold text-gray-800"><?= htmlspecialchars($row['supplier_name']); ?></td>
+              <td class="px-4 py-2"><?= date('d/m/Y', strtotime($row['reg_date'] ?? $row['created_at'] ?? '')); ?></td>
+              <td class="px-4 py-2"><?= htmlspecialchars($row['supplier_email']); ?></td>
+              <td class="px-4 py-2"><?= htmlspecialchars($row['supplier_phone']); ?></td>
+              <td class="px-4 py-2 flex gap-2">
+                <!-- Edit -->
+                <div x-data="{ open: false }">
+                  <button @click="open = true" class="text-green-600 hover:text-green-700 border border-green-300 rounded px-2 py-1" title="Edit">
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <div x-show="open" @click.away="open = false" x-transition.opacity x-cloak
+                       class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                    <div class="bg-white rounded-lg shadow-lg max-w-md w-full p-6">
+                      <h2 class="text-lg font-semibold text-[var(--rose)] mb-3">Edit Supplier</h2>
+                      <form action="update_supplier.php" method="POST" class="space-y-3">
+                        <input type="hidden" name="supplier_id" value="<?= $row['supplier_id'] ?>">
+                        <div>
+                          <label class="block text-gray-700 font-medium">Category</label>
+                          <select name="category_id" class="w-full border p-2 rounded focus:ring-2 focus:ring-[var(--rose)]">
+                            <?php
+                              $catRes = $conn->query("SELECT * FROM categories");
+                              while ($cat = $catRes->fetch_assoc()):
+                                $selected = ($cat['category_id'] == $row['category_id']) ? 'selected' : '';
+                            ?>
+                            <option value="<?= $cat['category_id'] ?>" <?= $selected ?>>
+                              <?= htmlspecialchars($cat['category_name']) ?>
+                            </option>
+                            <?php endwhile; ?>
+                          </select>
+                        </div>
+                        <div>
+                          <label class="block text-gray-700 font-medium">Supplier Name</label>
+                          <input type="text" name="supplier_name" value="<?= htmlspecialchars($row['supplier_name']) ?>" class="w-full border p-2 rounded focus:ring-2 focus:ring-[var(--rose)]">
+                        </div>
+                        <div>
+                          <label class="block text-gray-700 font-medium">Email</label>
+                          <input type="email" name="supplier_email" value="<?= htmlspecialchars($row['supplier_email']) ?>" class="w-full border p-2 rounded focus:ring-2 focus:ring-[var(--rose)]">
+                        </div>
+                        <div>
+                          <label class="block text-gray-700 font-medium">Phone</label>
+                          <input type="text" name="supplier_phone" value="<?= htmlspecialchars($row['supplier_phone']) ?>" class="w-full border p-2 rounded focus:ring-2 focus:ring-[var(--rose)]">
+                        </div>
+                        <div class="flex justify-end gap-2">
+                          <button type="button" @click="open=false" class="bg-gray-200 px-4 py-2 rounded hover:bg-gray-300">Cancel</button>
+                          <button type="submit" class="bg-[var(--rose-hover)] text-white px-4 py-2 rounded hover:bg-[var(--rose)]">Save</button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                </div>
 
-        <!-- Email -->
-        <div class="mb-4">
-          <label class="block text-gray-700 font-semibold">Email</label>
-          <input type="email" name="supplier_email" class="w-full border p-2 rounded-md focus:ring-indigo-500">
-        </div>
-
-        <!-- Phone -->
-        <div class="mb-4">
-          <label class="block text-gray-700 font-semibold">Phone</label>
-          <input type="text" name="supplier_phone" class="w-full border p-2 rounded-md focus:ring-indigo-500">
-        </div>
-
-        <!-- Buttons -->
-        <div class="flex justify-end gap-4 mt-6">
-          <button 
-            type="button" 
-            @click="addModal = false" 
-            class="px-4 py-2 bg-gray-300 hover:bg-gray-400 rounded"
-          >
-            Cancel
-          </button>
-          <button 
-            type="submit" 
-            class="px-4 py-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded"
-          >
-            Save
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-
-   </div>
-   <div class="bg-white border border-gray-200 rounded-md shadow-sm p-4">
-    <div class="flex flex-col md:flex-row md:justify-between md:items-center mb-4 gap-4 md:gap-0">
-     <div class="flex items-center gap-2 text-sm text-gray-700">
-     </div>
-     <div class="flex justify-start">
-  <div class="flex items-center gap-2 text-sm text-gray-700">
-    <label class="whitespace-nowrap" for="search">
-      Search:
-    </label>
-    <input
-      class="border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-      id="search"
-      name="search"
-      type="search"
-    />
-  </div>
-</div>
-
-    </div>
-    <div class="overflow-x-auto">
-     <table class="min-w-full text-left text-sm text-gray-700 border-separate border-spacing-y-2">
-      <thead>
-       <tr class="bg-gray-50 border-b border-gray-200">
-        <th class="px-3 py-2 font-extrabold cursor-pointer select-none" scope="col">
-         ID
-         <i class="fas fa-sort-up ml-1 text-gray-400 text-xs">
-         </i>
-        </th>
-        <th class="px-3 py-2 font-extrabold cursor-pointer select-none" scope="col">
-         ITEMS
-         <i class="fas fa-sort-up ml-1 text-gray-400 text-xs">
-         </i>
-        </th>
-        <th class="px-3 py-2 font-extrabold cursor-pointer select-none" scope="col">
-         SUPPLIERS
-         <i class="fas fa-sort-up ml-1 text-gray-400 text-xs">
-         </i>
-        </th>
-        <th class="px-3 py-2 font-extrabold cursor-pointer select-none" scope="col">
-         SUPPLIERS REGDATE
-         <i class="fas fa-sort-up ml-1 text-gray-400 text-xs">
-         </i>
-        </th>
-        <th class="px-3 py-2 font-extrabold cursor-pointer select-none" scope="col">
-         MAIL
-         <i class="fas fa-sort-up ml-1 text-gray-400 text-xs">
-         </i>
-        </th>
-        <th class="px-3 py-2 font-extrabold cursor-pointer select-none" scope="col">
-         PHONE
-         <i class="fas fa-sort-up ml-1 text-gray-400 text-xs">
-         </i>
-        </th>
-        <th class="px-3 py-2 font-extrabold cursor-pointer select-none" scope="col">
-         ACTIONS
-         <i class="fas fa-sort-up ml-1 text-gray-400 text-xs">
-         </i>
-        </th>
-       </tr>
-      </thead>
-      <tbody>
-<?php
-require 'conn.php';
-$sql = "SELECT s.*, c.category_name FROM suppliers s
-LEFT JOIN categories c ON s.category_id = c.category_id";
-$result = $conn->query($sql);
-
-if ($result->num_rows > 0):
-    while ($row = $result->fetch_assoc()):
-?>
-
-<!-- Wrapper that contains both the row and the modal -->
-<div x-data="{ openModal: false }">
-  <tr class="bg-white border border-gray-100 rounded-md">
-    <td class="px-3 py-3 whitespace-nowrap"><?= htmlspecialchars($row['supplier_id']); ?></td>
-    <td class="px-3 py-3"><?= htmlspecialchars($row['category_name']) ?></td>
-    <td class="px-3 py-3 font-extrabold text-gray-900 whitespace-nowrap"><?= htmlspecialchars($row['supplier_name']); ?></td>
-    <td class="px-3 py-3 whitespace-nowrap"><?= date('d/m/Y', strtotime($row['reg_date'] ?? $row['created_at'] ?? '')); ?></td>
-    <td class="px-3 py-3 whitespace-nowrap"><?= htmlspecialchars($row['supplier_email']); ?></td>
-    <td class="px-3 py-3 whitespace-nowrap"><?= htmlspecialchars($row['supplier_phone']); ?></td>
-    <td class="px-3 py-3 whitespace-nowrap flex gap-2">
-  <td class="px-3 py-3 whitespace-nowrap flex gap-2">
-  <div x-data="{ open: false }">
-    <!-- Trigger -->
-    <button 
-      @click="open = true"
-      class="text-green-600 hover:text-green-700 border border-green-300 rounded px-2 py-1" 
-      title="Edit"
-    >
-      <i class="fas fa-edit"></i>
-    </button>
-
-    <!-- Modal -->
-    <div 
-      x-show="open" 
-      x-transition 
-      @click.away="open = false" 
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
-      x-cloak
-    >
-      <div 
-        class="bg-white rounded-lg shadow-xl max-w-md w-full p-6"
-        x-show="open"
-        x-transition:enter="transition ease-out duration-300"
-        x-transition:enter-start="opacity-0 scale-90"
-        x-transition:enter-end="opacity-100 scale-100"
-        x-transition:leave="transition ease-in duration-200"
-        x-transition:leave-start="opacity-100 scale-100"
-        x-transition:leave-end="opacity-0 scale-90"
-      >
-        <h2 class="text-xl font-bold text-pink-300 mb-4">Edit Supplier</h2>
-
-        <form action="update_supplier.php" method="POST">
-          <input type="hidden" name="supplier_id" value="<?= $row['supplier_id'] ?>">
-
-          <!-- Category Dropdown -->
-          <div class="mb-4">
-            <label class="block text-gray-700 font-semibold">Category</label>
-            <select name="category_id" required class="w-full border p-2 rounded-md focus:ring-pink-500">
-              <option disabled>Select Category</option>
-              <?php
-                $catRes = $conn->query("SELECT * FROM categories");
-                while ($cat = $catRes->fetch_assoc()):
-                  $selected = ($cat['category_id'] == $row['category_id']) ? 'selected' : '';
-              ?>
-                <option value="<?= $cat['category_id'] ?>" <?= $selected ?>>
-                  <?= htmlspecialchars($cat['category_name']) ?>
-                </option>
-              <?php endwhile; ?>
-            </select>
-          </div>
-
-          <!-- Supplier Name -->
-          <div class="mb-4">
-            <label class="block text-gray-700 font-semibold">Supplier Name</label>
-            <input type="text" name="supplier_name" value="<?= htmlspecialchars($row['supplier_name']) ?>" required class="w-full border p-2 rounded-md focus:ring-pink-500">
-          </div>
-
-          <!-- Email -->
-          <div class="mb-4">
-            <label class="block text-gray-700 font-semibold">Email</label>
-            <input type="email" name="supplier_email" value="<?= htmlspecialchars($row['supplier_email']) ?>" class="w-full border p-2 rounded-md focus:ring-pink-500">
-          </div>
-
-          <!-- Phone -->
-          <div class="mb-4">
-            <label class="block text-gray-700 font-semibold">Phone</label>
-            <input type="text" name="supplier_phone" value="<?= htmlspecialchars($row['supplier_phone']) ?>" class="w-full border p-2 rounded-md focus:ring-pink-500">
-          </div>
-
-          <div class="flex justify-end gap-2">
-            <button type="button" @click="open = false" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Cancel</button>
-            <button type="submit" class="px-4 py-2 bg-pink-300 text-white rounded hover:bg-pink-500">Save</button>
-          </div>
-        </form>
+                <!-- Delete -->
+                <a href="delete_supplier.php?id=<?= $row['supplier_id'] ?>" 
+                   onclick="return confirm('Are you sure you want to delete this supplier?')"
+                   class="text-red-600 hover:text-red-700 border border-red-300 rounded px-2 py-1" title="Delete">
+                  <i class="fas fa-trash-alt"></i>
+                </a>
+              </td>
+            </tr>
+            <?php endwhile; else: ?>
+              <tr><td colspan="7" class="text-center text-gray-500 py-6">No suppliers found.</td></tr>
+            <?php endif; ?>
+          </tbody>
+        </table>
       </div>
-    </div>
-  </div>
-
-  <!-- Delete button (outside x-data) -->
-  <button class="text-red-600 hover:text-red-700 border border-red-300 rounded px-2 py-1" title="Delete">
-    <i class="fas fa-trash-alt"></i>
-  </button>
-</td>
-
-
-<?php endwhile; else: ?>
-<tr>
-  <td colspan="7" class="text-center text-gray-500 py-6">No suppliers found.</td>
-</tr>
-<?php endif; ?>
-</tbody>
-
-     </table>
-    </div>
-    <div class="flex flex-col sm:flex-row justify-between items-center mt-4 text-xs text-gray-700 font-normal">
-     </nav>
-    </div>
-   </div>
-  </div>
- </body>
+    </section>
+  </main>
+</div>
+</body>
 </html>

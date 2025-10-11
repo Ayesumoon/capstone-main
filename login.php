@@ -35,17 +35,23 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $stmtUpdate->execute();
             $stmtUpdate->close();
 
-            // ✅ Redirect based on role_id from `roles` table
-            if ($role_id == 1) {
-                header("Location: superadmin_dashboard.php"); // Super Admin
-            } elseif ($role_id == 2) {
-                header("Location: dashboard.php"); // Staff
-            } elseif ($role_id == 3) {
-                header("Location: manager_dashboard.php"); // Manager
+            // Determine role name (based on your earlier roles table)
+            $role_name = ($role_id == 0) ? 'Cashier' : 'Admin';
+
+            // ✅ Insert into system_logs
+            $log_sql = "INSERT INTO system_logs (user_id, role_id, action) VALUES (?, ?, 'Login')";
+            $stmtLog = $conn->prepare($log_sql);
+            $stmtLog->bind_param("is", $admin_id, $role_name);
+            $stmtLog->execute();
+            $stmtLog->close();
+
+            // ✅ Redirect based on role_id
+            if ($role_id == 2) {
+                header("Location: dashboard.php"); // Staff/Admin
             } elseif ($role_id == 0) {
                 header("Location: cashier_pos.php"); // Cashier
             } else {
-                header("Location: dashboard.php"); // Fallback
+                header("Location: dashboard.php"); // Default fallback
             }
             exit;
         }

@@ -71,86 +71,131 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Add Product</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="https://cdn.tailwindcss.com"></script>
+<meta charset="UTF-8">
+<title>Add Product | Seven Dwarfs Boutique</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --rose: #d37689;
+  --rose-hover: #b75f6f;
+}
+body {
+  font-family: 'Poppins', sans-serif;
+  background-color: #f9fafb;
+}
+.card {
+  background: #fff;
+  border-radius: 1rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  padding: 2rem;
+}
+input, select, button {
+  transition: all 0.2s ease;
+}
+</style>
 </head>
-<body class="bg-gray-100 min-h-screen p-6">
-    <div class="max-w-3xl mx-auto bg-white p-6 rounded-lg shadow-md">
-        <h2 class="text-2xl font-bold text-pink-400 mb-6">Add New Product</h2>
 
-        <form action="add_product.php" method="POST" enctype="multipart/form-data" class="space-y-8">
-            <!-- Product Information -->
-            <div>
-                <h3 class="text-lg font-semibold text-gray-800 border-b pb-2 mb-4">Product Information</h3>
+<body class="min-h-screen flex items-center justify-center px-4 py-10">
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Product Name</label>
-                        <input type="text" name="product_name" required
-                            class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:ring-pink-500 focus:border-pink-500">
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Supplier Price</label>
-                        <input type="number" step="0.01" name="supplier_price" required
-                            class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:ring-pink-500 focus:border-pink-500">
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Selling Price</label>
-                        <input type="number" step="0.01" name="price_id" required
-                            class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:ring-pink-500 focus:border-pink-500">
-                    </div>
-                </div>
-            </div>
-
-            <!-- Category and Supplier -->
-            <div>
-                <h3 class="text-lg font-semibold text-gray-800 border-b pb-2 mb-4">Category & Supplier</h3>
-
-                <div class="mt-4">
-                    <label for="category" class="block text-sm font-medium text-gray-700">Category</label>
-                    <select name="category" id="category" required
-                        class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:ring-pink-500 focus:border-pink-500">
-                        <option value="">Select a category</option>
-                        <?php while ($row = $category_result->fetch_assoc()): ?>
-                        <option value="<?= $row['category_id']; ?>" <?= ($preselectedCategoryId == $row['category_id']) ? 'selected' : '' ?>>
-                            <?= htmlspecialchars($row['category_name']); ?>
-                        </option>
-                        <?php endwhile; ?>
-                    </select>
-                </div>
-
-                <div class="mt-4">
-                    <label for="supplier" class="block text-sm font-medium text-gray-700">Supplier</label>
-                    <select name="supplier_id" id="supplier" required
-                        class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:ring-pink-500 focus:border-pink-500">
-                        <option value="">Select a supplier</option>
-                        <?php while ($row = $supplier_result->fetch_assoc()): ?>
-                        <option value="<?= $row['supplier_id']; ?>">
-                            <?= htmlspecialchars($row['supplier_name']); ?>
-                        </option>
-                        <?php endwhile; ?>
-                    </select>
-                </div>
-            </div>
-
-            <!-- Product Images -->
-            <div>
-                <h3 class="text-lg font-semibold text-gray-800 border-b pb-2 mb-4">Product Images</h3>
-                <input type="file" name="images[]" accept="image/*" multiple
-                    class="block w-full text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-pink-400 file:text-white hover:file:bg-pink-500 transition">
-            </div>
-
-            <!-- Actions -->
-            <div class="pt-6 flex gap-4">
-                <input type="submit" value="Add Product"
-                    class="bg-green-500 text-white px-6 py-2 rounded hover:bg-green-700 transition-all cursor-pointer">
-                <a href="products.php" class="text-pink-400 hover:underline self-center">Back to Products</a>
-            </div>
-        </form>
+  <div class="card w-full max-w-3xl">
+    <!-- Header -->
+    <div class="text-center mb-8">
+      <h2 class="text-3xl font-bold text-[var(--rose)]">🛍️ Add New Product</h2>
+      <p class="text-gray-500 text-sm mt-1">Fill in the product details below</p>
     </div>
+
+    <!-- Flash Message (if applicable) -->
+    <?php if (isset($_SESSION['message'])): ?>
+      <div class="mb-4 px-4 py-3 rounded bg-red-100 text-red-700 font-medium text-center">
+        <?= htmlspecialchars($_SESSION['message'], ENT_QUOTES, 'UTF-8'); unset($_SESSION['message']); ?>
+      </div>
+    <?php elseif (isset($_SESSION['success'])): ?>
+      <div class="mb-4 px-4 py-3 rounded bg-green-100 text-green-700 font-medium text-center">
+        <?= htmlspecialchars($_SESSION['success'], ENT_QUOTES, 'UTF-8'); unset($_SESSION['success']); ?>
+      </div>
+    <?php endif; ?>
+
+    <!-- Product Form -->
+    <form action="add_product.php" method="POST" enctype="multipart/form-data" class="space-y-8">
+      
+      <!-- 🧩 Product Info -->
+      <div>
+        <h3 class="text-lg font-semibold text-gray-800 border-b pb-2 mb-4">Product Information</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-gray-700 font-medium mb-1">Product Name</label>
+            <input type="text" name="product_name" required
+              class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[var(--rose)] focus:outline-none">
+          </div>
+
+          <div>
+            <label class="block text-gray-700 font-medium mb-1">Supplier Price</label>
+            <input type="number" step="0.01" name="supplier_price" required
+              class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[var(--rose)] focus:outline-none">
+          </div>
+
+          <div>
+            <label class="block text-gray-700 font-medium mb-1">Selling Price</label>
+            <input type="number" step="0.01" name="price_id" required
+              class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[var(--rose)] focus:outline-none">
+          </div>
+        </div>
+      </div>
+
+      <!-- 🏷️ Category & Supplier -->
+      <div>
+        <h3 class="text-lg font-semibold text-gray-800 border-b pb-2 mb-4">Category & Supplier</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-gray-700 font-medium mb-1">Category</label>
+            <select name="category" required
+              class="w-full border border-gray-300 rounded-lg p-3 bg-white focus:ring-2 focus:ring-[var(--rose)] focus:outline-none">
+              <option value="">Select a category</option>
+              <?php while ($row = $category_result->fetch_assoc()): ?>
+              <option value="<?= $row['category_id']; ?>" <?= ($preselectedCategoryId == $row['category_id']) ? 'selected' : '' ?>>
+                <?= htmlspecialchars($row['category_name']); ?>
+              </option>
+              <?php endwhile; ?>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-gray-700 font-medium mb-1">Supplier</label>
+            <select name="supplier_id" required
+              class="w-full border border-gray-300 rounded-lg p-3 bg-white focus:ring-2 focus:ring-[var(--rose)] focus:outline-none">
+              <option value="">Select a supplier</option>
+              <?php while ($row = $supplier_result->fetch_assoc()): ?>
+              <option value="<?= $row['supplier_id']; ?>"><?= htmlspecialchars($row['supplier_name']); ?></option>
+              <?php endwhile; ?>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- 🖼️ Product Images -->
+      <div>
+        <h3 class="text-lg font-semibold text-gray-800 border-b pb-2 mb-4">Product Images</h3>
+        <input type="file" name="images[]" accept="image/*" multiple
+          class="block w-full text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-[var(--rose)] file:text-white hover:file:bg-[var(--rose-hover)] transition cursor-pointer">
+        <p class="text-sm text-gray-500 mt-2">You can select multiple images at once.</p>
+      </div>
+
+      <!-- 🧾 Buttons -->
+      <div class="flex gap-4 pt-6">
+        <button type="submit"
+          class="flex-1 bg-[var(--rose)] text-white px-6 py-3 rounded-lg font-semibold shadow-md hover:bg-[var(--rose-hover)] active:scale-95 transition-all">
+          <i class="fas fa-plus-circle mr-2"></i> Add Product
+        </button>
+        <a href="products.php"
+          class="flex-1 bg-gray-100 text-gray-700 text-center px-6 py-3 rounded-lg font-medium hover:bg-gray-200 shadow-sm active:scale-95 transition-all">
+          Cancel
+        </a>
+      </div>
+    </form>
+  </div>
+
 </body>
 </html>
+

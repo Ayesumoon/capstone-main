@@ -1,39 +1,37 @@
 <?php
 session_start();
-require 'conn.php'; // Database connection
+require 'conn.php';
 
-// Ensure user ID is provided
+// ✅ Validate user ID
 if (!isset($_GET['id']) || empty($_GET['id'])) {
     $_SESSION['message'] = "Invalid User ID!";
-    header("Location: users.php");
+    header("Location: manage_users.php");
     exit();
 }
 
 $admin_id = (int) $_GET['id'];
 
-// Fetch user details before editing
-$sql = "SELECT admin_id, username, admin_email, first_name, last_name FROM adminusers WHERE admin_id = ?";
-$stmt = $conn->prepare($sql);
+// ✅ Fetch user details
+$stmt = $conn->prepare("SELECT admin_id, username, admin_email, first_name, last_name FROM adminusers WHERE admin_id = ?");
 $stmt->bind_param("i", $admin_id);
 $stmt->execute();
 $result = $stmt->get_result();
 
 if ($result->num_rows == 0) {
     $_SESSION['message'] = "User not found!";
-    header("Location: users.php");
+    header("Location: manage_users.php");
     exit();
 }
 
 $user = $result->fetch_assoc();
 $stmt->close();
 
-// Handle form submission
+// ✅ Handle form submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $updates = [];
     $params = [];
     $types = "";
 
-    // Sanitize inputs
     $username = trim($_POST['username']);
     $email = trim($_POST['admin_email']);
     $first_name = trim($_POST['first_name']);
@@ -60,7 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $types .= "s";
     }
 
-    // Handle password change
+    // ✅ Password change validation
     if (!empty($_POST['new_password']) || !empty($_POST['confirm_password'])) {
         if ($_POST['new_password'] !== $_POST['confirm_password']) {
             $_SESSION['message'] = "Passwords do not match!";
@@ -78,7 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
     }
 
-    // Only update if there are changes
+    // ✅ Apply updates
     if (!empty($updates)) {
         $query = "UPDATE adminusers SET " . implode(", ", $updates) . " WHERE admin_id = ?";
         $params[] = $admin_id;
@@ -88,7 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $stmt->bind_param($types, ...$params);
 
         if ($stmt->execute()) {
-            $_SESSION['success'] = "User updated successfully!";
+            $_SESSION['success'] = "User details updated successfully!";
             header("Location: manage_users.php");
             exit();
         } else {
@@ -105,84 +103,106 @@ $conn->close();
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Edit User</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Edit User | Seven Dwarfs Boutique</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --rose: #d37689;
+  --rose-hover: #b75f6f;
+}
+body {
+  font-family: 'Poppins', sans-serif;
+  background-color: #f9fafb;
+}
+.card {
+  background: #fff;
+  border-radius: 1rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  padding: 2rem;
+}
+input, button {
+  transition: all 0.2s ease;
+}
+</style>
 </head>
-<body class="bg-gray-100 min-h-screen p-6">
 
-  <div class="max-w-2xl mx-auto bg-white p-8 rounded-2xl shadow-lg">
-    <h2 class="text-3xl font-bold text-pink-600 mb-6 text-center">✏️ Edit User</h2>
+<body class="min-h-screen flex items-center justify-center px-4 py-10">
 
-    <!-- Flash Message -->
-    <?php if (isset($_SESSION['message'])) { ?>
-      <div class="mb-4 px-4 py-2 rounded bg-red-100 text-red-700 font-medium">
-        <?php 
-          echo $_SESSION['message']; 
-          unset($_SESSION['message']);
-        ?>
+  <div class="card w-full max-w-2xl">
+    <div class="text-center mb-8">
+      <h2 class="text-3xl font-bold text-[var(--rose)]">✏️ Edit User</h2>
+      <p class="text-gray-500 text-sm mt-1">Modify user details or reset their password</p>
+    </div>
+
+    <!-- 🔔 Flash Messages -->
+    <?php if (isset($_SESSION['message'])): ?>
+      <div class="mb-4 px-4 py-3 rounded bg-red-100 text-red-700 font-medium text-center">
+        <?= $_SESSION['message']; unset($_SESSION['message']); ?>
       </div>
-    <?php } elseif (isset($_SESSION['success'])) { ?>
-      <div class="mb-4 px-4 py-2 rounded bg-green-100 text-green-700 font-medium">
-        <?php 
-          echo $_SESSION['success']; 
-          unset($_SESSION['success']);
-        ?>
+    <?php elseif (isset($_SESSION['success'])): ?>
+      <div class="mb-4 px-4 py-3 rounded bg-green-100 text-green-700 font-medium text-center">
+        <?= $_SESSION['success']; unset($_SESSION['success']); ?>
       </div>
-    <?php } ?>
+    <?php endif; ?>
 
-    <form action="edit_user.php?id=<?php echo $admin_id; ?>" method="POST" class="space-y-5">
-
+    <form method="POST" action="edit_user.php?id=<?= $admin_id; ?>" class="space-y-5">
+      
       <!-- Username -->
       <div>
         <label class="block text-gray-700 font-medium mb-1">Username</label>
-        <input type="text" name="username" value="<?php echo htmlspecialchars($user['username']); ?>" 
-          class="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-pink-400">
+        <input type="text" name="username" value="<?= htmlspecialchars($user['username']); ?>" 
+          class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[var(--rose)] focus:outline-none">
       </div>
 
-      <!-- First Name -->
-      <div>
-        <label class="block text-gray-700 font-medium mb-1">First Name</label>
-        <input type="text" name="first_name" value="<?php echo htmlspecialchars($user['first_name']); ?>" 
-          class="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-pink-400">
-      </div>
-
-      <!-- Last Name -->
-      <div>
-        <label class="block text-gray-700 font-medium mb-1">Last Name</label>
-        <input type="text" name="last_name" value="<?php echo htmlspecialchars($user['last_name']); ?>" 
-          class="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-pink-400">
+      <!-- First & Last Name -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-gray-700 font-medium mb-1">First Name</label>
+          <input type="text" name="first_name" value="<?= htmlspecialchars($user['first_name']); ?>" 
+            class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[var(--rose)] focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-gray-700 font-medium mb-1">Last Name</label>
+          <input type="text" name="last_name" value="<?= htmlspecialchars($user['last_name']); ?>" 
+            class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[var(--rose)] focus:outline-none">
+        </div>
       </div>
 
       <!-- Email -->
       <div>
         <label class="block text-gray-700 font-medium mb-1">Email</label>
-        <input type="email" name="admin_email" value="<?php echo htmlspecialchars($user['admin_email']); ?>" 
-          class="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-pink-400">
+        <input type="email" name="admin_email" value="<?= htmlspecialchars($user['admin_email']); ?>" 
+          class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[var(--rose)] focus:outline-none">
       </div>
 
-      <!-- New Password -->
-      <div>
-        <label class="block text-gray-700 font-medium mb-1">New Password</label>
-        <input type="password" name="new_password" 
-          class="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-pink-400">
-        <p class="text-sm text-gray-500 mt-1">Leave blank if you don't want to change the password. Must be at least 6 characters.</p>
-      </div>
-
-      <!-- Confirm Password -->
-      <div>
-        <label class="block text-gray-700 font-medium mb-1">Confirm Password</label>
-        <input type="password" name="confirm_password" 
-          class="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-pink-400">
+      <!-- Password -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-gray-700 font-medium mb-1">New Password</label>
+          <input type="password" name="new_password"
+            class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[var(--rose)] focus:outline-none">
+          <p class="text-xs text-gray-500 mt-1">Leave blank to keep current password.</p>
+        </div>
+        <div>
+          <label class="block text-gray-700 font-medium mb-1">Confirm Password</label>
+          <input type="password" name="confirm_password"
+            class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[var(--rose)] focus:outline-none">
+        </div>
       </div>
 
       <!-- Buttons -->
       <div class="flex gap-4 pt-4">
         <button type="submit"
-          class="flex-1 bg-pink-500 text-white px-6 py-3 rounded-lg font-medium shadow-md hover:bg-pink-600 transition-all">Update User</button>
-        <button type="button" onclick="window.location.href='manage_users.php'"
-          class="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-lg font-medium hover:bg-gray-300 transition-all">Cancel</button>
+          class="flex-1 bg-[var(--rose)] text-white px-6 py-3 rounded-lg font-semibold hover:bg-[var(--rose-hover)] shadow-md">
+          <i class="fas fa-save mr-2"></i> Update User
+        </button>
+        <a href="manage_users.php"
+          class="flex-1 bg-gray-100 text-gray-700 px-6 py-3 text-center rounded-lg font-medium hover:bg-gray-200 shadow-sm">
+          Cancel
+        </a>
       </div>
 
     </form>

@@ -2,8 +2,8 @@
 session_start();
 require 'conn.php';
 
-if (!isset($_SESSION['admin_id']) || $_SESSION['role_id'] != 1) {
-    header("Location: superadmin_login.php");
+if (!isset($_SESSION['admin_id']) || $_SESSION['role_id'] != 2) {
+    header("Location: login.php");
     exit();
 }
 

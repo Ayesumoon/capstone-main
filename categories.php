@@ -46,25 +46,32 @@ if ($search !== "") {
     $result = $conn->query($query);
 }
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Category</title>
+  <title>Categories | Seven Dwarfs Boutique</title>
+
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/alpinejs" defer></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css"/>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+
   <style>
-    body { font-family: 'Poppins', sans-serif; }
+    :root {
+      --rose: #e59ca8;
+      --rose-hover: #d27b8c;
+    }
+    body {
+      font-family: 'Poppins', sans-serif;
+      background-color: #f9fafb;
+    }
     [x-cloak] { display: none !important; }
   </style>
 </head>
 
-<body class="bg-gray-100 font-poppins text-sm transition-all duration-300">
-
+<body class="text-sm text-gray-700">
 <div class="flex h-screen"
      x-data="{ 
        showAddModal: false, 
@@ -73,262 +80,168 @@ if ($search !== "") {
        userMenu: false, 
        productMenu: true,
        selectedCategory: { id: null, code: '', name: '' }
-     }"
-     @keydown.escape.window="showAddModal = true; showEditModal = true; showDeleteModal = true">
+     }">
 
-  <!-- Sidebar -->
-  <div class="w-64 bg-white shadow-md min-h-screen">
-    <div class="p-4">
-      <div class="flex items-center space-x-4">
-        <img src="logo2.png" alt="Logo" class="rounded-full w-12 h-12" />
-        <h2 class="text-lg font-semibold">SevenDwarfs</h2>
-      </div>
-
-      <div class="mt-4 flex items-center space-x-4">
-        <img src="newID.jpg" alt="Admin" class="rounded-full w-10 h-10" />
-        <div>
-          <h3 class="text-sm font-semibold"><?= htmlspecialchars($admin_name) ?></h3>
-          <p class="text-xs text-gray-500"><?= htmlspecialchars($admin_role) ?></p>
-        </div>
+  <!-- 🌸 Sidebar -->
+  <aside class="w-64 bg-white shadow-md min-h-screen" x-data="{ open: true }">
+    <div class="p-4 border-b">
+      <div class="flex items-center space-x-3">
+        <img src="logo2.png" alt="Logo" class="w-10 h-10 rounded-full">
+        <h2 class="text-lg font-bold text-[var(--rose)]">SevenDwarfs</h2>
       </div>
     </div>
 
-    <nav class="mt-6">
-      <ul>
-        <li class="px-4 py-2 hover:bg-gray-200">
-          <a href="dashboard.php" class="flex items-center"><i class="fas fa-tachometer-alt mr-2"></i>Dashboard</a>
-        </li>
+    <div class="p-4 border-b flex items-center space-x-3">
+      <img src="newID.jpg" alt="Admin" class="w-10 h-10 rounded-full">
+      <div>
+        <p class="font-semibold"><?= htmlspecialchars($admin_name) ?></p>
+        <p class="text-xs text-gray-500"><?= htmlspecialchars($admin_role) ?></p>
+      </div>
+    </div>
 
-        <li class="px-4 py-2 hover:bg-gray-200 cursor-pointer" @click="userMenu = !userMenu">
-          <div class="flex items-center justify-between">
-            <span class="flex items-center"><i class="fas fa-users-cog mr-2"></i>User Management</span>
-            <i class="fas fa-chevron-down transition-transform duration-200" :class="{ 'rotate-180': userMenu }"></i>
-          </div>
-        </li>
-        <ul x-show="userMenu" x-transition class="pl-8 text-sm text-gray-700 space-y-1">
-          <li class="py-1 hover:text-pink-600"><a href="manage_users.php" class="flex items-center"><i class="fas fa-user mr-2"></i>Manage Users</a></li>
-          <a href="manage_roles.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-id-badge mr-2"></i>Manage Roles</a>
-          <li class="py-1 hover:text-pink-600"><a href="customers.php" class="flex items-center"><i class="fas fa-users mr-2"></i>Customer</a></li>
+    <!-- Navigation -->
+    <nav class="p-4 space-y-1">
+      <a href="dashboard.php" class="block px-4 py-2 rounded-md hover:bg-gray-100 transition">
+        <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
+      </a>
+
+      <!-- User Management -->
+      <div>
+        <button @click="userMenu = !userMenu" 
+          class="w-full text-left px-4 py-2 flex justify-between items-center rounded-md hover:bg-gray-100 transition">
+          <span><i class="fas fa-users-cog mr-2"></i>User Management</span>
+          <i class="fas fa-chevron-down transition-transform duration-200" :class="{ 'rotate-180': userMenu }"></i>
+        </button>
+
+        <ul x-show="userMenu" x-transition class="pl-8 space-y-1 mt-1 text-sm">
+          <li><a href="manage_users.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-user mr-2"></i>Manage Users</a></li>
+          <li><a href="manage_roles.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-id-badge mr-2"></i>Manage Roles</a></li>
+          <li><a href="customers.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-users mr-2"></i>Customers</a></li>
         </ul>
+      </div>
 
-        <li class="px-4 py-2 hover:bg-gray-200 cursor-pointer" @click="productMenu = !productMenu">
-          <div class="flex items-center justify-between">
-            <span class="flex items-center"><i class="fas fa-box-open mr-2"></i>Product Management</span>
-            <i class="fas fa-chevron-down transition-transform duration-200" :class="{ 'rotate-180': productMenu }"></i>
-          </div>
-        </li>
-        <ul x-show="productMenu" x-transition class="pl-8 text-sm text-gray-700 space-y-1">
-          <li class="py-1 bg-pink-100 text-pink-600 rounded"><a href="categories.php" class="flex items-center"><i class="fas fa-tags mr-2"></i>Category</a></li>
-          <li class="py-1 hover:text-pink-600"><a href="products.php" class="flex items-center"><i class="fas fa-box mr-2"></i>Product</a></li>
-          <li class="py-1 hover:text-pink-600"><a href="inventory.php" class="flex items-center"><i class="fas fa-warehouse mr-2"></i>Inventory</a></li>
-          <li class="py-1 hover:text-pink-600"><a href="stock_management.php" class="flex items-center"><i class="fas fa-boxes mr-2"></i>Stock Management</a></li>
+      <!-- Product Management -->
+      <div>
+        <button @click="productMenu = !productMenu" 
+          class="w-full text-left px-4 py-2 flex justify-between items-center rounded-md hover:bg-gray-100 transition">
+          <span><i class="fas fa-box-open mr-2"></i>Product Management</span>
+          <i class="fas fa-chevron-down transition-transform duration-200" :class="{ 'rotate-180': productMenu }"></i>
+        </button>
+
+        <ul x-show="productMenu" x-transition class="pl-8 space-y-1 mt-1 text-sm">
+          <li><a href="categories.php" class="block py-1 bg-pink-50 text-[var(--rose)] font-medium rounded-md"><i class="fas fa-tags mr-2"></i>Category</a></li>
+          <li><a href="products.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-box mr-2"></i>Products</a></li>
+          <li><a href="inventory.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-warehouse mr-2"></i>Inventory</a></li>
+          <li><a href="stock_management.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-boxes mr-2"></i>Stock Management</a></li>
         </ul>
+      </div>
 
-        
-<!-- Other Pages -->
-<li class="px-4 py-2 hover:bg-gray-200">
-  <a href="orders.php" class="flex items-center">
-    <i class="fas fa-shopping-cart mr-2"></i>Orders
-  </a>
-</li>
+      <a href="orders.php" class="block px-4 py-2 rounded-md hover:bg-gray-100 transition"><i class="fas fa-shopping-cart mr-2"></i>Orders</a>
+      <a href="suppliers.php" class="block px-4 py-2 rounded-md hover:bg-gray-100 transition"><i class="fas fa-industry mr-2"></i>Suppliers</a>
+      <a href="system_logs.php" class="block px-4 py-2 hover:bg-gray-100 rounded transition"><i class="fas fa-file-alt mr-2"></i>System Logs</a>
 
-<li class="px-4 py-2 hover:bg-gray-200">
-  <a href="suppliers.php" class="flex items-center">
-    <i class="fas fa-industry mr-2"></i>Suppliers
-  </a>
-</li>
-
-
-<li class="px-4 py-2 hover:bg-gray-200">
-  <a href="logout.php" class="flex items-center">
-    <i class="fas fa-sign-out-alt mr-2"></i>Log out
-  </a>
-</li>
-
-      </ul>
+      <a href="logout.php" class="block px-4 py-2 text-red-600 hover:bg-red-50 rounded-md transition"><i class="fas fa-sign-out-alt mr-2"></i>Logout</a>
     </nav>
-  </div>
+  </aside>
 
-  <!-- Main Content -->
-  <div class="flex-1 p-6 space-y-6 transition-all duration-300 font-poppins">
+  <!-- 🌼 Main Content -->
+  <main class="flex-1 p-8 overflow-auto">
 
     <!-- Header -->
-    <div class="bg-pink-300 text-white p-4 rounded-t-2xl shadow-sm">
-      <h1 class="text-2xl font-semibold">Category</h1>
-    </div>
+    <header class="bg-[var(--rose)] text-white p-5 rounded-t-2xl shadow">
+      <h1 class="text-2xl font-semibold">Category Management</h1>
+    </header>
 
-    <div class="w-full bg-white p-6 rounded-b-2xl shadow">
+    <section class="bg-white p-6 rounded-b-2xl shadow-md">
       <div class="flex justify-between items-center mb-6">
-        <h2 class="text-xl font-extrabold text-gray-800">Category List</h2>
-        <button
-          @click="showAddModal = true"
-          class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-md px-4 py-2"
-          type="button"
-        >
-          <i class="fas fa-plus"></i> Add Categories
+        <h2 class="text-xl font-bold text-gray-800">Category List</h2>
+        <button @click="showAddModal = true" class="flex items-center gap-2 bg-[var(--rose)] hover:bg-[var(--rose-hover)] text-white px-4 py-2 rounded-md shadow transition">
+          <i class="fas fa-plus"></i> Add Category
         </button>
       </div>
 
-      <!-- Search -->
-      <div class="bg-white rounded-md shadow-sm p-4 overflow-x-auto">
-        <form method="GET" class="flex items-center gap-2 text-sm text-gray-700 mb-4">
-          <label for="search" class="whitespace-nowrap">Search:</label>
-          <input
-            id="search"
-            name="search"
-            type="text"
-            value="<?= htmlspecialchars($search) ?>"
-            class="border border-gray-300 rounded-md text-gray-700 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 px-2 py-1"
-          />
-          <button
-            type="submit"
-            class="ml-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded text-sm"
-          >
-            Search
-          </button>
-        </form>
+      <!-- Search Bar -->
+      <form method="GET" class="flex items-center gap-2 mb-5">
+        <label for="search" class="text-gray-600 font-medium">Search:</label>
+        <input id="search" name="search" type="text" value="<?= htmlspecialchars($search) ?>" 
+          class="border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-[var(--rose)] outline-none">
+        <button type="submit" class="bg-[var(--rose)] hover:bg-[var(--rose-hover)] text-white px-3 py-2 rounded-md transition">Search</button>
+      </form>
 
-        <!-- Category Table -->
-        <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-gray-50">
+      <!-- Category Table -->
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
+          <thead class="bg-gray-100 text-gray-600 uppercase text-xs">
             <tr>
-              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Category ID</th>
-              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Category Name</th>
-              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+              <th class="px-4 py-3 text-left">Category ID</th>
+              <th class="px-4 py-3 text-left">Category Name</th>
+              <th class="px-4 py-3 text-left">Actions</th>
             </tr>
           </thead>
-          <tbody class="bg-white divide-y divide-gray-200">
+          <tbody class="divide-y divide-gray-200">
             <?php while ($row = $result->fetch_assoc()): ?>
-              <tr>
-                <td class="px-4 py-2 text-sm text-gray-700"><?= htmlspecialchars($row['category_code']) ?></td>
-                <td class="px-4 py-2 text-sm text-gray-700"><?= htmlspecialchars($row['category_name']) ?></td>
-                <td class="px-4 py-2 text-sm">
-                    <button 
-                      @click="showEditModal = true; selectedCategory = { id: '<?= $row['category_id'] ?>', code: '<?= $row['category_code'] ?>', name: '<?= htmlspecialchars($row['category_name']) ?>' }" 
-                      class="text-blue-600 hover:underline mr-3">
-                      <i class="fas fa-edit"></i> Edit
-                    </button>
-
-                    <button 
-                      @click="showDeleteModal = true; selectedCategory = { id: '<?= $row['category_id'] ?>', code: '<?= $row['category_code'] ?>', name: '<?= htmlspecialchars($row['category_name']) ?>' }" 
-                      class="text-red-600 hover:underline">
-                      <i class="fas fa-trash-alt"></i> Delete
-                    </button>
+              <tr class="hover:bg-gray-50 transition">
+                <td class="px-4 py-2"><?= htmlspecialchars($row['category_code']) ?></td>
+                <td class="px-4 py-2"><?= htmlspecialchars($row['category_name']) ?></td>
+                <td class="px-4 py-2 space-x-2">
+                  <button @click="showEditModal = true; selectedCategory = { id: '<?= $row['category_id'] ?>', code: '<?= $row['category_code'] ?>', name: '<?= htmlspecialchars($row['category_name']) ?>' }" 
+                    class="text-blue-600 hover:underline"><i class="fas fa-edit"></i> Edit</button>
+                  <button @click="showDeleteModal = true; selectedCategory = { id: '<?= $row['category_id'] ?>', name: '<?= htmlspecialchars($row['category_name']) ?>' }" 
+                    class="text-red-600 hover:underline"><i class="fas fa-trash-alt"></i> Delete</button>
                 </td>
               </tr>
             <?php endwhile; ?>
           </tbody>
         </table>
       </div>
-    </div>
+    </section>
 
-    <!-- Add Category Modal -->
-    <div
-      x-show="showAddModal"
-      x-cloak
-      x-transition
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
-      >
-      <div
-        @click.away="showAddModal = false"
-        class="bg-white rounded-lg shadow-lg w-full max-w-md p-6 space-y-4"
-      >
-        <h2 class="text-lg font-semibold text-gray-700">Add New Category</h2>
-
+    <!-- Add Modal -->
+    <div x-show="showAddModal" x-cloak x-transition class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div @click.away="showAddModal = false" class="bg-white rounded-lg shadow-lg w-full max-w-md p-6">
+        <h2 class="text-lg font-semibold mb-4 text-gray-700">Add Category</h2>
         <form action="add_category.php" method="POST">
-          <div class="mb-4">
-            <label for="category_name" class="block text-sm font-medium text-gray-700">Category Name</label>
-            <input
-              type="text"
-              name="category_name"
-              id="category_name"
-              required
-              class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          </div>
-
-          <div class="flex justify-end gap-2">
-            <button
-              type="button"
-              @click="showAddModal = false"
-              class="px-4 py-2 text-sm text-gray-600 bg-gray-200 rounded hover:bg-gray-300"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              class="px-4 py-2 text-sm text-white bg-indigo-600 rounded hover:bg-indigo-700"
-            >
-              Save
-            </button>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Category Name</label>
+          <input type="text" name="category_name" required class="w-full border rounded-md p-2 mb-4 focus:ring-2 focus:ring-[var(--rose)]">
+          <div class="flex justify-end space-x-3">
+            <button type="button" @click="showAddModal = false" class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">Cancel</button>
+            <button type="submit" class="px-4 py-2 bg-[var(--rose)] text-white rounded hover:bg-[var(--rose-hover)]">Save</button>
           </div>
         </form>
       </div>
     </div>
 
-    <!-- Edit Category Modal -->
-<div x-show="showEditModal" x-cloak x-transition 
-     class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-  <div @click.away="showEditModal = false"
-       class="bg-white rounded-lg shadow-lg w-full max-w-md p-6 space-y-4">
-
-    <h2 class="text-lg font-semibold text-gray-700">Edit Category</h2>
-
-    <form action="edit_category.php" method="POST">
-      <input type="hidden" name="category_id" :value="selectedCategory.id">
-
-      <div class="mb-4">
-        <label for="edit_category_name" class="block text-sm font-medium text-gray-700">Category Name</label>
-        <input type="text" name="category_name" id="edit_category_name"
-               x-model="selectedCategory.name"
-               required
-               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+    <!-- Edit Modal -->
+    <div x-show="showEditModal" x-cloak x-transition class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div @click.away="showEditModal = false" class="bg-white rounded-lg shadow-lg w-full max-w-md p-6">
+        <h2 class="text-lg font-semibold mb-4 text-gray-700">Edit Category</h2>
+        <form action="edit_category.php" method="POST">
+          <input type="hidden" name="category_id" :value="selectedCategory.id">
+          <label class="block text-sm font-medium text-gray-700 mb-1">Category Name</label>
+          <input type="text" name="category_name" x-model="selectedCategory.name" required class="w-full border rounded-md p-2 mb-4 focus:ring-2 focus:ring-[var(--rose)]">
+          <div class="flex justify-end space-x-3">
+            <button type="button" @click="showEditModal = false" class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">Cancel</button>
+            <button type="submit" class="px-4 py-2 bg-[var(--rose)] text-white rounded hover:bg-[var(--rose-hover)]">Update</button>
+          </div>
+        </form>
       </div>
+    </div>
 
-      <div class="flex justify-end gap-2">
-        <button type="button" @click="showEditModal = false"
-                class="px-4 py-2 text-sm text-gray-600 bg-gray-200 rounded hover:bg-gray-300">
-          Cancel
-        </button>
-        <button type="submit"
-                class="px-4 py-2 text-sm text-white bg-indigo-600 rounded hover:bg-indigo-700">
-          Update
-        </button>
+    <!-- Delete Modal -->
+    <div x-show="showDeleteModal" x-cloak x-transition class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div @click.away="showDeleteModal = false" class="bg-white rounded-lg shadow-lg w-full max-w-sm p-6">
+        <h2 class="text-lg font-semibold mb-3 text-gray-700">Delete Category</h2>
+        <p class="text-sm text-gray-600 mb-4">Are you sure you want to delete <strong x-text="selectedCategory.name"></strong>?</p>
+        <form action="delete_category.php" method="POST">
+          <input type="hidden" name="category_id" :value="selectedCategory.id">
+          <div class="flex justify-end space-x-3">
+            <button type="button" @click="showDeleteModal = false" class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">Cancel</button>
+            <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">Delete</button>
+          </div>
+        </form>
       </div>
-    </form>
-  </div>
-</div>
-
-<!-- Delete Category Modal -->
-<div x-show="showDeleteModal" x-cloak x-transition 
-     class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-  <div @click.away="showDeleteModal = false"
-       class="bg-white rounded-lg shadow-lg w-full max-w-sm p-6 space-y-4">
-
-    <h2 class="text-lg font-semibold text-gray-700">Delete Category</h2>
-    <p class="text-sm text-gray-600">
-      Are you sure you want to delete <strong x-text="selectedCategory.name"></strong>?
-    </p>
-
-    <form action="delete_category.php" method="POST">
-      <input type="hidden" name="category_id" :value="selectedCategory.id">
-
-      <div class="flex justify-end gap-2 mt-4">
-        <button type="button" @click="showDeleteModal = false"
-                class="px-4 py-2 text-sm text-gray-600 bg-gray-200 rounded hover:bg-gray-300">
-          Cancel
-        </button>
-        <button type="submit"
-                class="px-4 py-2 text-sm text-white bg-red-600 rounded hover:bg-red-700">
-          Delete
-        </button>
-      </div>
-    </form>
-  </div>
-</div>
-
-
-  </div>
+    </div>
+  </main>
 </div>
 </body>
 </html>

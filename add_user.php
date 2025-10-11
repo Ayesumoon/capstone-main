@@ -101,114 +101,151 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $check_stmt->close();
     $conn->close();
 }
-?>
-<!DOCTYPE html>
+?><!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Add User</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    // ✅ Optional JS validation for instant feedback
-    function validatePassword() {
-      const pw = document.getElementById("password").value;
-      const cpw = document.getElementById("confirm_password").value;
-      const msg = document.getElementById("pw_message");
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Add User | Seven Dwarfs Boutique</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --rose: #d37689;
+  --rose-hover: #b75f6f;
+}
+body {
+  font-family: 'Poppins', sans-serif;
+  background-color: #f9fafb;
+}
+.card {
+  background: #fff;
+  border-radius: 1rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  padding: 2rem;
+}
+input, select, button {
+  transition: all 0.2s ease;
+}
+</style>
 
-      if (pw !== cpw) {
-        msg.textContent = "Passwords do not match!";
-        msg.classList.remove("text-green-600");
-        msg.classList.add("text-red-600");
-      } else {
-        msg.textContent = "Passwords match ✅";
-        msg.classList.remove("text-red-600");
-        msg.classList.add("text-green-600");
-      }
-    }
-  </script>
+<script>
+function validatePassword() {
+  const pw = document.getElementById("password").value;
+  const cpw = document.getElementById("confirm_password").value;
+  const msg = document.getElementById("pw_message");
+
+  if (!pw || !cpw) {
+    msg.textContent = "";
+    return;
+  }
+
+  if (pw !== cpw) {
+    msg.textContent = "Passwords do not match ❌";
+    msg.classList.remove("text-green-600");
+    msg.classList.add("text-red-600");
+  } else {
+    msg.textContent = "Passwords match ✅";
+    msg.classList.remove("text-red-600");
+    msg.classList.add("text-green-600");
+  }
+}
+</script>
 </head>
-<body class="bg-gray-100 min-h-screen flex items-center justify-center p-6">
 
-  <div class="max-w-2xl w-full bg-white p-8 rounded-2xl shadow-lg">
-    <h2 class="text-3xl font-bold text-pink-600 mb-6 text-center">➕ Add New User</h2>
+<body class="min-h-screen flex items-center justify-center px-4 py-10">
 
-    <?php if (isset($_SESSION['message'])) { ?>
-      <div class="mb-4 px-4 py-2 rounded bg-red-100 text-red-700 font-medium">
-        <?php 
-          echo htmlspecialchars($_SESSION['message'], ENT_QUOTES, 'UTF-8'); 
-          unset($_SESSION['message']);
-        ?>
+  <div class="card w-full max-w-2xl">
+    <!-- Header -->
+    <div class="text-center mb-8">
+      <h2 class="text-3xl font-bold text-[var(--rose)]">➕ Add New User</h2>
+      <p class="text-gray-500 text-sm mt-1">Fill in the details to create a new admin account</p>
+    </div>
+
+    <!-- Flash Message -->
+    <?php if (isset($_SESSION['message'])): ?>
+      <div class="mb-4 px-4 py-3 rounded bg-red-100 text-red-700 font-medium text-center">
+        <?= htmlspecialchars($_SESSION['message'], ENT_QUOTES, 'UTF-8'); unset($_SESSION['message']); ?>
       </div>
-    <?php } ?>
+    <?php elseif (isset($_SESSION['success'])): ?>
+      <div class="mb-4 px-4 py-3 rounded bg-green-100 text-green-700 font-medium text-center">
+        <?= htmlspecialchars($_SESSION['success'], ENT_QUOTES, 'UTF-8'); unset($_SESSION['success']); ?>
+      </div>
+    <?php endif; ?>
 
+    <!-- Form -->
     <form action="add_user.php" method="POST" class="space-y-5">
-      <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+      <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?? ''; ?>">
 
+      <!-- Username -->
       <div>
         <label class="block text-gray-700 font-medium mb-1">Username</label>
         <input type="text" name="username" required
-          class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-pink-400">
+          class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[var(--rose)] focus:outline-none">
       </div>
 
-      <div>
-        <label class="block text-gray-700 font-medium mb-1">First Name</label>
-        <input type="text" name="first_name" required
-          class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-pink-400">
+      <!-- First / Last Name -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-gray-700 font-medium mb-1">First Name</label>
+          <input type="text" name="first_name" required
+            class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[var(--rose)] focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-gray-700 font-medium mb-1">Last Name</label>
+          <input type="text" name="last_name" required
+            class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[var(--rose)] focus:outline-none">
+        </div>
       </div>
 
-      <div>
-        <label class="block text-gray-700 font-medium mb-1">Last Name</label>
-        <input type="text" name="last_name" required
-          class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-pink-400">
-      </div>
-
+      <!-- Email -->
       <div>
         <label class="block text-gray-700 font-medium mb-1">Email</label>
         <input type="email" name="email" required
-          class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-pink-400">
+          class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[var(--rose)] focus:outline-none">
       </div>
 
       <!-- Password -->
-      <div>
-        <label class="block text-gray-700 font-medium mb-1">Password</label>
-        <input type="password" id="password" name="password" required
-          class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-pink-400"
-          oninput="validatePassword()">
-        <p class="text-sm text-gray-500 mt-1">Password must be at least 8 characters long and include at least one number.</p>
-      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-gray-700 font-medium mb-1">Password</label>
+          <input type="password" id="password" name="password" required
+            class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[var(--rose)] focus:outline-none"
+            oninput="validatePassword()">
+          <p class="text-xs text-gray-500 mt-1">Minimum 8 characters, include at least one number.</p>
+        </div>
 
-      <!-- Confirm Password -->
-      <div>
-        <label class="block text-gray-700 font-medium mb-1">Confirm Password</label>
-        <input type="password" id="confirm_password" name="confirm_password" required
-          class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-pink-400"
-          oninput="validatePassword()">
-        <p id="pw_message" class="text-sm mt-1"></p>
+        <div>
+          <label class="block text-gray-700 font-medium mb-1">Confirm Password</label>
+          <input type="password" id="confirm_password" name="confirm_password" required
+            class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[var(--rose)] focus:outline-none"
+            oninput="validatePassword()">
+          <p id="pw_message" class="text-sm mt-1"></p>
+        </div>
       </div>
 
       <!-- Role -->
       <div>
         <label class="block text-gray-700 font-medium mb-1">Role</label>
         <select name="role_id" required
-          class="w-full border border-gray-300 rounded-lg p-3 bg-white focus:ring-2 focus:ring-pink-400">
-          <?php foreach ($roles as $role) { ?>
-            <option value="<?php echo (int) $role['role_id']; ?>">
-              <?php echo htmlspecialchars($role['role_name']); ?>
-            </option>
-          <?php } ?>
+          class="w-full border border-gray-300 rounded-lg p-3 bg-white focus:ring-2 focus:ring-[var(--rose)] focus:outline-none">
+          <option value="" disabled selected>Select a role</option>
+          <?php foreach ($roles as $role): ?>
+            <option value="<?= (int) $role['role_id']; ?>"><?= htmlspecialchars($role['role_name']); ?></option>
+          <?php endforeach; ?>
         </select>
       </div>
 
+      <!-- Buttons -->
       <div class="flex gap-4 pt-4">
         <button type="submit"
-          class="flex-1 bg-pink-500 text-white px-6 py-3 rounded-lg font-medium shadow-md hover:bg-pink-600 active:scale-95 transition-all">
-          Add User
+          class="flex-1 bg-[var(--rose)] text-white px-6 py-3 rounded-lg font-semibold shadow-md hover:bg-[var(--rose-hover)] active:scale-95 transition-all">
+          <i class="fas fa-user-plus mr-2"></i> Add User
         </button>
-        <button type="button" onclick="window.location.href='manage_users.php'"
-          class="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-lg font-medium shadow hover:bg-gray-300 active:scale-95 transition-all">
+        <a href="manage_users.php"
+          class="flex-1 bg-gray-100 text-gray-700 text-center px-6 py-3 rounded-lg font-medium hover:bg-gray-200 shadow-sm active:scale-95 transition-all">
           Cancel
-        </button>
+        </a>
       </div>
     </form>
   </div>

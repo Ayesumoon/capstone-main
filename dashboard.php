@@ -1,5 +1,7 @@
 <?php
 include 'conn.php';
+require 'auth_session.php';
+
 
     $admin_id = $_SESSION['admin_id'] ?? null;
     $admin_name = "Admin";
@@ -84,251 +86,198 @@ while ($row = $chartQuery->fetch_assoc()) {
     $chartLabels[] = $row['order_date'];
     $chartData[] = $row['count'];
 }
-?>
-<!DOCTYPE html>
+?><!DOCTYPE html>
 <html lang="en">
- <head>
+<head>
   <meta charset="utf-8"/>
-  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-  <title>Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dashboard | Seven Dwarfs Boutique</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet"/>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+
   <style>
+    :root {
+      --rose: #e59ca8; /* softer rose tone */
+      --rose-hover: #d27b8c;
+    }
     body {
       font-family: 'Poppins', sans-serif;
+      background-color: #f9fafb;
+      color: #374151;
+    }
+    .active {
+      background-color: #fce8eb;
+      color: var(--rose);
+      font-weight: 600;
+      border-radius: 0.5rem;
     }
   </style>
- </head>
- <body class="bg-gray-100 text-sm">
-  <div class="flex h-screen">
-   <!-- Sidebar -->
-<div class="w-64 bg-white shadow-md min-h-screen" x-data="{ userMenu: false, productMenu: false }">
-  <div class="p-4">
-    <div class="flex items-center space-x-4">
-      <img alt="Logo" class="rounded-full" height="50" src="logo2.png" width="50" />
-      <div>
-        <h2 class="text-lg font-semibold">SevenDwarfs</h2>
+</head>
+
+<body class="text-sm">
+<div class="flex min-h-screen">
+  <!-- Sidebar -->
+  <aside class="w-64 bg-white shadow-md" x-data="{ userMenu: false, productMenu: false }">
+    <div class="p-5 border-b">
+      <div class="flex items-center space-x-3">
+        <img src="logo2.png" alt="Logo" class="rounded-full w-10 h-10" />
+        <h2 class="text-lg font-bold text-[var(--rose)]">SevenDwarfs</h2>
       </div>
     </div>
-    <div class="mt-4">
-      <div class="flex items-center space-x-4">
-        <img alt="Admin profile" class="rounded-full" height="40" src="newID.jpg" width="40" />
-        <div>
-            <h3 class="text-sm font-semibold"><?php echo htmlspecialchars($admin_name); ?></h3>
-            <p class="text-xs text-gray-500"><?php echo htmlspecialchars($admin_role); ?></p>
-          </div>
-        </div>
-    </div>
-  </div>
 
-  <nav class="mt-6">
-    <ul class="space-y-1">
-      <!-- Dashboard -->
-      <li class="px-4 py-2 bg-pink-100 text-pink-600">
-        <a href="dashboard.php" class="flex items-center space-x-2">
-          <i class="fas fa-tachometer-alt"></i>
-          <span>Dashboard</span>
-        </a>
-      </li>
+    <div class="p-5 border-b flex items-center space-x-3">
+      <img src="newID.jpg" alt="Admin" class="rounded-full w-10 h-10" />
+      <div>
+        <p class="font-semibold text-gray-800"><?= htmlspecialchars($admin_name); ?></p>
+        <p class="text-xs text-gray-500"><?= htmlspecialchars($admin_role); ?></p>
+      </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="p-4 space-y-1">
+      <a href="dashboard.php" class="block px-4 py-2 active flex items-center space-x-2 transition">
+        <i class="fas fa-tachometer-alt"></i><span>Dashboard</span>
+      </a>
 
       <!-- User Management -->
-<li class="px-4 py-2 rounded-md hover:bg-pink-100 hover:text-pink-600 transition-all duration-200 cursor-pointer" @click="userMenu = !userMenu">
-  <div class="flex items-center justify-between">
-    <div class="flex items-center space-x-2">
-      <i class="fas fa-users-cog"></i>
-      <span>User Management</span>
-    </div>
-    <i class="fas fa-chevron-down" :class="{ 'rotate-180': userMenu }"></i>
-  </div>
-</li>
-<ul x-show="userMenu" x-transition.duration.300ms class="pl-8 text-sm text-gray-700 space-y-1 overflow-hidden">
-  <li class="py-1">
-    <a href="manage_users.php" class="flex items-center space-x-2 hover:text-pink-600">
-      <i class="fas fa-user"></i>
-      <span>Manage Users</span>
-    </a>
-  </li>
-    <a href="manage_roles.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-id-badge mr-2"></i>Manage Roles</a>
+      <div>
+        <button @click="userMenu = !userMenu"
+          class="w-full text-left px-4 py-2 flex justify-between items-center hover:bg-gray-100 rounded-md transition">
+          <span><i class="fas fa-users-cog mr-2"></i>User Management</span>
+          <i class="fas fa-chevron-down transition-transform duration-200" :class="{ 'rotate-180': userMenu }"></i>
+        </button>
+        <ul x-show="userMenu" x-transition class="pl-8 text-sm text-gray-700 space-y-1 mt-1">
+          <li><a href="manage_users.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-user mr-2"></i>Manage Users</a></li>
+          <li><a href="manage_roles.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-id-badge mr-2"></i>Manage Roles</a></li>
+          <li><a href="customers.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-users mr-2"></i>Customer</a></li>
+        </ul>
+      </div>
 
-  <li class="py-1">
-    <a href="customers.php" class="flex items-center space-x-2 hover:text-pink-600">
-      <i class="fas fa-users"></i>
-      <span>Customer</span>
-    </a>
-  </li>
-</ul>
+      <!-- Product Management -->
+      <div>
+        <button @click="productMenu = !productMenu"
+          class="w-full text-left px-4 py-2 flex justify-between items-center hover:bg-gray-100 rounded-md transition">
+          <span><i class="fas fa-box-open mr-2"></i>Product Management</span>
+          <i class="fas fa-chevron-down transition-transform duration-200" :class="{ 'rotate-180': productMenu }"></i>
+        </button>
+        <ul x-show="productMenu" x-transition class="pl-8 text-sm text-gray-700 space-y-1 mt-1">
+          <li><a href="categories.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-tags mr-2"></i>Category</a></li>
+          <li><a href="products.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-box mr-2"></i>Product</a></li>
+          <li><a href="inventory.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-warehouse mr-2"></i>Inventory</a></li>
+          <li><a href="stock_management.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-boxes mr-2"></i>Stock Management</a></li>
+        </ul>
+      </div>
 
-<!-- Product Management -->
-<li class="px-4 py-2 hover:bg-gray-200 cursor-pointer" @click="productMenu = !productMenu">
-  <div class="flex items-center justify-between">
-    <div class="flex items-center space-x-2">
-      <i class="fas fa-box-open"></i>
-      <span>Product Management</span>
-    </div>
-    <i class="fas fa-chevron-down" :class="{ 'rotate-180': productMenu }"></i>
-  </div>
-</li>
-<ul x-show="productMenu" x-transition class="pl-8 text-sm text-gray-700 space-y-1">
-  <li class="py-1">
-    <a href="categories.php" class="flex items-center space-x-2 hover:text-pink-600">
-      <i class="fas fa-tags"></i>
-      <span>Category</span>
-    </a>
-  </li>
-  <li class="py-1">
-    <a href="products.php" class="flex items-center space-x-2 hover:text-pink-600">
-      <i class="fas fa-box"></i>
-      <span>Product</span>
-    </a>
-  </li>
-  <li class="py-1">
-    <a href="inventory.php" class="flex items-center space-x-2 hover:text-pink-600">
-      <i class="fas fa-warehouse"></i>
-      <span>Inventory</span>
-    </a>
-  </li>
-  <li class="py-1 hover:text-pink-600"><a href="stock_management.php" class="flex items-center"><i class="fas fa-boxes mr-2"></i>Stock Management</a></li>
-</ul>
+      <a href="orders.php" class="block px-4 py-2 hover:bg-gray-100 rounded-md transition"><i class="fas fa-shopping-cart mr-2"></i>Orders</a>
+      <a href="suppliers.php" class="block px-4 py-2 hover:bg-gray-100 rounded-md transition"><i class="fas fa-industry mr-2"></i>Suppliers</a>
+      <a href="system_logs.php" class="block px-4 py-2 hover:bg-gray-100 rounded transition"><i class="fas fa-file-alt mr-2"></i>System Logs</a>
 
-      
-<!-- Other Pages -->
-<li class="px-4 py-2 hover:bg-gray-200">
-  <a href="orders.php" class="flex items-center">
-    <i class="fas fa-shopping-cart mr-2"></i>Orders
-  </a>
-</li>
-      
-<li class="px-4 py-2 hover:bg-gray-200">
-  <a href="suppliers.php" class="flex items-center">
-    <i class="fas fa-industry mr-2"></i>Suppliers
-  </a>
-</li>
+      <a href="logout.php" class="block px-4 py-2 text-red-600 hover:bg-red-50 rounded-md transition"><i class="fas fa-sign-out-alt mr-2"></i>Logout</a>
+    </nav>
+  </aside>
 
-
-<li class="px-4 py-2 hover:bg-gray-200">
-  <a href="logout.php" class="flex items-center">
-    <i class="fas fa-sign-out-alt mr-2"></i>Log out
-  </a>
-</li>
-
-    </ul>
-  </nav>
-</div>
-   <!-- Main Content -->
-   <div class="flex-1 flex flex-col">
+  <!-- Main Content -->
+  <main class="flex-1 flex flex-col">
     <!-- Header -->
-     
-<header class="bg-pink-300 p-4 flex items-center justify-between shadow-md rounded-bl-2xl">
-     <div class="flex items-center space-x-4">
-      <button class="text-white text-2xl">
-      <h1 class="text-xl font-bold">Dashboard</h1>
-       </i>
-     </div>
-     <div class="flex items-center space-x-4">
-      <button class="text-white text-xl">
-       <i class="fas fa-envelope">
-       </i>
-      </button>
-      <div class="relative">
-  <button class="text-white text-xl focus:outline-none" onclick="toggleNotifDropdown()">
-    <i class="fas fa-bell"></i>
-    <?php if ($totalNotif > 0): ?>
-    <span class="absolute -top-2 -right-2 bg-red-600 text-white text-xs rounded-full px-1.5"><?= $totalNotif ?></span>
-    <?php endif; ?>
-  </button>
+    <header class="bg-[var(--rose)] text-white p-4 flex justify-between items-center shadow-md rounded-bl-2xl">
+      <h1 class="text-xl font-semibold">Dashboard</h1>
+      <div class="flex items-center gap-4">
+        <button class="text-white text-lg"><i class="fas fa-envelope"></i></button>
 
-  <!-- Dropdown -->
-<div id="notifDropdown" class="hidden absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg z-50 transition-all">
-    <ul class="divide-y divide-gray-200">
-      <?php if ($newOrdersNotif > 0): ?>
-      <li class="px-4 py-2 hover:bg-gray-100 text-sm">🛒 <?= $newOrdersNotif ?> new order(s)</li>
-      <?php endif; ?>
-      <?php if ($lowStockNotif > 0): ?>
-      <li class="px-4 py-2 hover:bg-gray-100 text-sm">📦 <?= $lowStockNotif ?> low stock item(s)</li>
-      <?php endif; ?>
-      <?php if ($totalNotif === 0): ?>
-      <li class="px-4 py-2 text-gray-500 text-sm">No notifications</li>
-      <?php endif; ?>
-    </ul>
-  </div>
-</div>
+        <!-- Notification Bell -->
+        <div class="relative">
+          <button class="text-white text-lg focus:outline-none" onclick="toggleNotifDropdown()">
+            <i class="fas fa-bell"></i>
+            <?php if ($totalNotif > 0): ?>
+              <span class="absolute -top-2 -right-2 bg-red-600 text-white text-xs rounded-full px-1.5"><?= $totalNotif ?></span>
+            <?php endif; ?>
+          </button>
 
-     </div>
+          <!-- Notification Dropdown -->
+          <div id="notifDropdown" class="hidden absolute right-0 mt-3 w-64 bg-white rounded-lg shadow-lg z-50">
+            <ul class="divide-y divide-gray-200">
+              <?php if ($newOrdersNotif > 0): ?>
+                <li class="px-4 py-2 hover:bg-gray-100 text-sm">🛒 <?= $newOrdersNotif ?> new order(s)</li>
+              <?php endif; ?>
+              <?php if ($lowStockNotif > 0): ?>
+                <li class="px-4 py-2 hover:bg-gray-100 text-sm">📦 <?= $lowStockNotif ?> low stock item(s)</li>
+              <?php endif; ?>
+              <?php if ($totalNotif === 0): ?>
+                <li class="px-4 py-2 text-gray-500 text-sm">No notifications</li>
+              <?php endif; ?>
+            </ul>
+          </div>
+        </div>
+      </div>
     </header>
-   <!-- Dashboard Content -->
-<div class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
 
-  <div class="bg-purple-500 hover:bg-purple-600 transition duration-300 text-white p-6 rounded-xl shadow-lg text-center transform hover:scale-105">
-    <h2 class="text-lg font-semibold">New Orders</h2>
-    <p class="text-3xl font-bold mt-2"><?= $newOrders ?></p>
-  </div>
+    <!-- Dashboard Stats -->
+    <section class="p-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="bg-purple-500 hover:bg-purple-600 text-white p-6 rounded-xl shadow-md text-center transition transform hover:scale-105">
+        <h2 class="text-lg font-medium">New Orders</h2>
+        <p class="text-3xl font-bold mt-2"><?= $newOrders ?></p>
+      </div>
 
-  <div class="bg-green-500 hover:bg-green-600 transition duration-300 text-white p-6 rounded-xl shadow-lg text-center transform hover:scale-105">
-    <h2 class="text-lg font-semibold">Sales</h2>
-    <p class="text-3xl font-bold mt-2"><?= $totalSales ?></p>
-  </div>
+      <div class="bg-green-500 hover:bg-green-600 text-white p-6 rounded-xl shadow-md text-center transition transform hover:scale-105">
+        <h2 class="text-lg font-medium">Sales</h2>
+        <p class="text-3xl font-bold mt-2"><?= $totalSales ?></p>
+      </div>
 
-  <div class="bg-yellow-500 hover:bg-yellow-600 transition duration-300 text-white p-6 rounded-xl shadow-lg text-center transform hover:scale-105">
-    <h2 class="text-lg font-semibold">Revenue</h2>
-    <p class="text-3xl font-bold mt-2">₱<?= number_format($totalRevenue, 2) ?></p>
-  </div>
+      <div class="bg-yellow-500 hover:bg-yellow-600 text-white p-6 rounded-xl shadow-md text-center transition transform hover:scale-105">
+        <h2 class="text-lg font-medium">Revenue</h2>
+        <p class="text-3xl font-bold mt-2">₱<?= number_format($totalRevenue, 2) ?></p>
+      </div>
+    </section>
 
+    <!-- Filter -->
+    <section class="px-6">
+      <form method="GET" class="flex flex-wrap gap-2 items-center mb-4">
+        <select name="filter" class="border p-2 rounded-md shadow-sm focus:ring-[var(--rose)] focus:outline-none">
+          <option value="today" <?= ($_GET['filter'] ?? 'today') === 'today' ? 'selected' : '' ?>>Today</option>
+          <option value="month" <?= ($_GET['filter'] ?? '') === 'month' ? 'selected' : '' ?>>This Month</option>
+        </select>
+        <button type="submit" class="bg-[var(--rose)] text-white px-4 py-2 rounded-md hover:bg-[var(--rose-hover)] transition">Filter</button>
+      </form>
+    </section>
+
+    <!-- Recent Orders -->
+    <section class="bg-white mx-6 p-6 rounded-xl shadow-md">
+      <h2 class="text-lg font-semibold mb-4">Recent Orders</h2>
+      <table class="w-full table-auto border-collapse text-sm">
+        <thead class="bg-gray-100 text-gray-600">
+          <tr>
+            <th class="text-left px-4 py-2">Order ID</th>
+            <th class="text-left px-4 py-2">Customer</th>
+            <th class="text-left px-4 py-2">Amount</th>
+            <th class="text-left px-4 py-2">Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php while($row = $recentOrders->fetch_assoc()): ?>
+            <tr class="hover:bg-gray-50 border-b">
+              <td class="px-4 py-2"><?= $row['order_id'] ?></td>
+              <td class="px-4 py-2"><?= $row['customer_name'] ?></td>
+              <td class="px-4 py-2">₱<?= number_format($row['total_amount'], 2) ?></td>
+              <td class="px-4 py-2"><?= $row['created_at'] ?></td>
+            </tr>
+          <?php endwhile; ?>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- Chart -->
+    <section class="mt-6 bg-white mx-6 p-6 rounded-xl shadow-md">
+      <h2 class="text-lg font-semibold mb-4">Order Trends (Last 7 Days)</h2>
+      <div class="w-full" style="height:300px;">
+        <canvas id="ordersChart"></canvas>
+      </div>
+    </section>
+  </main>
 </div>
 
-<!-- Filter -->
-<div class="mt-6">
-  <form method="GET" class="flex flex-wrap gap-2 items-center mb-4">
-    <select name="filter" class="border p-2 rounded-md shadow-sm focus:ring-pink-400 focus:outline-none">
-      <option value="today" <?= ($_GET['filter'] ?? 'today') === 'today' ? 'selected' : '' ?>>Today</option>
-<option value="month" <?= ($_GET['filter'] ?? '') === 'month' ? 'selected' : '' ?>>This Month</option>
-
-    </select>
-    <button type="submit" class="bg-pink-300 text-white px-4 py-2 rounded-md hover:bg-pink-500 transition">Filter</button>
-  </form>
-</div>
-
-
-<!-- Recent Orders -->
-<div class="bg-white p-4 rounded-md shadow-md">
-    <h2 class="text-lg font-semibold mb-4">Recent Orders</h2>
-    <table class="w-full table-auto border-collapse text-sm">
-  <thead class="bg-gray-200">
-    <tr>
-      <th class="text-left px-4 py-2">Order ID</th>
-      <th class="text-left px-4 py-2">Customer</th>
-      <th class="text-left px-4 py-2">Amount</th>
-      <th class="text-left px-4 py-2">Date</th>
-    </tr>
-  </thead>
-  <tbody>
-    <?php while($row = $recentOrders->fetch_assoc()): ?>
-    <tr class="hover:bg-gray-50 border-b">
-      <td class="px-4 py-2"><?= $row['order_id'] ?></td>
-      <td class="px-4 py-2"><?= $row['customer_name'] ?></td>
-      <td class="px-4 py-2">₱<?= number_format($row['total_amount'], 2) ?></td>
-      <td class="px-4 py-2"><?= $row['created_at'] ?></td>
-    </tr>
-    <?php endwhile; ?>
-  </tbody>
-</table>
-
-</div>
-
-<!-- Chart.js -->
-<div class="mt-6 bg-white p-6 rounded-xl shadow-lg">
-  <h2 class="text-lg font-semibold mb-4">Order Trends (Last 7 Days)</h2>
-  <div class="w-full" style="height:300px;"> <!-- smaller height -->
-    <canvas id="ordersChart"></canvas>
-  </div>
-</div>
-
-
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 let chart;
 const ctx = document.getElementById('ordersChart').getContext('2d');
@@ -337,53 +286,39 @@ function loadChart(filter = 'today') {
   fetch("chart_data.php?filter=" + filter)
     .then(res => res.json())
     .then(res => {
-      if (chart) chart.destroy(); // reset old chart
+      if (chart) chart.destroy();
       chart = new Chart(ctx, {
-  type: 'line',
-  data: {
-    labels: res.labels,
-    datasets: [{
-      label: 'Orders',
-      data: res.data,
-      borderColor: 'rgba(255, 99, 132, 1)',
-      backgroundColor: 'rgba(255, 99, 132, 0.2)',
-      fill: true,
-      tension: 0.4
-    }]
-  },
-  options: { 
-    responsive: true,
-    maintainAspectRatio: false  // allows custom height
-  }
-});
-
+        type: 'line',
+        data: {
+          labels: res.labels,
+          datasets: [{
+            label: 'Orders',
+            data: res.data,
+            borderColor: 'rgba(229,156,168,1)',
+            backgroundColor: 'rgba(229,156,168,0.3)',
+            fill: true,
+            tension: 0.4
+          }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+      });
     });
 }
-
-// Initial load
 loadChart("<?= $_GET['filter'] ?? 'today' ?>");
-
-// Update when filter form changes
 document.querySelector("select[name='filter']").addEventListener("change", function(){
   loadChart(this.value);
 });
+
+// Notifications dropdown
+function toggleNotifDropdown() {
+  const dropdown = document.getElementById('notifDropdown');
+  dropdown.classList.toggle('hidden');
+}
+window.addEventListener('click', function(e) {
+  const notifBtn = document.querySelector('.fa-bell');
+  const dropdown = document.getElementById('notifDropdown');
+  if (!notifBtn.contains(e.target) && !dropdown.contains(e.target)) dropdown.classList.add('hidden');
+});
 </script>
-
-<script>
-  function toggleNotifDropdown() {
-    const dropdown = document.getElementById('notifDropdown');
-    dropdown.classList.toggle('hidden');
-  }
-
-  // Optional: Close when clicking outside
-  window.addEventListener('click', function(e) {
-    const notifBtn = document.querySelector('.fa-bell');
-    const dropdown = document.getElementById('notifDropdown');
-    if (!notifBtn.contains(e.target) && !dropdown.contains(e.target)) {
-      dropdown.classList.add('hidden');
-    }
-  });
-</script>
-
- </body>
+</body>
 </html>

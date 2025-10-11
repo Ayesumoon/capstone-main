@@ -12,7 +12,8 @@ $admin_id = $_SESSION['admin_id'];
 
 // 🧩 Fetch current admin details
 $stmt = $conn->prepare("
-    SELECT CONCAT(a.first_name, ' ', a.last_name) AS full_name, r.role_name 
+    SELECT CONCAT(a.first_name, ' ', a.last_name) AS full_name, 
+           r.role_name, a.role_id 
     FROM adminusers a 
     LEFT JOIN roles r ON a.role_id = r.role_id
     WHERE a.admin_id = ?
@@ -20,14 +21,17 @@ $stmt = $conn->prepare("
 $stmt->bind_param("i", $admin_id);
 $stmt->execute();
 $admin = $stmt->get_result()->fetch_assoc();
+
 $admin_name = $admin['full_name'] ?? "Admin";
 $admin_role = $admin['role_name'] ?? "Administrator";
+$admin_role_id = $admin['role_id'] ?? 0;
 
-// 🧩 Fetch all users with roles & status
+// 🧩 Fetch all users with their roles and status
 $query = "
     SELECT u.admin_id, u.username, u.admin_email, 
            CONCAT(u.first_name, ' ', u.last_name) AS full_name, 
-           r.role_name, s.status_id, s.status_name
+           r.role_name, r.role_id, 
+           s.status_id, s.status_name
     FROM adminusers u
     LEFT JOIN roles r ON u.role_id = r.role_id
     LEFT JOIN status s ON u.status_id = s.status_id
@@ -39,14 +43,15 @@ $result = $conn->query($query);
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Manage Users | Seven Dwarfs</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Manage Users | Seven Dwarfs Boutique</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet" />
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
+:root { --rose: #d37689; --rose-hover: #b75f6f; }
 body { font-family: 'Poppins', sans-serif; background-color: #f9fafb; }
 .active { background-color: #fef2f4; color: #d37689; font-weight: 600; }
 </style>
@@ -71,7 +76,9 @@ body { font-family: 'Poppins', sans-serif; background-color: #f9fafb; }
     </div>
 
     <nav class="mt-6 space-y-1" x-data="{ userMenu: true, productMenu: false }">
-      <a href="dashboard.php" class="block px-4 py-2 hover:bg-gray-100"><i class="fas fa-tachometer-alt mr-2"></i>Dashboard</a>
+      <a href="dashboard.php" class="block px-4 py-2 hover:bg-gray-100">
+        <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
+      </a>
 
       <div>
         <button @click="userMenu = !userMenu" class="w-full text-left px-4 py-2 flex justify-between items-center hover:bg-gray-100">
@@ -100,6 +107,8 @@ body { font-family: 'Poppins', sans-serif; background-color: #f9fafb; }
 
       <a href="orders.php" class="block px-4 py-2 hover:bg-gray-100"><i class="fas fa-shopping-cart mr-2"></i>Orders</a>
       <a href="suppliers.php" class="block px-4 py-2 hover:bg-gray-100"><i class="fas fa-industry mr-2"></i>Suppliers</a>
+      <a href="system_logs.php" class="block px-4 py-2 hover:bg-gray-100 rounded transition"><i class="fas fa-file-alt mr-2"></i>System Logs</a>
+
       <a href="logout.php" class="block px-4 py-2 hover:bg-gray-100 text-red-600"><i class="fas fa-sign-out-alt mr-2"></i>Logout</a>
     </nav>
   </div>
@@ -108,16 +117,10 @@ body { font-family: 'Poppins', sans-serif; background-color: #f9fafb; }
 <!-- 🌸 Main Content -->
 <main class="flex-1 p-6 overflow-auto">
   <div class="flex justify-between items-center mb-6">
-    <div class="flex items-center gap-4">
-      <button id="toggleSidebar" class="text-2xl text-gray-600 lg:hidden">☰</button>
-      <h1 class="text-2xl font-semibold text-[var(--rose)]">👥 Manage Users</h1>
-    </div>
-
-    <!-- ➕ Add User Button -->
-    <a href="add_user.php" class="bg-pink-400 text-white px-4 py-2 rounded-lg shadow hover:bg-pink-500 transition flex items-center gap-2">
-  <i class="fas fa-user-plus"></i> Add User
-</a>
-
+    <h1 class="text-2xl font-semibold text-[var(--rose)]">👥 Manage Users</h1>
+    <a href="add_user.php" class="bg-[var(--rose)] text-white px-4 py-2 rounded-lg shadow hover:bg-[var(--rose-hover)] transition flex items-center gap-2">
+      <i class="fas fa-user-plus"></i> Add User
+    </a>
   </div>
 
   <!-- ✅ Flash Messages -->
@@ -144,38 +147,46 @@ body { font-family: 'Poppins', sans-serif; background-color: #f9fafb; }
         </tr>
       </thead>
       <tbody class="divide-y divide-gray-200">
-        <?php while ($user = $result->fetch_assoc()): ?>
-          <tr class="hover:bg-gray-50 transition <?= $user['status_id'] == 2 ? 'opacity-60' : ''; ?>">
-            <td class="px-4 py-2"><?= $user['admin_id']; ?></td>
-            <td class="px-4 py-2"><?= htmlspecialchars($user['username']); ?></td>
-            <td class="px-4 py-2"><?= htmlspecialchars($user['full_name']); ?></td>
-            <td class="px-4 py-2"><?= htmlspecialchars($user['admin_email']); ?></td>
-            <td class="px-4 py-2"><?= htmlspecialchars($user['role_name']); ?></td>
-            <td class="px-4 py-2">
-              <span class="px-2 py-1 text-xs rounded <?= $user['status_id'] == 1 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'; ?>">
-                <?= htmlspecialchars($user['status_name']); ?>
-              </span>
-            </td>
-            <td class="px-4 py-2 text-center space-x-2">
-              <a href="edit_user.php?id=<?= $user['admin_id']; ?>" class="text-blue-600 hover:underline">Edit</a>
-              <?php if ($user['status_id'] == 1): ?>
-                <a href="toggle_user.php?id=<?= $user['admin_id']; ?>&status=2" class="text-yellow-600 hover:underline">Deactivate</a>
-              <?php else: ?>
-                <a href="toggle_user.php?id=<?= $user['admin_id']; ?>&status=1" class="text-green-600 hover:underline">Activate</a>
-              <?php endif; ?>
-              <a href="delete_user.php?id=<?= $user['admin_id']; ?>" onclick="return confirm('Are you sure you want to delete this user?')" class="text-red-600 hover:underline">Delete</a>
-            </td>
-          </tr>
-        <?php endwhile; ?>
-      </tbody>
+  <?php while ($user = $result->fetch_assoc()): ?>
+    <tr class="hover:bg-gray-50 transition <?= $user['status_id'] == 2 ? 'opacity-60' : ''; ?>">
+      <td class="px-4 py-2"><?= $user['admin_id']; ?></td>
+      <td class="px-4 py-2"><?= htmlspecialchars($user['username']); ?></td>
+      <td class="px-4 py-2"><?= htmlspecialchars($user['full_name']); ?></td>
+      <td class="px-4 py-2"><?= htmlspecialchars($user['admin_email']); ?></td>
+      <td class="px-4 py-2"><?= htmlspecialchars($user['role_name']); ?></td>
+      <td class="px-4 py-2">
+        <span class="px-2 py-1 text-xs rounded <?= $user['status_id'] == 1 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'; ?>">
+          <?= htmlspecialchars($user['status_name']); ?>
+        </span>
+      </td>
+
+      <td class="px-4 py-2 text-center space-x-3">
+        <!-- ✏️ Edit -->
+        <a href="edit_user.php?id=<?= $user['admin_id']; ?>" 
+           class="text-blue-600 hover:text-blue-800 font-medium">Edit</a>
+
+        <?php if ($admin_role_id == 2 && $user['admin_id'] != $admin_id): ?>
+          <!-- 🔄 Activate / Deactivate -->
+          <?php if ($user['status_id'] == 1): ?>
+            <a href="toggle_user.php?id=<?= $user['admin_id']; ?>&status=2" 
+               class="text-yellow-600 hover:text-yellow-800 font-medium">Deactivate</a>
+          <?php else: ?>
+            <a href="toggle_user.php?id=<?= $user['admin_id']; ?>&status=1" 
+               class="text-green-600 hover:text-green-800 font-medium">Activate</a>
+          <?php endif; ?>
+
+          <!-- 🗑️ Delete -->
+          <a href="delete_user.php?id=<?= $user['admin_id']; ?>" 
+             onclick="return confirm('Are you sure you want to delete this user?')" 
+             class="text-red-600 hover:text-red-800 font-medium">Delete</a>
+        <?php endif; ?>
+      </td>
+    </tr>
+  <?php endwhile; ?>
+</tbody>
+
     </table>
   </div>
 </main>
-
-<script>
-document.getElementById("toggleSidebar").addEventListener("click", () => {
-  document.getElementById("sidebar").classList.toggle("hidden");
-});
-</script>
 </body>
 </html>

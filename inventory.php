@@ -118,108 +118,123 @@ if ($resultProducts && $resultProducts->num_rows > 0) {
 $stmt->close();
 $conn->close();
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Inventory</title>
+  <title>Inventory | Seven Dwarfs Boutique</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: {
-            poppins: ['Poppins', 'sans-serif'],
-          },
-          colors: {
-            primary: '#ec4899',
-          }
-        }
-      }
-    };
-  </script>
   <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet" />
+
+  <style>
+    :root {
+      --rose: #e5a5b2;
+      --rose-hover: #d48b98;
+    }
+    body {
+      font-family: 'Poppins', sans-serif;
+      background-color: #f9fafb;
+      color: #374151;
+    }
+    .active-link {
+      background-color: #fef3f5;
+      color: var(--rose);
+      font-weight: 600;
+      border-radius: 0.5rem;
+    }
+    .sidebar {
+      box-shadow: 2px 0 6px rgba(0,0,0,0.05);
+    }
+  </style>
 </head>
-<body class="bg-gray-100 font-sans">
+
+<body class="bg-gray-50 font-poppins text-sm">
   <div class="flex h-screen overflow-hidden">
-    <!-- Sidebar -->
-    <div class="w-64 bg-white shadow-md overflow-y-auto" x-data="{ userMenu: false, productMenu: false }">
-      <div class="p-4 border-b">
-        <div class="flex items-center space-x-4">
-          <img src="logo2.png" alt="Logo" class="rounded-full w-12 h-12"/>
-          <h2 class="text-lg font-semibold">SevenDwarfs</h2>
+    <!-- 🧭 Sidebar -->
+    <aside class="w-64 bg-white sidebar" x-data="{ userMenu: false, productMenu: true }">
+      <div class="p-5 border-b">
+        <div class="flex items-center space-x-3">
+          <img src="logo2.png" alt="Logo" class="rounded-full w-10 h-10" />
+          <h2 class="text-lg font-bold text-[var(--rose)]">SevenDwarfs</h2>
         </div>
-        <div class="mt-4 flex items-center space-x-4">
-          <img src="newID.jpg" alt="Admin" class="rounded-full w-10 h-10"/>
-          <div>
-            <h3 class="text-sm font-semibold"><?php echo htmlspecialchars($admin_name); ?></h3>
-            <p class="text-xs text-gray-500"><?php echo htmlspecialchars($admin_role); ?></p>
+      </div>
+
+      <div class="p-5 border-b flex items-center space-x-3">
+        <img src="newID.jpg" alt="Admin" class="rounded-full w-10 h-10" />
+        <div>
+          <p class="font-semibold text-gray-800"><?php echo htmlspecialchars($admin_name); ?></p>
+          <p class="text-xs text-gray-500"><?php echo htmlspecialchars($admin_role); ?></p>
+        </div>
+      </div>
+
+      <!-- Navigation -->
+      <nav class="p-4 space-y-1">
+        <a href="dashboard.php" class="block px-4 py-2 hover:bg-gray-100 rounded-md transition">
+          <i class="fas fa-tachometer-alt mr-2"></i> Dashboard
+        </a>
+
+        <!-- User Management -->
+        <div>
+          <button @click="userMenu = !userMenu"
+            class="w-full text-left px-4 py-2 flex justify-between items-center hover:bg-gray-100 rounded-md transition">
+            <span><i class="fas fa-users-cog mr-2"></i> User Management</span>
+            <i class="fas fa-chevron-down transition-transform duration-200"
+              :class="{ 'rotate-180': userMenu }"></i>
+          </button>
+          <div x-show="userMenu" x-transition class="pl-8 space-y-1 mt-1">
+            <a href="manage_users.php" class="block py-1 hover:text-[var(--rose)]">
+              <i class="fas fa-user mr-2"></i> Manage Users</a>
+            <a href="manage_roles.php" class="block py-1 hover:text-[var(--rose)]">
+              <i class="fas fa-id-badge mr-2"></i> Manage Roles</a>
+            <a href="customers.php" class="block py-1 hover:text-[var(--rose)]">
+              <i class="fas fa-users mr-2"></i> Customers</a>
           </div>
         </div>
-      </div>
-      <!-- Navigation -->
-      <nav class="mt-4">
-        <ul class="space-y-1">
-          <li class="px-4 py-2 hover:bg-gray-200">
-            <a href="dashboard.php" class="flex items-center">
-              <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
-            </a>
-          </li>
-          <li class="px-4 py-2 hover:bg-gray-200 cursor-pointer" @click="userMenu = !userMenu">
-            <div class="flex items-center justify-between">
-              <span class="flex items-center">
-                <i class="fas fa-users-cog mr-2"></i>User Management
-              </span>
-              <i class="fas fa-chevron-down transition-transform duration-200" :class="{ 'rotate-180': userMenu }"></i>
-            </div>
-          </li>
-          <ul x-show="userMenu" x-transition x-cloak class="pl-8 text-sm text-gray-700 space-y-1">
-            <li><a href="manage_users.php" class="block py-1 hover:text-pink-600"><i class="fas fa-user mr-2"></i>Manage Users</a></li>
-            <a href="manage_roles.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-id-badge mr-2"></i>Manage Roles</a>
-            <li><a href="customers.php" class="block py-1 hover:text-pink-600"><i class="fas fa-users mr-2"></i>Customer</a></li>
-          </ul>
-          <li class="px-4 py-2 hover:bg-gray-200 cursor-pointer" @click="productMenu = !productMenu">
-            <div class="flex items-center justify-between">
-              <span class="flex items-center">
-                <i class="fas fa-box-open mr-2"></i>Product Management
-              </span>
-              <i class="fas fa-chevron-down transition-transform duration-200" :class="{ 'rotate-180': productMenu }"></i>
-            </div>
-          </li>
-          <ul x-show="productMenu" x-transition x-cloak class="pl-8 text-sm text-gray-700 space-y-1">
-            <li><a href="categories.php" class="block py-1 hover:text-pink-600"><i class="fas fa-tags mr-2"></i>Category</a></li>
-            <li><a href="products.php" class="block py-1 hover:text-pink-600"><i class="fas fa-box mr-2"></i>Product</a></li>
-            <li><a href="inventory.php" class="block py-1 bg-pink-100 text-pink-600 rounded"><i class="fas fa-warehouse mr-2"></i>Inventory</a></li>
-            <li class="py-1 hover:text-pink-600"><a href="stock_management.php" class="flex items-center"><i class="fas fa-boxes mr-2"></i>Stock Management</a></li>
-          </ul>
-          <li class="px-4 py-2 hover:bg-gray-200">
-            <a href="orders.php" class="flex items-center"><i class="fas fa-shopping-cart mr-2"></i>Orders</a>
-          </li>
-          <li class="px-4 py-2 hover:bg-gray-200">
-            <a href="suppliers.php" class="flex items-center"><i class="fas fa-industry mr-2"></i>Suppliers</a>
-          </li>
-          <li class="px-4 py-2 hover:bg-gray-200">
-            <a href="logout.php" class="flex items-center"><i class="fas fa-sign-out-alt mr-2"></i>Log out</a>
-          </li>
-        </ul>
+
+        <!-- Product Management -->
+        <div>
+          <button @click="productMenu = !productMenu"
+            class="w-full text-left px-4 py-2 flex justify-between items-center hover:bg-gray-100 rounded-md transition">
+            <span><i class="fas fa-box-open mr-2"></i> Product Management</span>
+            <i class="fas fa-chevron-down transition-transform duration-200"
+              :class="{ 'rotate-180': productMenu }"></i>
+          </button>
+          <div x-show="productMenu" x-transition class="pl-8 space-y-1 mt-1">
+            <a href="categories.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-tags mr-2"></i> Category</a>
+            <a href="products.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-box mr-2"></i> Product</a>
+            <a href="inventory.php" class="block py-1 active-link"><i class="fas fa-warehouse mr-2"></i> Inventory</a>
+            <a href="stock_management.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-boxes mr-2"></i> Stock Management</a>
+          </div>
+        </div>
+
+        <a href="orders.php" class="block px-4 py-2 hover:bg-gray-100 rounded-md transition">
+          <i class="fas fa-shopping-cart mr-2"></i> Orders</a>
+        <a href="suppliers.php" class="block px-4 py-2 hover:bg-gray-100 rounded-md transition">
+          <i class="fas fa-industry mr-2"></i> Suppliers</a>
+      <a href="system_logs.php" class="block px-4 py-2 hover:bg-gray-100 rounded transition"><i class="fas fa-file-alt mr-2"></i>System Logs</a>
+
+        <a href="logout.php" class="block px-4 py-2 text-red-600 hover:bg-red-50 rounded-md transition">
+          <i class="fas fa-sign-out-alt mr-2"></i> Logout</a>
       </nav>
-    </div>
+    </aside>
 
-    <!-- Main Content -->
-    <div class="flex-1 p-6 overflow-auto">
-      <div class="bg-pink-300 text-white p-4 rounded-t-2xl shadow-sm">
-        <h1 class="text-xl font-bold">Inventory Management</h1>
+    <!-- 🌸 Main Content -->
+    <main class="flex-1 p-8 overflow-auto bg-gray-50">
+      <!-- Header -->
+      <div class="bg-[var(--rose)] text-white p-5 rounded-t-2xl shadow-sm">
+        <h1 class="text-2xl font-semibold">📦 Inventory Management</h1>
       </div>
 
-      <div class="bg-white p-4 rounded-b shadow-md mb-6">
-        <form method="GET" action="inventory.php" class="flex flex-wrap items-center gap-4">
+      <!-- Filter Section -->
+      <section class="bg-white p-6 rounded-b-2xl shadow mb-6">
+        <form method="GET" action="inventory.php" class="flex flex-wrap items-center gap-6">
           <div>
-            <label for="category" class="font-medium text-sm">Category:</label>
-            <select name="category" id="category" onchange="this.form.submit()" class="border rounded-md p-2 text-sm">
+            <label for="category" class="font-medium text-gray-700 text-sm">Category:</label>
+            <select name="category" id="category" onchange="this.form.submit()" 
+              class="p-2 border rounded-lg focus:ring-2 focus:ring-[var(--rose)] text-sm">
               <option value="all">All</option>
               <?php foreach ($categories as $category) { ?>
                 <option value="<?php echo $category['category_name']; ?>" <?php echo ($selectedCategory == $category['category_name']) ? 'selected' : ''; ?>>
@@ -228,9 +243,11 @@ $conn->close();
               <?php } ?>
             </select>
           </div>
+
           <div>
-            <label for="color" class="font-medium text-sm">Color:</label>
-            <select name="color" id="color" onchange="this.form.submit()" class="border rounded-md p-2 text-sm">
+            <label for="color" class="font-medium text-gray-700 text-sm">Color:</label>
+            <select name="color" id="color" onchange="this.form.submit()" 
+              class="p-2 border rounded-lg focus:ring-2 focus:ring-[var(--rose)] text-sm">
               <option value="all">All</option>
               <?php foreach ($colors as $color) { ?>
                 <option value="<?php echo $color['color']; ?>" <?php echo ($selectedColor == $color['color']) ? 'selected' : ''; ?>>
@@ -239,9 +256,11 @@ $conn->close();
               <?php } ?>
             </select>
           </div>
+
           <div>
-            <label for="size" class="font-medium text-sm">Size:</label>
-            <select name="size" id="size" onchange="this.form.submit()" class="border rounded-md p-2 text-sm">
+            <label for="size" class="font-medium text-gray-700 text-sm">Size:</label>
+            <select name="size" id="size" onchange="this.form.submit()" 
+              class="p-2 border rounded-lg focus:ring-2 focus:ring-[var(--rose)] text-sm">
               <option value="all">All</option>
               <?php foreach ($sizes as $size) { ?>
                 <option value="<?php echo $size['size']; ?>" <?php echo ($selectedSize == $size['size']) ? 'selected' : ''; ?>>
@@ -251,48 +270,50 @@ $conn->close();
             </select>
           </div>
         </form>
-      </div>
+      </section>
 
+      <!-- Table -->
       <div class="overflow-x-auto">
         <table class="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm text-sm">
           <thead class="bg-gray-100 text-gray-700">
             <tr>
-              <th class="px-4 py-3 border text-left">Product Name</th>
-              <th class="px-4 py-3 border text-left">Category</th>
-              <th class="px-4 py-3 border text-left">Colors</th>
-              <th class="px-4 py-3 border text-left">Sizes</th>
-              <th class="px-4 py-3 border text-left">Created At</th>
-              <th class="px-4 py-3 border text-left">Stock</th>
-              <th class="px-4 py-3 border text-left">Status</th>
+              <th class="px-4 py-3 text-left">Product Name</th>
+              <th class="px-4 py-3 text-left">Category</th>
+              <th class="px-4 py-3 text-left">Colors</th>
+              <th class="px-4 py-3 text-left">Sizes</th>
+              <th class="px-4 py-3 text-left">Created At</th>
+              <th class="px-4 py-3 text-center">Stock</th>
+              <th class="px-4 py-3 text-center">Status</th>
             </tr>
           </thead>
           <tbody>
             <?php 
-            if (!empty($inventory)) { 
-              foreach ($inventory as $item) {
-                $stock = (int)$item['total_stock'];
-                $status = ($stock > 20) ? "In Stock" : (($stock > 0) ? "Low Stock" : "Out of Stock");
+              if (!empty($inventory)) { 
+                foreach ($inventory as $item) {
+                  $stock = (int)$item['total_stock'];
+                  $status = ($stock > 20) ? "In Stock" : (($stock > 0) ? "Low Stock" : "Out of Stock");
             ?>
-            <tr class="hover:bg-gray-50 transition-all">
-              <td class="px-4 py-2 border"><?php echo $item['product_name']; ?></td>
-              <td class="px-4 py-2 border"><?php echo $item['category_name']; ?></td>
+            <tr class="hover:bg-gray-50 transition">
+              <td class="px-4 py-2 border"><?php echo htmlspecialchars($item['product_name']); ?></td>
+              <td class="px-4 py-2 border"><?php echo htmlspecialchars($item['category_name']); ?></td>
               <td class="px-4 py-2 border"><?php echo $item['colors'] ?: '—'; ?></td>
               <td class="px-4 py-2 border"><?php echo $item['sizes'] ?: '—'; ?></td>
-              <td class="px-4 py-2 border"><?php echo $item['created_at']; ?></td>
-              <td class="px-4 py-2 border text-center"><?php echo $stock; ?></td>
-              <td class="px-4 py-2 border font-semibold capitalize <?php echo ($status === 'In Stock') ? 'text-green-600' : (($status === 'Low Stock') ? 'text-yellow-600' : 'text-red-600'); ?>">
+              <td class="px-4 py-2 border"><?php echo htmlspecialchars($item['created_at']); ?></td>
+              <td class="px-4 py-2 border text-center font-medium"><?php echo $stock; ?></td>
+              <td class="px-4 py-2 border text-center font-semibold capitalize
+                <?php echo ($status === 'In Stock') ? 'text-green-600' : (($status === 'Low Stock') ? 'text-yellow-600' : 'text-red-600'); ?>">
                 <?php echo $status; ?>
               </td>
             </tr>
             <?php }} else { ?>
             <tr>
-              <td colspan="7" class="text-center px-4 py-4 text-gray-500 border">No products found</td>
+              <td colspan="7" class="text-center px-4 py-6 text-gray-500 border">No products found</td>
             </tr>
             <?php } ?>
           </tbody>
         </table>
       </div>
-    </div>
+    </main>
   </div>
 </body>
 </html>
