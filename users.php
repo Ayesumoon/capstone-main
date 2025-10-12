@@ -198,7 +198,8 @@ $conn->close();
     <i class="fas fa-shopping-cart mr-2"></i>Orders
   </a>
 </li>
-
+      <a href="cashier_sales_report.php" class="block px-4 py-2 rounded-md hover:bg-gray-100 transitio">
+        <i class="fas fa-chart-line mr-2"></i>Cashier Sales</a>
 
 <li class="px-4 py-2 hover:bg-gray-200">
   <a href="suppliers.php" class="flex items-center">

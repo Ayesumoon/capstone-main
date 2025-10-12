@@ -147,6 +147,8 @@
         </div>
 
         <a href="orders.php" class="block px-4 py-2 hover:bg-gray-100 rounded-md transition"><i class="fas fa-shopping-cart mr-2"></i>Orders</a>
+              <a href="cashier_sales_report.php" class="block px-4 py-2 rounded-md hover:bg-gray-100 transitio"><i class="fas fa-chart-line mr-2"></i>Cashier Sales</a>
+
         <a href="suppliers.php" class="block px-4 py-2 hover:bg-gray-100 rounded-md transition"><i class="fas fa-industry mr-2"></i>Suppliers</a>
       <a href="system_logs.php" class="block px-4 py-2 hover:bg-gray-100 rounded transition"><i class="fas fa-file-alt mr-2"></i>System Logs</a>
 
@@ -179,7 +181,6 @@
         <table class="min-w-full border border-gray-200 rounded-lg overflow-hidden text-sm">
           <thead class="bg-gray-100 text-gray-600 uppercase text-xs">
             <tr>
-              <th class="px-4 py-3 text-left">Customer ID</th>
               <th class="px-4 py-3 text-left">Name</th>
               <th class="px-4 py-3 text-left">Email</th>
               <th class="px-4 py-3 text-left">Phone</th>
@@ -191,7 +192,6 @@
             <?php if (!empty($customers)): ?>
               <?php foreach ($customers as $customer): ?>
                 <tr class="hover:bg-gray-50 transition">
-                  <td class="px-4 py-2"><?= $customer['customer_id']; ?></td>
                   <td class="px-4 py-2"><?= htmlspecialchars($customer['name']); ?></td>
                   <td class="px-4 py-2"><?= htmlspecialchars($customer['email']); ?></td>
                   <td class="px-4 py-2"><?= htmlspecialchars($customer['phone']); ?></td>

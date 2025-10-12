@@ -1,7 +1,6 @@
 <?php
 include 'conn.php';
-require 'auth_session.php';
-
+include 'auth_session.php';
 
     $admin_id = $_SESSION['admin_id'] ?? null;
     $admin_name = "Admin";
@@ -172,6 +171,8 @@ while ($row = $chartQuery->fetch_assoc()) {
       </div>
 
       <a href="orders.php" class="block px-4 py-2 hover:bg-gray-100 rounded-md transition"><i class="fas fa-shopping-cart mr-2"></i>Orders</a>
+            <a href="cashier_sales_report.php" class="block px-4 py-2 rounded-md hover:bg-gray-100 transitio"><i class="fas fa-chart-line mr-2"></i>Cashier Sales</a>
+
       <a href="suppliers.php" class="block px-4 py-2 hover:bg-gray-100 rounded-md transition"><i class="fas fa-industry mr-2"></i>Suppliers</a>
       <a href="system_logs.php" class="block px-4 py-2 hover:bg-gray-100 rounded transition"><i class="fas fa-file-alt mr-2"></i>System Logs</a>
 

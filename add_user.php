@@ -87,7 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $log_stmt->close();
 
     $_SESSION['success'] = "User added successfully!";
-    header("Location: users.php");
+    header("Location: manage_users.php");
     exit();
 } else {
     error_log("DB Error: " . $stmt->error);

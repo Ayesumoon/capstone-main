@@ -113,83 +113,145 @@ $conn->close();
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Edit Product - Seven Dwarfs Boutique</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+  <meta charset="UTF-8">
+  <title>Edit Product | Seven Dwarfs Boutique</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --rose: #e5a5b2;
+      --rose-hover: #d48b98;
+    }
+    body {
+      font-family: 'Poppins', sans-serif;
+      background-color: #f9fafb;
+      color: #374151;
+    }
+  </style>
 </head>
-<body class="bg-gray-100 font-poppins">
 
-<div class="max-w-4xl mx-auto bg-white shadow-md rounded-2xl mt-10 p-8">
-  <h2 class="text-2xl font-semibold text-pink-500 mb-6">✏️ Edit Product</h2>
-
-  <form method="POST" enctype="multipart/form-data" class="space-y-6">
-
-    <!-- Product Name -->
-    <div>
-      <label class="block text-gray-700 font-medium mb-1">Product Name</label>
-      <input type="text" name="product_name" value="<?= htmlspecialchars($product['product_name']); ?>" required
-             class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-pink-400 outline-none">
+<body class="min-h-screen flex items-center justify-center bg-gray-100 px-4">
+  <div class="max-w-3xl w-full bg-white shadow-md rounded-2xl p-8">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+      <h2 class="text-2xl font-semibold text-[var(--rose)] flex items-center gap-2">
+        <i class="fas fa-pen-nib"></i> Edit Product
+      </h2>
+      <a href="products.php" 
+         class="flex items-center gap-2 bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 transition text-sm">
+        <i class="fas fa-arrow-left"></i> Back
+      </a>
     </div>
 
-    <!-- Price Fields -->
-    <div class="grid grid-cols-2 gap-6">
+    <form method="POST" enctype="multipart/form-data" class="space-y-6">
+      <!-- Product Name -->
       <div>
-        <label class="block text-gray-700 font-medium mb-1">Selling Price (₱)</label>
-        <input type="number" name="price" step="0.01" value="<?= htmlspecialchars($product['price_id']); ?>" required
-               class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-pink-400 outline-none">
-      </div>
-      <div>
-        <label class="block text-gray-700 font-medium mb-1">Supplier Price (₱)</label>
-        <input type="number" name="supplier_price" step="0.01" value="<?= htmlspecialchars($product['supplier_price'] ?? 0); ?>"
-               class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-pink-400 outline-none">
-      </div>
-    </div>
-
-    <!-- Category & Supplier -->
-    <div class="grid grid-cols-2 gap-6">
-      <div>
-        <label class="block text-gray-700 font-medium mb-1">Category</label>
-        <select name="category_id" required
-                class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-pink-400 outline-none">
-          <?php foreach ($categories as $cat): ?>
-            <option value="<?= $cat['category_id']; ?>" <?= ($product['category_id'] == $cat['category_id']) ? 'selected' : ''; ?>>
-              <?= htmlspecialchars($cat['category_name']); ?>
-            </option>
-          <?php endforeach; ?>
-        </select>
+        <label class="block text-gray-700 font-medium mb-1">Product Name</label>
+        <input 
+          type="text" 
+          name="product_name" 
+          value="<?= htmlspecialchars($product['product_name']); ?>" 
+          required
+          class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[var(--rose)] outline-none"
+        >
       </div>
 
-      <div>
-        <label class="block text-gray-700 font-medium mb-1">Supplier</label>
-        <select name="supplier_id" required
-                class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-pink-400 outline-none">
-          <option value="">Select Supplier</option>
-          <?php foreach ($suppliers as $sup): ?>
-            <option value="<?= $sup['supplier_id']; ?>" <?= ($product['supplier_id'] == $sup['supplier_id']) ? 'selected' : ''; ?>>
-              <?= htmlspecialchars($sup['supplier_name']); ?>
-            </option>
-          <?php endforeach; ?>
-        </select>
+      <!-- Price Section -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label class="block text-gray-700 font-medium mb-1">Selling Price (₱)</label>
+          <input 
+            type="number" 
+            name="price" 
+            step="0.01" 
+            value="<?= htmlspecialchars($product['price_id']); ?>" 
+            required
+            class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[var(--rose)] outline-none"
+          >
+        </div>
+        <div>
+          <label class="block text-gray-700 font-medium mb-1">Supplier Price (₱)</label>
+          <input 
+            type="number" 
+            name="supplier_price" 
+            step="0.01" 
+            value="<?= htmlspecialchars($product['supplier_price'] ?? 0); ?>"
+            class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[var(--rose)] outline-none"
+          >
+        </div>
       </div>
-    </div>
 
-    <!-- Upload New Images -->
-    <div>
-      <label class="block text-gray-700 font-medium mb-1">Upload New Images</label>
-      <input type="file" name="images[]" multiple accept="image/*"
-             class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-pink-400 outline-none">
-      <p class="text-xs text-gray-500 mt-1">Uploading new images will replace the old ones.</p>
-    </div>
+      <!-- Category & Supplier -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label class="block text-gray-700 font-medium mb-1">Category</label>
+          <select 
+            name="category_id" 
+            required
+            class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[var(--rose)] outline-none"
+          >
+            <?php foreach ($categories as $cat): ?>
+              <option 
+                value="<?= $cat['category_id']; ?>" 
+                <?= ($product['category_id'] == $cat['category_id']) ? 'selected' : ''; ?>>
+                <?= htmlspecialchars($cat['category_name']); ?>
+              </option>
+            <?php endforeach; ?>
+          </select>
+        </div>
 
-    <!-- Buttons -->
-    <div class="flex items-center justify-between mt-8">
-      <a href="products.php" class="bg-gray-200 text-gray-700 px-5 py-2 rounded-lg hover:bg-gray-300 transition">← Back</a>
-      <button type="submit" class="bg-pink-500 hover:bg-pink-600 text-white px-6 py-2 rounded-lg shadow">Save Changes</button>
-    </div>
+        <div>
+          <label class="block text-gray-700 font-medium mb-1">Supplier</label>
+          <select 
+            name="supplier_id" 
+            required
+            class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[var(--rose)] outline-none"
+          >
+            <option value="">Select Supplier</option>
+            <?php foreach ($suppliers as $sup): ?>
+              <option 
+                value="<?= $sup['supplier_id']; ?>" 
+                <?= ($product['supplier_id'] == $sup['supplier_id']) ? 'selected' : ''; ?>>
+                <?= htmlspecialchars($sup['supplier_name']); ?>
+              </option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+      </div>
 
-  </form>
-</div>
+      <!-- Image Upload -->
+      <div>
+        <label class="block text-gray-700 font-medium mb-1">Upload New Images</label>
+        <div class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-[var(--rose)] transition">
+          <input 
+            type="file" 
+            name="images[]" 
+            multiple 
+            accept="image/*"
+            class="w-full text-sm text-gray-500"
+          >
+          <p class="text-xs text-gray-500 mt-2">Uploading new images will replace the old ones.</p>
+        </div>
+      </div>
 
+      <!-- Buttons -->
+      <div class="flex justify-end gap-3 pt-4">
+        <button 
+          type="reset" 
+          class="bg-gray-200 text-gray-700 px-5 py-2 rounded-lg hover:bg-gray-300 transition"
+        >
+          Reset
+        </button>
+        <button 
+          type="submit" 
+          class="bg-[var(--rose)] hover:bg-[var(--rose-hover)] text-white px-6 py-2 rounded-lg shadow"
+        >
+          <i class="fas fa-save mr-1"></i> Save Changes
+        </button>
+      </div>
+    </form>
+  </div>
 </body>
 </html>

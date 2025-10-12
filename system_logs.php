@@ -27,26 +27,32 @@ if ($row = $result->fetch_assoc()) {
   $admin_name = $row['full_name'];
   $admin_role = $row['role_name'] ?? 'Admin';
 }
+$stmt->close();
 
 // Handle filters
-$filter_role = $_GET['role'] ?? '';
+$filter_role   = $_GET['role'] ?? '';
 $filter_action = $_GET['action'] ?? '';
-$search = $_GET['search'] ?? '';
+$search        = $_GET['search'] ?? '';
 
-$where = [];
+$where  = [];
 $params = [];
-$types = '';
+$types  = '';
 
+// ✅ Role filter should match role name, not ID
 if (!empty($filter_role)) {
-  $where[] = "l.role = ?";
+  $where[] = "r.role_name = ?";
   $params[] = $filter_role;
   $types .= 's';
 }
+
+// Action filter
 if (!empty($filter_action)) {
   $where[] = "l.action = ?";
   $params[] = $filter_action;
   $types .= 's';
 }
+
+// Search filter (by username or full name)
 if (!empty($search)) {
   $where[] = "(a.username LIKE ? OR CONCAT(a.first_name, ' ', a.last_name) LIKE ?)";
   $searchTerm = "%$search%";
@@ -55,17 +61,19 @@ if (!empty($search)) {
   $types .= 'ss';
 }
 
+// ✅ Updated query
 $sql = "
   SELECT 
     l.log_id,
     l.user_id,
-    l.role_id,
+    r.role_name,
     l.action,
     l.created_at,
     CONCAT(a.first_name, ' ', a.last_name) AS full_name,
     a.username
   FROM system_logs l
   LEFT JOIN adminusers a ON l.user_id = a.admin_id
+  LEFT JOIN roles r ON l.role_id = r.role_id
 ";
 
 if (!empty($where)) {
@@ -157,6 +165,8 @@ $logs = $stmt->get_result();
       </ul>
 
       <a href="orders.php" class="block px-4 py-2 hover:bg-gray-100 rounded transition"><i class="fas fa-shopping-cart mr-2"></i>Orders</a>
+            <a href="cashier_sales_report.php" class="block px-4 py-2 rounded-md hover:bg-gray-100 transitio"><i class="fas fa-chart-line mr-2"></i>Cashier Sales</a>
+
       <a href="suppliers.php" class="block px-4 py-2 hover:bg-gray-100 rounded transition"><i class="fas fa-industry mr-2"></i>Suppliers</a>
       <a href="system_logs.php" class="block px-4 py-2 active-link"><i class="fas fa-file-alt mr-2"></i>System Logs</a>
       <a href="logout.php" class="block px-4 py-2 text-red-600 hover:bg-red-50 rounded transition"><i class="fas fa-sign-out-alt mr-2"></i>Log out</a>
@@ -216,7 +226,7 @@ $logs = $stmt->get_result();
               <tr class="hover:bg-gray-50 transition">
                 <td class="px-4 py-3"><?= htmlspecialchars($log['log_id']); ?></td>
                 <td class="px-4 py-3"><?= htmlspecialchars($log['full_name'] ?: $log['username'] ?: 'Unknown'); ?></td>
-                <td class="px-4 py-3"><?= htmlspecialchars($log['role_id']); ?></td>
+                <td class="px-4 py-3"><?= htmlspecialchars($log['role_name']); ?></td>
                 <td class="px-4 py-3 font-semibold <?= $log['action'] === 'Login' ? 'text-green-600' : 'text-red-500'; ?>">
                   <?= htmlspecialchars($log['action']); ?>
                 </td>

@@ -6,7 +6,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $login_input = trim($_POST["login"]); // can be username OR email
     $password = $_POST["password"];
 
-    // Check if it's an admin (username OR email)
+    // 🔹 1. Check if it's an admin (username OR email)
     $sql = "SELECT admin_id, admin_email, username, password_hash, role_id 
             FROM adminusers 
             WHERE admin_email = ? OR username = ?";
@@ -26,7 +26,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $_SESSION["username"] = $db_username;
             $_SESSION["role_id"] = $role_id;
 
-            // Update last_logged_in
+            // 🔹 Update last_logged_in
             $updateLogin = "UPDATE adminusers 
                             SET last_logged_in = NOW(), last_logged_out = NULL 
                             WHERE admin_id = ?";
@@ -35,30 +35,37 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $stmtUpdate->execute();
             $stmtUpdate->close();
 
-            // Determine role name (based on your earlier roles table)
-            $role_name = ($role_id == 0) ? 'Cashier' : 'Admin';
+            // 🔹 Get the role name from roles table
+            $roleQuery = $conn->prepare("SELECT role_name FROM roles WHERE role_id = ?");
+            $roleQuery->bind_param("i", $role_id);
+            $roleQuery->execute();
+            $roleResult = $roleQuery->get_result();
+            $roleRow = $roleResult->fetch_assoc();
+            $role_name = $roleRow['role_name'] ?? 'Unknown';
+            $roleQuery->close();
 
-            // ✅ Insert into system_logs
-            $log_sql = "INSERT INTO system_logs (user_id, role_id, action) VALUES (?, ?, 'Login')";
+            // 🔹 Insert into system_logs (properly stores role_id)
+            $log_sql = "INSERT INTO system_logs (user_id, username, role_id, action) 
+                        VALUES (?, ?, ?, 'Login')";
             $stmtLog = $conn->prepare($log_sql);
-            $stmtLog->bind_param("is", $admin_id, $role_name);
+            $stmtLog->bind_param("isi", $admin_id, $db_username, $role_id);
             $stmtLog->execute();
             $stmtLog->close();
 
-            // ✅ Redirect based on role_id
-            if ($role_id == 2) {
-                header("Location: dashboard.php"); // Staff/Admin
-            } elseif ($role_id == 0) {
-                header("Location: cashier_pos.php"); // Cashier
+            // 🔹 Redirect based on role
+            if ($role_name === 'Admin') {
+                header("Location: dashboard.php");
+            } elseif ($role_name === 'Cashier') {
+                header("Location: cashier_pos.php");
             } else {
-                header("Location: dashboard.php"); // Default fallback
+                header("Location: dashboard.php");
             }
             exit;
         }
     }
     $stmt->close();
 
-    // If not admin, check if it's a customer
+    // 🔹 2. If not admin, check if it's a customer
     $sql = "SELECT customer_id, email, password_hash 
             FROM customers 
             WHERE email = ?";
@@ -88,6 +95,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $error = "Invalid username/email or password.";
 }
 ?>
+
 
 
 <!DOCTYPE html>

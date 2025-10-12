@@ -179,6 +179,8 @@ while ($sup = $supplier_query->fetch_assoc()) {
       </ul>
 
       <a href="orders.php" class="block px-4 py-2 rounded hover:bg-gray-100 transition"><i class="fas fa-shopping-cart mr-2"></i>Orders</a>
+            <a href="cashier_sales_report.php" class="block px-4 py-2 rounded-md hover:bg-gray-100 transitio"><i class="fas fa-chart-line mr-2"></i>Cashier Sales</a>
+
       <a href="system_logs.php" class="block px-4 py-2 hover:bg-gray-100 rounded transition"><i class="fas fa-file-alt mr-2"></i>System Logs</a>
             <a href="system_logs.php" class="block px-4 text-red-600 hover:bg-red-50 rounded transition"><i class="fas fa-file-alt mr-2"></i>System Logs</a>
 
