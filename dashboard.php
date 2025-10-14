@@ -188,30 +188,59 @@ while ($row = $chartQuery->fetch_assoc()) {
       <div class="flex items-center gap-4">
         <button class="text-white text-lg"><i class="fas fa-envelope"></i></button>
 
-        <!-- Notification Bell -->
-        <div class="relative">
-          <button class="text-white text-lg focus:outline-none" onclick="toggleNotifDropdown()">
-            <i class="fas fa-bell"></i>
-            <?php if ($totalNotif > 0): ?>
-              <span class="absolute -top-2 -right-2 bg-red-600 text-white text-xs rounded-full px-1.5"><?= $totalNotif ?></span>
-            <?php endif; ?>
-          </button>
+        <!-- 🔔 Notification Bell -->
+<div class="relative" x-data="{ open: false }" @click.outside="open = false">
+  <button 
+    class="relative text-white text-lg focus:outline-none transition hover:scale-110"
+    @click="open = !open"
+  >
+    <i class="fas fa-bell"></i>
+    <?php if ($totalNotif > 0): ?>
+      <span class="absolute -top-1.5 -right-1.5 bg-red-600 text-white text-[10px] font-semibold rounded-full px-1.5 py-0.5 shadow">
+        <?= $totalNotif ?>
+      </span>
+    <?php endif; ?>
+  </button>
 
-          <!-- Notification Dropdown -->
-          <div id="notifDropdown" class="hidden absolute right-0 mt-3 w-64 bg-white rounded-lg shadow-lg z-50">
-            <ul class="divide-y divide-gray-200">
-              <?php if ($newOrdersNotif > 0): ?>
-                <li class="px-4 py-2 hover:bg-gray-100 text-sm">🛒 <?= $newOrdersNotif ?> new order(s)</li>
-              <?php endif; ?>
-              <?php if ($lowStockNotif > 0): ?>
-                <li class="px-4 py-2 hover:bg-gray-100 text-sm">📦 <?= $lowStockNotif ?> low stock item(s)</li>
-              <?php endif; ?>
-              <?php if ($totalNotif === 0): ?>
-                <li class="px-4 py-2 text-gray-500 text-sm">No notifications</li>
-              <?php endif; ?>
-            </ul>
-          </div>
-        </div>
+  <!-- Dropdown -->
+  <div 
+    x-show="open"
+    x-transition:enter="transition ease-out duration-200"
+    x-transition:enter-start="opacity-0 translate-y-2 scale-95"
+    x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+    x-transition:leave="transition ease-in duration-150"
+    x-transition:leave-start="opacity-100 translate-y-0 scale-100"
+    x-transition:leave-end="opacity-0 translate-y-2 scale-95"
+    class="absolute right-0 mt-3 w-72 bg-white rounded-xl shadow-lg ring-1 ring-gray-100 overflow-hidden z-50"
+    style="display: none;"
+  >
+    <div class="p-3 border-b border-gray-100 flex justify-between items-center">
+      <h3 class="text-gray-800 font-semibold text-sm">Notifications</h3>
+      <button class="text-xs text-[var(--rose)] hover:underline" @click="open = false">Close</button>
+    </div>
+    
+    <ul class="divide-y divide-gray-100 max-h-64 overflow-y-auto">
+      <?php if ($newOrdersNotif > 0): ?>
+        <li class="flex items-center gap-2 px-4 py-3 hover:bg-gray-50 transition">
+          <span class="text-[var(--rose)] text-lg">🛒</span>
+          <span class="text-sm text-gray-700"><?= $newOrdersNotif ?> new order<?= $newOrdersNotif > 1 ? 's' : '' ?></span>
+        </li>
+      <?php endif; ?>
+
+      <?php if ($lowStockNotif > 0): ?>
+        <li class="flex items-center gap-2 px-4 py-3 hover:bg-gray-50 transition">
+          <span class="text-yellow-500 text-lg">📦</span>
+          <span class="text-sm text-gray-700"><?= $lowStockNotif ?> low stock item<?= $lowStockNotif > 1 ? 's' : '' ?></span>
+        </li>
+      <?php endif; ?>
+
+      <?php if ($totalNotif === 0): ?>
+        <li class="px-4 py-3 text-center text-gray-500 text-sm">No notifications</li>
+      <?php endif; ?>
+    </ul>
+  </div>
+</div>
+
       </div>
     </header>
 

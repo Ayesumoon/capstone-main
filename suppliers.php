@@ -140,6 +140,16 @@ $suppliers = $conn->query("
 
   <!-- Main Content -->
   <main class="flex-1 p-8 bg-gray-50 overflow-auto">
+    <?php if (isset($_GET['deleted'])): ?>
+  <div class="bg-green-100 text-green-700 px-4 py-2 rounded-lg mb-4">
+    ✅ Supplier deleted successfully.
+  </div>
+<?php elseif (isset($_GET['error'])): ?>
+  <div class="bg-red-100 text-red-700 px-4 py-2 rounded-lg mb-4">
+    ⚠️ Error: <?= htmlspecialchars($_GET['error']); ?>
+  </div>
+<?php endif; ?>
+
     <div class="bg-[var(--rose)] text-white p-5 rounded-t-2xl shadow-sm flex justify-between items-center">
       <h1 class="text-2xl font-semibold">Suppliers Information</h1>
       <button @click="addModal = true" class="flex items-center gap-2 bg-[var(--rose-hover)] hover:bg-[var(--rose)] text-white px-4 py-2 rounded-lg shadow transition">
