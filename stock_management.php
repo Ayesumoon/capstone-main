@@ -162,9 +162,8 @@ while ($sup = $supplier_query->fetch_assoc()) {
         <i class="fas fa-chevron-down transition-transform duration-200" :class="{ 'rotate-180': userMenu }"></i>
       </button>
       <ul x-show="userMenu" x-transition class="pl-8 text-sm space-y-1">
-        <li><a href="manage_users.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-user mr-2"></i>Manage Users</a></li>
-        <a href="manage_roles.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-id-badge mr-2"></i>Manage Roles</a>
-        <li><a href="customers.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-users mr-2"></i>Customer</a></li>
+        <li><a href="manage_users.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-user mr-2"></i>Users</a></li>
+        <a href="manage_roles.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-id-badge mr-2"></i>Roles</a>
       </ul>
 
       <button @click="productMenu = !productMenu" class="w-full text-left px-4 py-2 flex justify-between items-center hover:bg-gray-100 rounded transition">
@@ -180,9 +179,7 @@ while ($sup = $supplier_query->fetch_assoc()) {
 
       <a href="orders.php" class="block px-4 py-2 rounded hover:bg-gray-100 transition"><i class="fas fa-shopping-cart mr-2"></i>Orders</a>
             <a href="cashier_sales_report.php" class="block px-4 py-2 rounded-md hover:bg-gray-100 transitio"><i class="fas fa-chart-line mr-2"></i>Cashier Sales</a>
-
       <a href="system_logs.php" class="block px-4 py-2 hover:bg-gray-100 rounded transition"><i class="fas fa-file-alt mr-2"></i>System Logs</a>
-            <a href="system_logs.php" class="block px-4 text-red-600 hover:bg-red-50 rounded transition"><i class="fas fa-file-alt mr-2"></i>System Logs</a>
 
       <a href="logout.php" class="block px-4 py-2 text-red-600 hover:bg-red-50 rounded transition"><i class="fas fa-sign-out-alt mr-2"></i>Log out</a>
     </nav>

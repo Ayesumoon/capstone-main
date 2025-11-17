@@ -25,12 +25,27 @@ $stmt->close();
 $admin_name = $admin['full_name'] ?? "Admin";
 $admin_role = $admin['role_name'] ?? "Administrator";
 
+// ✅ Handle Add Role
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_role'])) {
+    $role_name = trim($_POST['role_name']);
+    if (!empty($role_name)) {
+        $stmt = $conn->prepare("INSERT INTO roles (role_name) VALUES (?)");
+        $stmt->bind_param("s", $role_name);
+        $stmt->execute();
+        $_SESSION['success'] = "Role added successfully!";
+        $stmt->close();
+    } else {
+        $_SESSION['message'] = "Role name cannot be empty!";
+    }
+    header("Location: manage_roles.php");
+    exit();
+}
+
 // ✅ Handle Edit Role
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_role'])) {
     $role_id = intval($_POST['role_id']);
     $role_name = trim($_POST['role_name']);
 
-    // Admin = 2 → cannot rename
     if ($role_id == 2) {
         $_SESSION['message'] = "Admin role cannot be renamed!";
     } else {
@@ -48,7 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_role'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_role'])) {
     $role_id = intval($_POST['role_id']);
 
-    if ($role_id == 2) { // Admin = 2 (protected)
+    if ($role_id == 2) {
         $_SESSION['message'] = "Admin role cannot be deleted!";
     } else {
         // Check if role is assigned to users
@@ -73,166 +88,121 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_role'])) {
     exit();
 }
 
-// ✅ Fetch roles
-$roles_query = $conn->query("SELECT * FROM roles ORDER BY role_id ASC");
-$roles = $roles_query ? $roles_query->fetch_all(MYSQLI_ASSOC) : [];
-
-// ✅ Fetch users with roles
-$sql = "SELECT u.admin_id, u.username, u.admin_email, u.first_name, u.last_name, 
-               r.role_name, u.role_id, u.status_id, u.last_logged_in, u.last_logged_out
-        FROM adminusers u
-        JOIN roles r ON u.role_id = r.role_id
-        ORDER BY u.admin_id ASC";
-$users = $conn->query($sql);
+// ✅ Fetch all roles
+$roles = $conn->query("SELECT * FROM roles ORDER BY role_id ASC");
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Manage Roles & Users | Seven Dwarfs Boutique</title>
+  <title>Manage Roles | Seven Dwarfs Boutique</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet" />
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet"/>
-
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    :root {
-      --rose: #e59ca8;
-      --rose-hover: #d27b8c;
-    }
-    body {
-      font-family: 'Poppins', sans-serif;
-      background-color: #f9fafb;
-      color: #374151;
-    }
-    .active {
-      background-color: #fce8eb;
-      color: var(--rose);
-      font-weight: 600;
-      border-radius: 0.5rem;
-    }
+    :root { --rose: #e59ca8; --rose-hover: #d27b8c; }
+    body { font-family: 'Poppins', sans-serif; background: #f9fafb; color: #374151; }
+    .active { background-color: #fce8eb; color: var(--rose); font-weight: 600; border-radius: .5rem; }
   </style>
 </head>
 <body class="min-h-screen flex bg-gray-100">
 
 <!-- 🧭 Sidebar -->
-<aside class="w-64 bg-white shadow-md flex flex-col justify-between" x-data="{ userMenu: true, productMenu: false }">
-  <div class="p-5 border-b">
+<aside id="sidebar" class="w-64 bg-white shadow-lg flex flex-col justify-between transition-all duration-300">
+  <div class="p-4">
     <div class="flex items-center space-x-3">
       <img src="logo2.png" alt="Logo" class="w-10 h-10 rounded-full">
       <h2 class="text-lg font-bold text-[var(--rose)]">SevenDwarfs</h2>
     </div>
-  </div>
 
-  <div class="p-5 border-b flex items-center space-x-3">
-    <img src="newID.jpg" alt="Admin" class="w-10 h-10 rounded-full">
-    <div>
-      <p class="font-semibold text-gray-800"><?= htmlspecialchars($admin_name); ?></p>
-      <p class="text-xs text-gray-500"><?= htmlspecialchars($admin_role); ?></p>
-    </div>
-  </div>
-
-  <!-- Navigation -->
-  <nav class="flex-1 p-4 space-y-1">
-    <a href="dashboard.php" class="block px-4 py-2 hover:bg-gray-100 rounded-md transition">
-      <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
-    </a>
-
-    <!-- User Management -->
-    <div>
-      <button @click="userMenu = !userMenu"
-        class="w-full text-left px-4 py-2 flex justify-between items-center hover:bg-gray-100 rounded-md transition">
-        <span><i class="fas fa-users-cog mr-2"></i>User Management</span>
-        <i class="fas fa-chevron-down transition-transform duration-200" :class="{ 'rotate-180': userMenu }"></i>
-      </button>
-      <ul x-show="userMenu" x-transition class="pl-8 text-sm text-gray-700 space-y-1 mt-1">
-        <li><a href="manage_users.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-user mr-2"></i>Manage Users</a></li>
-        <li><a href="manage_roles.php" class="block py-1 active"><i class="fas fa-id-badge mr-2"></i>Manage Roles</a></li>
-        <li><a href="customers.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-users mr-2"></i>Customers</a></li>
-      </ul>
+    <div class="mt-4 flex items-center space-x-3 border-t pt-3">
+      <img src="newID.jpg" alt="Admin" class="w-10 h-10 rounded-full">
+      <div>
+        <p class="font-semibold"><?= htmlspecialchars($admin_name); ?></p>
+        <p class="text-xs text-gray-500"><?= htmlspecialchars($admin_role); ?></p>
+      </div>
     </div>
 
-    <!-- Product Management -->
-    <div>
-      <button @click="productMenu = !productMenu"
-        class="w-full text-left px-4 py-2 flex justify-between items-center hover:bg-gray-100 rounded-md transition">
-        <span><i class="fas fa-box-open mr-2"></i>Product Management</span>
-        <i class="fas fa-chevron-down transition-transform duration-200" :class="{ 'rotate-180': productMenu }"></i>
-      </button>
-      <ul x-show="productMenu" x-transition class="pl-8 text-sm text-gray-700 space-y-1 mt-1">
-        <li><a href="categories.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-tags mr-2"></i>Category</a></li>
-        <li><a href="products.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-box mr-2"></i>Products</a></li>
-        <li><a href="inventory.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-warehouse mr-2"></i>Inventory</a></li>
-        <li><a href="stock_management.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-boxes mr-2"></i>Stock Management</a></li>
-      </ul>
-    </div>
+    <nav class="mt-6 space-y-1" x-data="{ userMenu: true, productMenu: false }">
+      <a href="dashboard.php" class="block px-4 py-2 hover:bg-gray-100">
+        <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
+      </a>
 
-    <a href="orders.php" class="block px-4 py-2 hover:bg-gray-100 rounded-md transition"><i class="fas fa-shopping-cart mr-2"></i>Orders</a>
-          <a href="cashier_sales_report.php" class="block px-4 py-2 rounded-md hover:bg-gray-100 transitio"><i class="fas fa-chart-line mr-2"></i>Cashier Sales</a>
+      <div>
+        <button @click="userMenu = !userMenu" class="w-full text-left px-4 py-2 flex justify-between items-center hover:bg-gray-100">
+          <span><i class="fas fa-users-cog mr-2"></i>User Management</span>
+          <i class="fas fa-chevron-down" :class="{ 'rotate-180': userMenu }"></i>
+        </button>
+        <div x-show="userMenu" x-transition class="pl-8 space-y-1">
+          <a href="manage_users.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-user mr-2"></i>Users</a>
+          <a href="manage_roles.php" class="block py-1 active"><i class="fas fa-id-badge mr-2"></i>Roles</a>
+        </div>
+      </div>
 
-    <a href="suppliers.php" class="block px-4 py-2 hover:bg-gray-100 rounded-md transition"><i class="fas fa-industry mr-2"></i>Suppliers</a>
+      <div>
+        <button @click="productMenu = !productMenu" class="w-full text-left px-4 py-2 flex justify-between items-center hover:bg-gray-100">
+          <span><i class="fas fa-box-open mr-2"></i>Product Management</span>
+          <i class="fas fa-chevron-down" :class="{ 'rotate-180': productMenu }"></i>
+        </button>
+        <div x-show="productMenu" x-transition class="pl-8 space-y-1">
+          <a href="categories.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-tags mr-2"></i>Category</a>
+          <a href="products.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-box mr-2"></i>Products</a>
+          <a href="inventory.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-warehouse mr-2"></i>Inventory</a>
+          <a href="stock_management.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-boxes mr-2"></i>Stock Management</a>
+        </div>
+      </div>
+
+      <a href="orders.php" class="block px-4 py-2 hover:bg-gray-100"><i class="fas fa-shopping-cart mr-2"></i>Orders</a>
+            <a href="cashier_sales_report.php" class="block px-4 py-2 rounded-md hover:bg-gray-100 transitio"><i class="fas fa-chart-line mr-2"></i>Cashier Sales</a>
+
+      <a href="suppliers.php" class="block px-4 py-2 hover:bg-gray-100"><i class="fas fa-industry mr-2"></i>Suppliers</a>
+
       <a href="system_logs.php" class="block px-4 py-2 hover:bg-gray-100 rounded transition"><i class="fas fa-file-alt mr-2"></i>System Logs</a>
 
-    <a href="logout.php" class="block px-4 py-2 text-red-600 hover:bg-red-50 rounded-md transition"><i class="fas fa-sign-out-alt mr-2"></i>Logout</a>
-  </nav>
+      <a href="logout.php" class="block px-4 py-2 hover:bg-gray-100 text-red-600"><i class="fas fa-sign-out-alt mr-2"></i>Logout</a>
+    </nav>
+  </div>
 </aside>
-
 <!-- 🧩 Main Content -->
-<main class="flex-1 p-8 transition-all duration-300">
+<main class="flex-1 p-8">
   <header class="flex justify-between items-center mb-8">
     <h1 class="text-3xl font-bold text-gray-800">Manage Roles</h1>
+    <button onclick="openModal('addModal')" class="bg-[var(--rose)] text-white px-4 py-2 rounded-lg hover:bg-[var(--rose-hover)] transition">
+      <i class="fas fa-plus mr-2"></i>Add Role
+    </button>
   </header>
 
   <!-- Flash Messages -->
   <?php if (isset($_SESSION['message'])): ?>
-    <div class="mb-4 px-4 py-2 rounded bg-red-100 text-red-700 font-medium shadow-sm">
-      <?= $_SESSION['message']; unset($_SESSION['message']); ?>
-    </div>
+    <div class="mb-4 px-4 py-2 bg-red-100 text-red-700 rounded shadow-sm"><?= $_SESSION['message']; unset($_SESSION['message']); ?></div>
   <?php endif; ?>
   <?php if (isset($_SESSION['success'])): ?>
-    <div class="mb-4 px-4 py-2 rounded bg-green-100 text-green-700 font-medium shadow-sm">
-      <?= $_SESSION['success']; unset($_SESSION['success']); ?>
-    </div>
+    <div class="mb-4 px-4 py-2 bg-green-100 text-green-700 rounded shadow-sm"><?= $_SESSION['success']; unset($_SESSION['success']); ?></div>
   <?php endif; ?>
 
-  <!-- Users Table -->
+  <!-- Roles Table -->
   <section class="bg-white p-6 rounded-xl shadow-md">
-    <div class="flex justify-between items-center mb-4">
-      <h2 class="text-xl font-semibold text-gray-700">👥 Users & Roles</h2>
-    </div>
+    <h2 class="text-xl font-semibold text-gray-700 mb-4">🧩 Roles List</h2>
     <div class="overflow-x-auto">
-      <table class="min-w-full border border-gray-200 rounded-lg overflow-hidden text-sm">
+      <table class="min-w-full border border-gray-200 rounded-lg text-sm">
         <thead class="bg-gray-100 text-gray-600 uppercase text-xs">
           <tr>
-            <th class="px-4 py-3 text-left">ID</th>
-            <th class="px-4 py-3 text-left">Username</th>
-            <th class="px-4 py-3 text-left">Name</th>
-            <th class="px-4 py-3 text-left">Email</th>
-            <th class="px-4 py-3 text-left">Role</th>
-            <th class="px-4 py-3 text-left">Status</th>
+            <th class="px-4 py-3 text-left">Role ID</th>
+            <th class="px-4 py-3 text-left">Role Name</th>
             <th class="px-4 py-3 text-center">Actions</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-200">
-          <?php while ($row = $users->fetch_assoc()): ?>
-            <tr class="hover:bg-gray-50 transition">
-              <td class="px-4 py-3"><?= $row['admin_id']; ?></td>
-              <td class="px-4 py-3"><?= htmlspecialchars($row['username']); ?></td>
-              <td class="px-4 py-3"><?= htmlspecialchars($row['first_name'] . " " . $row['last_name']); ?></td>
-              <td class="px-4 py-3"><?= htmlspecialchars($row['admin_email']); ?></td>
-              <td class="px-4 py-3"><?= htmlspecialchars($row['role_name']); ?></td>
-              <td class="px-4 py-3">
-                <?php if ($row['status_id'] == 1): ?>
-                  <span class="px-2 py-1 text-xs rounded bg-green-100 text-green-700">Active</span>
-                <?php else: ?>
-                  <span class="px-2 py-1 text-xs rounded bg-red-100 text-red-700">Inactive</span>
-                <?php endif; ?>
-              </td>
+          <?php while ($role = $roles->fetch_assoc()): ?>
+            <tr class="hover:bg-gray-50">
+              <td class="px-4 py-3"><?= $role['role_id']; ?></td>
+              <td class="px-4 py-3"><?= htmlspecialchars($role['role_name']); ?></td>
               <td class="px-4 py-3 text-center space-x-3">
-                <button onclick="openEditModal(<?= $row['admin_id']; ?>, <?= $row['role_id']; ?>)" class="text-blue-500 hover:text-blue-700 font-medium">Edit Role</button>
-                <?php if ($row['role_id'] != 2): ?>
-                  <button onclick="openDeleteModal(<?= $row['admin_id']; ?>)" class="text-red-500 hover:text-red-700 font-medium">Delete Role</button>
+                <button onclick="openEditModal(<?= $role['role_id']; ?>, '<?= htmlspecialchars($role['role_name']); ?>')" class="text-blue-500 hover:text-blue-700">Edit</button>
+                <?php if ($role['role_id'] != 2): ?>
+                  <button onclick="openDeleteModal(<?= $role['role_id']; ?>)" class="text-red-500 hover:text-red-700">Delete</button>
                 <?php endif; ?>
               </td>
             </tr>
@@ -243,52 +213,61 @@ $users = $conn->query($sql);
   </section>
 </main>
 
-<!-- ✏️ Edit Modal -->
-<div id="editModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+<!-- ➕ Add Role Modal -->
+<div id="addModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
   <div class="bg-white p-6 rounded-xl shadow-lg w-96">
-    <h2 class="text-xl font-semibold text-gray-800 mb-4">Edit User Role</h2>
-    <form method="POST" action="update_user_role.php">
-      <input type="hidden" name="admin_id" id="editAdminId">
-      <select name="role_id" id="editRoleSelect" class="w-full border border-gray-300 rounded-lg p-2 mb-4 focus:ring-2 focus:ring-[var(--rose)]">
-        <?php foreach ($roles as $role): ?>
-          <option value="<?= $role['role_id']; ?>"><?= htmlspecialchars($role['role_name']); ?></option>
-        <?php endforeach; ?>
-      </select>
+    <h2 class="text-xl font-semibold mb-4">Add New Role</h2>
+    <form method="POST">
+      <input type="text" name="role_name" placeholder="Role Name" required class="w-full border border-gray-300 rounded-lg p-2 mb-4 focus:ring-2 focus:ring-[var(--rose)]">
       <div class="flex justify-end gap-3">
-        <button type="button" onclick="closeModal('editModal')" class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300">Cancel</button>
-        <button type="submit" class="px-4 py-2 bg-[var(--rose)] text-white rounded-lg hover:bg-[var(--rose-hover)] transition">Save</button>
+        <button type="button" onclick="closeModal('addModal')" class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300">Cancel</button>
+        <button type="submit" name="add_role" class="px-4 py-2 bg-[var(--rose)] text-white rounded-lg hover:bg-[var(--rose-hover)]">Save</button>
       </div>
     </form>
   </div>
 </div>
 
-<!-- 🗑️ Delete Modal -->
+<!-- ✏️ Edit Role Modal -->
+<div id="editModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+  <div class="bg-white p-6 rounded-xl shadow-lg w-96">
+    <h2 class="text-xl font-semibold mb-4">Edit Role</h2>
+    <form method="POST">
+      <input type="hidden" name="role_id" id="editRoleId">
+      <input type="text" name="role_name" id="editRoleName" required class="w-full border border-gray-300 rounded-lg p-2 mb-4 focus:ring-2 focus:ring-[var(--rose)]">
+      <div class="flex justify-end gap-3">
+        <button type="button" onclick="closeModal('editModal')" class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300">Cancel</button>
+        <button type="submit" name="edit_role" class="px-4 py-2 bg-[var(--rose)] text-white rounded-lg hover:bg-[var(--rose-hover)]">Update</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 🗑️ Delete Role Modal -->
 <div id="deleteModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
   <div class="bg-white p-6 rounded-xl shadow-lg w-96">
-    <h2 class="text-xl font-semibold text-gray-800 mb-3">Delete User Role</h2>
-    <p class="mb-4 text-gray-600">Are you sure you want to delete this user’s role?</p>
-    <form method="POST" action="delete_user_role.php">
-      <input type="hidden" name="admin_id" id="deleteAdminId">
+    <h2 class="text-xl font-semibold mb-3">Delete Role</h2>
+    <p class="mb-4 text-gray-600">Are you sure you want to delete this role?</p>
+    <form method="POST">
+      <input type="hidden" name="role_id" id="deleteRoleId">
       <div class="flex justify-end gap-3">
         <button type="button" onclick="closeModal('deleteModal')" class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300">Cancel</button>
-        <button type="submit" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600">Delete</button>
+        <button type="submit" name="delete_role" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600">Delete</button>
       </div>
     </form>
   </div>
 </div>
 
 <script>
-  function openEditModal(adminId, roleId) {
-    document.getElementById("editAdminId").value = adminId;
-    document.getElementById("editRoleSelect").value = roleId;
-    document.getElementById("editModal").classList.remove("hidden");
+  function openModal(id){ document.getElementById(id).classList.remove('hidden'); }
+  function closeModal(id){ document.getElementById(id).classList.add('hidden'); }
+  function openEditModal(id, name){
+    document.getElementById("editRoleId").value = id;
+    document.getElementById("editRoleName").value = name;
+    openModal('editModal');
   }
-  function openDeleteModal(adminId) {
-    document.getElementById("deleteAdminId").value = adminId;
-    document.getElementById("deleteModal").classList.remove("hidden");
-  }
-  function closeModal(id) {
-    document.getElementById(id).classList.add("hidden");
+  function openDeleteModal(id){
+    document.getElementById("deleteRoleId").value = id;
+    openModal('deleteModal');
   }
 </script>
 

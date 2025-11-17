@@ -86,9 +86,8 @@ body { font-family: 'Poppins', sans-serif; background-color: #f9fafb; }
           <i class="fas fa-chevron-down" :class="{ 'rotate-180': userMenu }"></i>
         </button>
         <div x-show="userMenu" x-transition class="pl-8 space-y-1">
-          <a href="manage_users.php" class="block py-1 active"><i class="fas fa-user mr-2"></i>Manage Users</a>
-          <a href="manage_roles.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-id-badge mr-2"></i>Manage Roles</a>
-          <a href="customers.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-users mr-2"></i>Customers</a>
+          <a href="manage_users.php" class="block py-1 active"><i class="fas fa-user mr-2"></i>Users</a>
+          <a href="manage_roles.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-id-badge mr-2"></i>Roles</a>
         </div>
       </div>
 
@@ -109,6 +108,7 @@ body { font-family: 'Poppins', sans-serif; background-color: #f9fafb; }
             <a href="cashier_sales_report.php" class="block px-4 py-2 rounded-md hover:bg-gray-100 transitio"><i class="fas fa-chart-line mr-2"></i>Cashier Sales</a>
 
       <a href="suppliers.php" class="block px-4 py-2 hover:bg-gray-100"><i class="fas fa-industry mr-2"></i>Suppliers</a>
+
       <a href="system_logs.php" class="block px-4 py-2 hover:bg-gray-100 rounded transition"><i class="fas fa-file-alt mr-2"></i>System Logs</a>
 
       <a href="logout.php" class="block px-4 py-2 hover:bg-gray-100 text-red-600"><i class="fas fa-sign-out-alt mr-2"></i>Logout</a>

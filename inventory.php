@@ -186,11 +186,9 @@ $conn->close();
           </button>
           <div x-show="userMenu" x-transition class="pl-8 space-y-1 mt-1">
             <a href="manage_users.php" class="block py-1 hover:text-[var(--rose)]">
-              <i class="fas fa-user mr-2"></i> Manage Users</a>
+              <i class="fas fa-user mr-2"></i>Users</a>
             <a href="manage_roles.php" class="block py-1 hover:text-[var(--rose)]">
-              <i class="fas fa-id-badge mr-2"></i> Manage Roles</a>
-            <a href="customers.php" class="block py-1 hover:text-[var(--rose)]">
-              <i class="fas fa-users mr-2"></i> Customers</a>
+              <i class="fas fa-id-badge mr-2"></i>Roles</a>
           </div>
         </div>
 
@@ -216,6 +214,7 @@ $conn->close();
 
         <a href="suppliers.php" class="block px-4 py-2 hover:bg-gray-100 rounded-md transition">
           <i class="fas fa-industry mr-2"></i> Suppliers</a>
+
       <a href="system_logs.php" class="block px-4 py-2 hover:bg-gray-100 rounded transition"><i class="fas fa-file-alt mr-2"></i>System Logs</a>
 
         <a href="logout.php" class="block px-4 py-2 text-red-600 hover:bg-red-50 rounded-md transition">

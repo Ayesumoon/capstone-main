@@ -206,6 +206,9 @@ $conn->close();
     <i class="fas fa-industry mr-2"></i>Suppliers
   </a>
 </li>
+  
+  <a href="system_settings.php" class="block px-4 py-2 active-link"><i class="fas fa-cogs mr-2"></i>System Settings</a>
+        <a href="system_logs.php" class="block px-4 py-2 active-link"><i class="fas fa-file-alt mr-2"></i>System Logs</a>
 
 
 <li class="px-4 py-2 hover:bg-gray-200">
