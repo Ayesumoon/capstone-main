@@ -173,28 +173,148 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
 :root{--rose:#d37689;--rose-600:#b75f6f;--card-bg:#fff;--cart-bg:#f9e9ed}
 body{background:#fef9fa;font-family:'Poppins',sans-serif}
 /* Sidebar */
-.sidebar{width:260px;background:linear-gradient(135deg,#fef2f4 0%,#f9e9ed 100%);border-right:1px solid #f3dbe2;position:fixed;top:0;left:0;height:100vh;padding:1.25rem;display:flex;flex-direction:column;z-index:30;border-top-right-radius:18px;border-bottom-right-radius:18px}
+.sidebar {
+  width: 260px;
+  background: linear-gradient(135deg,#fef2f4 0%,#f9e9ed 100%);
+  border-right: 1px solid #f3dbe2;
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  z-index: 30;
+  border-top-right-radius: 18px;
+  border-bottom-right-radius: 18px;
+  transition: width 0.2s;
+}
+.sidebar.collapsed {
+  width: 60px;
+  padding: 1.25rem 0.5rem;
+}
+.sidebar.collapsed .sidebar-title,
+.sidebar.collapsed .text-xs,
+.sidebar.collapsed nav a span,
+.sidebar.collapsed .sidebar-footer {
+  display: none !important;
+}
 .sidebar-header{display:flex;align-items:center;gap:12px;margin-bottom:1.2rem}
-.sidebar-logo{width:44px;height:44px;border-radius:10px;object-fit:cover;background:#ff8dc6}
+/* .sidebar-logo removed: no longer used */
 .sidebar-title{font-size:1.2rem;font-weight:700;color:var(--rose)}
 .sidebar nav{margin-top:8px}
-.sidebar a{display:flex;align-items:center;gap:10px;padding:0.6rem 0.8rem;border-radius:10px;color:#374151;text-decoration:none;font-weight:600;margin-bottom:6px}
+.sidebar a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0.6rem 0.8rem;
+  border-radius: 10px;
+  color: #374151;
+  text-decoration: none;
+  font-weight: 600;
+  margin-bottom: 6px;
+  position: relative;
+}
+.sidebar.collapsed a {
+  justify-content: center;
+  padding: 0.6rem 0.2rem;
+}
+.sidebar.collapsed a svg {
+  margin-right: 0;
+}
+.sidebar.collapsed a[title]:hover::after {
+  content: attr(title);
+  position: absolute;
+  left: 60px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: #fff;
+  color: #d37689;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 0.95rem;
+  box-shadow: 0 2px 8px rgba(211,118,137,0.12);
+  white-space: nowrap;
+  z-index: 100;
+}
 .sidebar a:hover{background:#fff2f5;color:var(--rose-600)}
 .sidebar .active-link{background:linear-gradient(90deg,var(--rose) 65%,#fff);color:#fff}
 .sidebar-footer{margin-top:auto;border-top:1px solid #f3dbe2;padding-top:12px}
 /* Main */
-.main-content{margin-left:280px;padding:20px;min-height:100vh}
-.pos-card{background:var(--card-bg);border-radius:16px;box-shadow:0 8px 30px rgba(211,118,137,0.06);padding:20px;display:flex;gap:24px;align-items:flex-start;max-width:1200px;margin-inline:auto}
-.product-section{flex:1}
-#productGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
-.product{background:#fff;border-radius:12px;border:1px solid #f3dbe2;padding:12px;display:flex;flex-direction:column;gap:8px}
+.main-content {
+  margin-left: 260px;
+  padding: 0;
+  height: 100vh;
+  width: calc(100vw - 260px);
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  background: #fef9fa;
+}
+.pos-card {
+  background: var(--card-bg);
+  border-radius: 16px;
+  box-shadow: 0 8px 30px rgba(211,118,137,0.06);
+  padding: 24px;
+  display: flex;
+  gap: 24px;
+  align-items: stretch;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  max-width: none;
+}
+.product-section {
+  flex: 1 1 0%;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+#productGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 16px;
+  grid-auto-rows: 1fr;
+}
+.product {
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid #f3dbe2;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  box-shadow: 0 2px 8px rgba(211,118,137,0.06);
+  margin-top: 0;
+  width: 100%;
+  height: 100%;
+  justify-content: space-between;
+  box-sizing: border-box;
+}
 .product.opacity-50{opacity:0.5}
-.product img{width:100%;height:110px;object-fit:cover;border-radius:8px}
-.product .meta{display:flex;justify-content:space-between;align-items:center}
+/* .product img removed: no longer used */
+.product .meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 0;
+}
 .addToCart{background:var(--rose);color:#fff;padding:8px;border-radius:8px;font-weight:600}
 .addToCart:hover{background:var(--rose-600)}
 /* Cart */
-.cart-section{width:380px;background:var(--cart-bg);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:12px;position:sticky;top:24px;height:80vh}
+.cart-section {
+  width: 380px;
+  background: var(--cart-bg);
+  border-radius: 12px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: relative;
+  height: 100%;
+  min-height: 0;
+}
 .cart-table-wrapper{background:#fff;border-radius:8px;padding:8px;overflow:auto;flex:1}
 .cart-item{display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid #f3dbe2}
 .qty-control{display:inline-flex;align-items:center;gap:6px}
@@ -213,26 +333,29 @@ body{background:#fef9fa;font-family:'Poppins',sans-serif}
 
 <!-- Sidebar -->
 <aside class="sidebar" id="sidebar">
+  <button id="sidebarToggle" style="background:#fff;border-radius:8px;padding:6px 10px;border:1px solid #f3dbe2;color:var(--rose);cursor:pointer;position:absolute;top:12px;right:12px;z-index:40;">
+    ☰
+  </button>
   <div>
     <div class="sidebar-header">
-      <img src="logo.png" class="sidebar-logo" alt="Logo">
+      <!-- Logo image removed -->
       <div>
         <div class="sidebar-title">Seven Dwarfs</div>
         <div class="text-xs text-gray-500">Point of Sale</div>
       </div>
     </div>
     <nav>
-      <a href="cashier_pos.php" class="active-link">
+      <a href="cashier_pos.php" class="active-link" title="POS">
         <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M6 7V6a6 6 0 1 1 12 0v1"/><rect x="4" y="7" width="16" height="13" rx="3"/><path d="M9 11v2m6-2v2"/></svg>
-        POS
+        <span>POS</span>
       </a>
-      <a href="cashier_transactions.php">
+      <a href="cashier_transactions.php" title="Transactions">
         <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="10" rx="2"/><path d="M3 10h18"/><path d="M7 15h2"/></svg>
-        Transactions
+        <span>Transactions</span>
       </a>
-      <a href="cashier_inventory.php">
+      <a href="cashier_inventory.php" title="Inventory">
         <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="10" rx="2"/><path d="M3 7l9 5 9-5"/><path d="M12 12v5"/></svg>
-        Inventory
+        <span>Inventory</span>
       </a>
     </nav>
   </div>
@@ -286,22 +409,26 @@ body{background:#fef9fa;font-family:'Poppins',sans-serif}
              data-sizes='<?= htmlspecialchars(json_encode($sizes), ENT_QUOTES) ?>'
              data-colors='<?= htmlspecialchars(json_encode($colors), ENT_QUOTES) ?>'
              data-stock="<?= $total_stock ?>">
-          <img src="<?= htmlspecialchars($img) ?>" alt="<?= htmlspecialchars($p['product_name']) ?>" onerror="this.src='uploads/default.png'">
+          <!-- Product image removed -->
           <div class="meta">
-            <div style="flex:1">
-              <div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><?= htmlspecialchars($p['product_name']) ?></div>
-              <div class="text-sm text-gray-500" style="margin-top:4px"><?= htmlspecialchars($p['category_name']) ?></div>
+            <div style="font-weight:700;font-size:1.08rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px;">
+              <?= htmlspecialchars($p['product_name']) ?>
             </div>
-            <div style="text-align:right">
-              <div style="font-weight:700;color:var(--rose)">₱<?= number_format($p['price'],2) ?></div>
-              <div style="margin-top:8px">
-                <?php if ($total_stock > 0): ?>
-                    <button class="addToCart" type="button">Add</button>
-                <?php else: ?>
-                    <button class="addToCart" type="button" disabled style="background:#ccc; cursor:not-allowed">Out of Stock</button>
-                <?php endif; ?>
-              </div>
+            <div class="text-sm text-gray-500" style="margin-bottom:8px;">
+              <?= htmlspecialchars($p['category_name']) ?>
             </div>
+            <div style="font-weight:700;color:var(--rose);font-size:1.1rem;margin-bottom:10px;">
+              ₱<?= number_format($p['price'],2) ?>
+            </div>
+            <?php if ($total_stock > 0): ?>
+              <button class="addToCart" type="button" style="margin-top:0;padding:10px 22px;font-weight:600;font-size:1rem;border-radius:10px;background:var(--rose);color:#fff;box-shadow:0 2px 6px rgba(211,118,137,0.08);border:none;transition:background 0.2s;">
+                Add
+              </button>
+            <?php else: ?>
+              <button class="addToCart" type="button" disabled style="margin-top:0;padding:10px 22px;font-weight:600;font-size:1rem;border-radius:10px;background:#ccc;color:#fff;cursor:not-allowed;box-shadow:0 2px 6px rgba(211,118,137,0.08);border:none;">
+                Out of Stock
+              </button>
+            <?php endif; ?>
           </div>
         </div>
         <?php endwhile; ?>
@@ -482,6 +609,21 @@ function toggleGcashRef(){ const s = document.getElementById('paymentMethodSelec
 document.addEventListener('DOMContentLoaded', toggleGcashRef);
 
 // Sidebar behavior (simple)
+document.getElementById('sidebarToggle').onclick = function() {
+  var sidebar = document.getElementById('sidebar');
+  sidebar.classList.toggle('collapsed');
+  // Optionally, adjust main-content margin if needed
+  var mainContent = document.querySelector('.main-content');
+  if (sidebar.classList.contains('collapsed')) {
+    mainContent.style.marginLeft = '60px';
+    mainContent.style.width = 'calc(100vw - 60px)';
+  } else {
+    mainContent.style.marginLeft = '260px';
+    mainContent.style.width = 'calc(100vw - 260px)';
+  }
+};
 </script>
 </body>
 </html>
+
+

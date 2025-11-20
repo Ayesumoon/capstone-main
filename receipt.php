@@ -158,8 +158,13 @@ body {
   <button onclick="window.print()" class="bg-[var(--rose)] hover:bg-[var(--rose-hover)] text-white px-4 py-2 rounded-md shadow">
     🖨️ Print Receipt
   </button>
-  <a href="cashier_pos.php" class="ml-2 px-4 py-2 rounded-md bg-gray-200 hover:bg-gray-300 text-gray-700">⬅ Back to POS</a>
+  <!-- Back to POS link removed -->
 </div>
 
+<script>
+  window.onload = function() {
+    window.print();
+  };
+</script>
 </body>
 </html>

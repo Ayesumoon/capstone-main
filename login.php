@@ -2,7 +2,7 @@
 session_start();
 require 'conn.php'; // Database connection
 
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["login"]) && isset($_POST["password"])) {
     $login_input = trim($_POST["login"]); // can be username OR email
     $password = $_POST["password"];
 
@@ -90,10 +90,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     }
 
     $stmt->close();
-    $conn->close();
+    // Do NOT close $conn here, let the rest of the page use it
 
     $error = "Invalid username/email or password.";
 }
+
+// Forgot password handler
+// (Removed as per request)
+?>
+<?php
+// Close the connection at the end of the script
+$conn->close();
 ?>
 
 
@@ -114,55 +121,70 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
   </style>
 </head>
 <body class="bg-gradient-to-r from-pink-100 to-pink-200 min-h-screen flex items-center justify-center">
-  <div class="bg-white shadow-xl rounded-2xl p-10 w-full max-w-md transition-transform duration-300 transform hover:scale-105">
-    
-    <!-- Logo -->
-    <div class="flex justify-center mb-6">
-      <img src="logo2.png" alt="Seven Dwarfs Logo" class="h-24 w-auto shadow-md" />
-    </div>
+  <div class="bg-white/80 shadow-2xl border border-pink-200 rounded-2xl p-10 w-full max-w-md backdrop-blur-lg transition-transform duration-300 transform hover:scale-105">
+      <!-- Logo -->
+      <div class="flex flex-col items-center mb-6">
+        <img src="logo2.png" alt="Seven Dwarfs Logo" class="h-20 w-auto shadow-lg rounded-full border-4 border-pink-200 mb-2" />
+        <h2 class="text-3xl font-extrabold text-center text-pink-600 mt-2 tracking-wide drop-shadow">Seven Dwarfs</h2>
+      </div>
+      <h3 class="text-xl font-semibold text-center text-gray-700 mb-6">Admin Login</h3>
+      <?php if (!empty($error)) echo "<p class='text-red-500 text-center mb-4'>$error</p>"; ?>
+      <form method="post" class="space-y-5">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Username or Email</label>
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-pink-400">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path d="M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"/>
+                <path d="M12 16v2m0 0a6 6 0 1 1 0-12 6 6 0 0 1 0 12z"/>
+              </svg>
+            </span>
+            <input type="text" name="login" required
+              class="mt-1 w-full pl-10 px-4 py-2 border border-gray-300 rounded-md bg-white/90
+                focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-transparent transition" />
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-pink-400">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path d="M12 17a5 5 0 0 0 5-5V9a5 5 0 0 0-10 0v3a5 5 0 0 0 5 5z"/>
+                <path d="M12 17v2m0 0a6 6 0 1 1 0-12 6 6 0 0 1 0 12z"/>
+              </svg>
+            </span>
+            <input type="password" name="password" id="password" required
+              class="mt-1 w-full pl-10 px-4 py-2 border border-gray-300 rounded-md bg-white/90
+                focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-transparent pr-10 transition" />
+            <button type="button" onclick="togglePassword()"
+              class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-pink-500 focus:outline-none">
+              <svg id="eyeIcon" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            </button>
+          </div>
+          <!-- Forgot password link removed as per request -->
+        </div>
+        <div class="pt-2">
+          <button type="submit"
+            class="w-full bg-gradient-to-r from-pink-400 to-pink-500 text-white py-2 rounded-md font-semibold shadow-lg hover:scale-105 hover:from-pink-500 hover:to-pink-600 transition-all duration-200">
+            Login
+          </button>
+        </div>
+      </form>
 
-    <h2 class="text-2xl font-bold text-center text-pink-600 mb-4">Admin Login</h2>
-
-    <?php if (!empty($error)) echo "<p class='text-red-500 text-center mb-4'>$error</p>"; ?>
-
-    <form method="post" class="space-y-4">
-  <div>
-    <label class="block text-sm font-medium text-gray-700">Username or Email</label>
-    <input type="text" name="login" required
-           class="mt-1 w-full px-4 py-2 border border-gray-300 rounded-md 
-                  focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-transparent" />
-  </div>
-
-  <div>
-    <label class="block text-sm font-medium text-gray-700">Password</label>
-    <div class="relative">
-      <input type="password" name="password" id="password" required
-             class="mt-1 w-full px-4 py-2 border border-gray-300 rounded-md 
-                    focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-transparent pr-10" />
-      <button type="button" onclick="togglePassword()"
-              class="absolute inset-y-0 right-0 px-3 flex items-center text-sm text-gray-500 
-                     hover:text-pink-500 focus:outline-none">
-        Show
-      </button>
-    </div>
-  </div>
-
-  <div class="pt-4">
-    <input type="submit" value="Login"
-           class="w-full bg-pink-500 text-white py-2 rounded-md font-semibold hover:bg-pink-600 transition-colors" />
-  </div>
-</form>
-
+   <!-- Forgot Password Modal removed as per request -->
   <script>
     function togglePassword() {
       const passwordInput = document.getElementById("password");
-      const button = event.currentTarget;
+      const eyeIcon = document.getElementById("eyeIcon");
       if (passwordInput.type === "password") {
         passwordInput.type = "text";
-        button.textContent = "Hide";
+        eyeIcon.innerHTML = '<path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.77 21.77 0 0 1 5.06-7.94M1 1l22 22"/><circle cx="12" cy="12" r="3"/>';
       } else {
         passwordInput.type = "password";
-        button.textContent = "Show";
+        eyeIcon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
       }
     }
   </script>
