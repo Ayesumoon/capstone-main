@@ -75,16 +75,32 @@ $recentOrders = $conn->query("
 // Chart data
 $chartQuery = $conn->query("
     SELECT DATE(created_at) AS order_date, COUNT(*) AS count
-    FROM orders 
+    FROM orders
     WHERE $dateCondition
     GROUP BY DATE(created_at)
 ");
 
-$chartLabels = $chartData = [];
-while ($row = $chartQuery->fetch_assoc()) {
-    $chartLabels[] = $row['order_date'];
-    $chartData[] = $row['count'];
+$chartLabels = [];
+$chartData = [];
+// Build last 7 days array
+for ($i = 6; $i >= 0; $i--) {
+    $date = date('Y-m-d', strtotime("-$i days"));
+    $chartLabels[$date] = 0;
 }
+while ($row = $chartQuery->fetch_assoc()) {
+    $chartLabels[$row['order_date']] = $row['count'];
+}
+// Format labels as "Nov 11", "Nov 12", ..., "Now"
+$labelsFormatted = [];
+foreach (array_keys($chartLabels) as $idx => $date) {
+    if ($idx === count($chartLabels) - 1) {
+        $labelsFormatted[] = "Now";
+    } else {
+        $labelsFormatted[] = date('M j', strtotime($date));
+    }
+    $chartData[] = $chartLabels[$date];
+}
+$chartLabels = $labelsFormatted;
 ?><!DOCTYPE html>
 <html lang="en">
 <head>
@@ -119,7 +135,7 @@ while ($row = $chartQuery->fetch_assoc()) {
 <body class="text-sm">
 <div class="flex min-h-screen">
   <!-- Sidebar -->
-  <aside class="w-64 bg-white shadow-md" x-data="{ userMenu: false, productMenu: false }">
+  <aside class="w-64 bg-white shadow-md fixed top-0 left-0 h-screen z-30" x-data="{ userMenu: false, productMenu: false }">
     <div class="p-5 border-b">
       <div class="flex items-center space-x-3">
         <img src="logo2.png" alt="Logo" class="rounded-full w-10 h-10" />
@@ -181,9 +197,9 @@ while ($row = $chartQuery->fetch_assoc()) {
   </aside>
 
   <!-- Main Content -->
-  <main class="flex-1 flex flex-col">
+  <main class="flex-1 flex flex-col ml-64 pt-20">
     <!-- Header -->
-    <header class="bg-[var(--rose)] text-white p-4 flex justify-between items-center shadow-md rounded-bl-2xl">
+    <header class="bg-[var(--rose)] text-white p-4 flex justify-between items-center shadow-md rounded-bl-2xl fixed top-0 left-64 right-0 z-20">
       <h1 class="text-xl font-semibold">Dashboard</h1>
       <div class="flex items-center gap-4">
         <button class="text-white text-lg"><i class="fas fa-envelope"></i></button>
@@ -256,9 +272,57 @@ while ($row = $chartQuery->fetch_assoc()) {
         <p class="text-3xl font-bold mt-2"><?= $totalSales ?></p>
       </div>
 
-      <div class="bg-yellow-500 hover:bg-yellow-600 text-white p-6 rounded-xl shadow-md text-center transition transform hover:scale-105">
-        <h2 class="text-lg font-medium">Revenue</h2>
-        <p class="text-3xl font-bold mt-2">₱<?= number_format($totalRevenue, 2) ?></p>
+      <a href="#top-products-modal" id="topProductCard" class="bg-yellow-500 hover:bg-yellow-600 text-white p-6 rounded-xl shadow-md text-center transition transform hover:scale-105 block cursor-pointer focus:outline-none focus:ring-2 focus:ring-yellow-400">
+        <h2 class="text-lg font-medium">Top Product</h2>
+        <?php
+          $topProductRow = $conn->query("
+            SELECT p.product_name, SUM(oi.qty) as total_qty
+            FROM order_items oi
+            JOIN products p ON oi.product_id = p.product_id
+            GROUP BY oi.product_id
+            ORDER BY total_qty DESC
+            LIMIT 1
+          ")->fetch_assoc();
+        ?>
+        <?php if ($topProductRow): ?>
+          <p class="text-xl font-bold mt-2"><?= htmlspecialchars($topProductRow['product_name']) ?></p>
+          <p class="text-lg mt-1">Sold: <?= $topProductRow['total_qty'] ?></p>
+        <?php else: ?>
+          <p class="text-xl font-bold mt-2">No sales yet</p>
+        <?php endif; ?>
+      </a>
+      <!-- Modal for Top Products -->
+      <div id="top-products-modal" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-xl shadow-lg p-6 w-full max-w-lg relative">
+          <button id="closeTopProducts" class="absolute top-3 right-3 text-gray-400 hover:text-yellow-500 text-2xl font-bold">&times;</button>
+          <h3 class="text-lg font-semibold mb-4 text-yellow-600">Top Selling Products</h3>
+          <table class="w-full table-auto border-collapse text-sm mb-2">
+            <thead class="bg-yellow-100 text-yellow-700">
+              <tr>
+                <th class="px-3 py-2 text-left">Product</th>
+                <th class="px-3 py-2 text-right">Sold</th>
+              </tr>
+            </thead>
+            <tbody>
+              <?php
+                $topProducts = $conn->query("
+                  SELECT p.product_name, SUM(oi.qty) as total_qty
+                  FROM order_items oi
+                  JOIN products p ON oi.product_id = p.product_id
+                  GROUP BY oi.product_id
+                  ORDER BY total_qty DESC
+                  LIMIT 10
+                ");
+                while ($row = $topProducts->fetch_assoc()):
+              ?>
+              <tr class="border-b hover:bg-yellow-50">
+                <td class="px-3 py-2"><?= htmlspecialchars($row['product_name']) ?></td>
+                <td class="px-3 py-2 text-right"><?= $row['total_qty'] ?></td>
+              </tr>
+              <?php endwhile; ?>
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
 
@@ -273,37 +337,25 @@ while ($row = $chartQuery->fetch_assoc()) {
       </form>
     </section>
 
-    <!-- Recent Orders -->
-    <section class="bg-white mx-6 p-6 rounded-xl shadow-md">
-      <h2 class="text-lg font-semibold mb-4">Recent Orders</h2>
-      <table class="w-full table-auto border-collapse text-sm">
-        <thead class="bg-gray-100 text-gray-600">
-          <tr>
-            <th class="text-left px-4 py-2">Order ID</th>
-            <th class="text-left px-4 py-2">Customer</th>
-            <th class="text-left px-4 py-2">Amount</th>
-            <th class="text-left px-4 py-2">Date</th>
-          </tr>
-        </thead>
-        <tbody>
-          <?php while($row = $recentOrders->fetch_assoc()): ?>
-            <tr class="hover:bg-gray-50 border-b">
-              <td class="px-4 py-2"><?= $row['order_id'] ?></td>
-              <td class="px-4 py-2"><?= $row['customer_name'] ?></td>
-              <td class="px-4 py-2">₱<?= number_format($row['total_amount'], 2) ?></td>
-              <td class="px-4 py-2"><?= $row['created_at'] ?></td>
-            </tr>
-          <?php endwhile; ?>
-        </tbody>
-      </table>
-    </section>
 
     <!-- Chart -->
     <section class="mt-6 bg-white mx-6 p-6 rounded-xl shadow-md">
-      <h2 class="text-lg font-semibold mb-4">Order Trends (Last 7 Days)</h2>
-      <div class="w-full" style="height:300px;">
-        <canvas id="ordersChart"></canvas>
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold">Order Trends</h2>
+        <div class="flex gap-2">
+          <select id="chartType" class="border p-2 rounded-md shadow-sm focus:ring-[var(--rose)] focus:outline-none">
+            <option value="line">Line</option>
+            <option value="bar">Bar</option>
+          </select>
+          <button id="refreshChart" class="bg-[var(--rose)] text-white px-3 py-1 rounded-md hover:bg-[var(--rose-hover)] transition flex items-center gap-1">
+            <i class="fas fa-sync-alt"></i> Refresh
+          </button>
+        </div>
       </div>
+      <div class="w-full flex items-center justify-center" style="height:350px;">
+        <canvas id="ordersChart" class="rounded-lg border border-gray-200 shadow" style="background:#f9f9fb;"></canvas>
+      </div>
+      <div id="chartLegend" class="mt-4 flex gap-4 justify-center text-sm"></div>
     </section>
   </main>
 </div>
@@ -311,33 +363,83 @@ while ($row = $chartQuery->fetch_assoc()) {
 <script>
 let chart;
 const ctx = document.getElementById('ordersChart').getContext('2d');
+const chartTypeSelect = document.getElementById('chartType');
+const refreshChartBtn = document.getElementById('refreshChart');
+const chartLegend = document.getElementById('chartLegend');
+const filterSelect = document.querySelector("select[name='filter']");
 
-function loadChart(filter = 'today') {
+// Top Product Modal logic
+const topProductCard = document.getElementById('topProductCard');
+const topProductsModal = document.getElementById('top-products-modal');
+const closeTopProducts = document.getElementById('closeTopProducts');
+if (topProductCard && topProductsModal && closeTopProducts) {
+  topProductCard.addEventListener('click', function(e) {
+    e.preventDefault();
+    topProductsModal.classList.remove('hidden');
+  });
+  closeTopProducts.addEventListener('click', function() {
+    topProductsModal.classList.add('hidden');
+  });
+  topProductsModal.addEventListener('click', function(e) {
+    if (e.target === topProductsModal) topProductsModal.classList.add('hidden');
+  });
+}
+
+function loadChart(filter = 'today', type = 'line') {
   fetch("chart_data.php?filter=" + filter)
     .then(res => res.json())
     .then(res => {
       if (chart) chart.destroy();
       chart = new Chart(ctx, {
-        type: 'line',
+        type: type,
         data: {
           labels: res.labels,
           datasets: [{
             label: 'Orders',
             data: res.data,
             borderColor: 'rgba(229,156,168,1)',
-            backgroundColor: 'rgba(229,156,168,0.3)',
-            fill: true,
-            tension: 0.4
+            backgroundColor: type === 'bar' ? 'rgba(229,156,168,0.7)' : 'rgba(229,156,168,0.3)',
+            fill: type === 'line',
+            tension: 0.4,
+            borderWidth: 3,
+            pointBackgroundColor: 'rgba(229,156,168,1)',
+            pointRadius: 5
           }]
         },
-        options: { responsive: true, maintainAspectRatio: false }
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            x: {
+              grid: { color: '#f3e6eb' },
+              ticks: { color: '#d27b8c', font: { weight: 'bold' } }
+            },
+            y: {
+              grid: { color: '#f3e6eb' },
+              ticks: {
+                color: '#d27b8c',
+                font: { weight: 'bold' },
+                callback: function(value) { return Math.round(value); },
+                stepSize: 1
+              }
+            }
+          }
+        }
       });
+      chartLegend.innerHTML = `<span class="flex items-center gap-2"><span class="inline-block w-4 h-4 rounded bg-[var(--rose)]"></span> Orders</span>`;
     });
 }
-loadChart("<?= $_GET['filter'] ?? 'today' ?>");
-document.querySelector("select[name='filter']").addEventListener("change", function(){
-  loadChart(this.value);
-});
+function updateChart() {
+  loadChart(filterSelect.value, chartTypeSelect.value);
+}
+loadChart(filterSelect.value, chartTypeSelect.value);
+
+filterSelect.addEventListener("change", updateChart);
+chartTypeSelect.addEventListener("change", updateChart);
+refreshChartBtn.addEventListener("click", updateChart);
 
 // Notifications dropdown
 function toggleNotifDropdown() {
@@ -352,3 +454,4 @@ window.addEventListener('click', function(e) {
 </script>
 </body>
 </html>
+

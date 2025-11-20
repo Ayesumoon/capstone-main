@@ -35,8 +35,10 @@ while ($row = $res->fetch_assoc()) {
 
 // 🔹 Selected category filter
 $selectedCategory = $_GET['category'] ?? 'all';
+$searchQuery = $_GET['search'] ?? '';
+$searchTerm = "%$searchQuery%";
 
-// 🔹 Fetch products
+// 🔹 Fetch products with optional search and category filter
 $sql = "
     SELECT 
         p.product_id,
@@ -54,42 +56,58 @@ $sql = "
     LEFT JOIN sizes sz ON st.size_id = sz.size_id
 ";
 
+$conditions = [];
+$params = [];
+$types = "";
+
+// Category filter
 if ($selectedCategory !== 'all') {
-    $sql .= " WHERE p.category_id = ?";
+    $conditions[] = "p.category_id = ?";
+    $params[] = $selectedCategory;
+    $types .= "i";
+}
+
+// Search filter
+if (!empty($searchQuery)) {
+    $conditions[] = "(p.product_name LIKE ? OR p.description LIKE ?)";
+    $params[] = $searchTerm;
+    $params[] = $searchTerm;
+    $types .= "ss";
+}
+
+// Apply conditions
+if (!empty($conditions)) {
+    $sql .= " WHERE " . implode(" AND ", $conditions);
 }
 
 $sql .= " GROUP BY p.product_id ORDER BY p.product_id DESC";
 
 $stmt = $conn->prepare($sql);
-if ($selectedCategory !== 'all') {
-    $stmt->bind_param("i", $selectedCategory);
+if (!empty($params)) {
+    $stmt->bind_param($types, ...$params);
 }
+
 $stmt->execute();
 $result = $stmt->get_result();
 
+// Process products
 $products = [];
 while ($row = $result->fetch_assoc()) {
-    // 🧠 Normalize image data
     $imageList = [];
     $raw = trim($row['image_url'] ?? '');
 
     if ($raw && str_starts_with($raw, '[')) {
-        // JSON format
         $decoded = json_decode($raw, true);
         if (is_array($decoded)) $imageList = $decoded;
     } elseif ($raw) {
-        // Comma-separated format
         $imageList = array_filter(array_map('trim', explode(',', $raw)));
     }
 
-    // Build full paths
     $displayImages = [];
     if (!empty($imageList)) {
         foreach ($imageList as $img) {
             $img = trim($img);
-            if (!str_contains($img, 'uploads/')) {
-                $img = 'uploads/products/' . $img;
-            }
+            if (!str_contains($img, 'uploads/')) $img = 'uploads/products/' . $img;
             $displayImages[] = htmlspecialchars($img);
         }
     } else {
@@ -103,6 +121,7 @@ while ($row = $result->fetch_assoc()) {
 $stmt->close();
 $conn->close();
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -225,6 +244,20 @@ $conn->close();
           </select>
         </form>
 
+       <!-- Live Search Input -->
+<div class="flex items-center gap-2">
+  <input 
+    type="text" 
+    id="searchBox" 
+    placeholder="Search product..." 
+    class="p-2 border rounded-lg w-64 focus:ring-2 focus:ring-[var(--rose)]"
+  >
+
+  <!-- Keep category filter when searching -->
+  <input type="hidden" id="selectedCategory" value="<?= htmlspecialchars($selectedCategory) ?>">
+</div>
+
+
         <a href="add_product.php" 
            class="flex items-center gap-2 bg-[var(--rose)] hover:bg-[var(--rose-hover)] text-white text-sm font-medium rounded-lg px-4 py-2 shadow transition">
           <i class="fas fa-plus"></i> Add Product
@@ -305,6 +338,74 @@ $conn->close();
     </section>
   </main>
 </div>
+<script>
+// Wait until the page loads
+document.addEventListener('DOMContentLoaded', function () {
+    const searchBox = document.getElementById('searchBox');
+    const categorySelect = document.querySelector('select[name="category"]');
+    const tableBody = document.querySelector('table tbody');
+
+    // Debounce function to limit requests
+    function debounce(fn, delay) {
+        let timeout;
+        return function (...args) {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => fn.apply(this, args), delay);
+        };
+    }
+
+    // Function to fetch filtered products
+    const fetchProducts = debounce(() => {
+        const search = searchBox.value.trim();
+        const category = categorySelect.value;
+
+        fetch(`products_ajax.php?search=${encodeURIComponent(search)}&category=${encodeURIComponent(category)}`)
+            .then(res => res.text())
+            .then(html => {
+                tableBody.innerHTML = html;
+            });
+    }, 300);
+
+    // Event listeners
+    searchBox.addEventListener('input', fetchProducts);
+    categorySelect.addEventListener('change', fetchProducts);
+});
+</script><script>
+document.addEventListener('DOMContentLoaded', function () {
+    const searchBox = document.getElementById('searchBox');
+    const categorySelect = document.querySelector('select[name="category"]');
+    const tableBody = document.querySelector('table tbody');
+
+    function debounce(fn, delay) {
+        let timeout;
+        return function(...args) {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => fn.apply(this, args), delay);
+        };
+    }
+
+    const fetchProducts = debounce(() => {
+        const search = searchBox.value.trim();
+        const category = categorySelect.value;
+        const params = new URLSearchParams({ search, category });
+
+        fetch(`products.php?${params.toString()}`)
+            .then(res => res.text())
+            .then(html => {
+                // Extract tbody content from returned HTML
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const newTbody = doc.querySelector('table tbody');
+                tableBody.innerHTML = newTbody.innerHTML;
+            });
+    }, 300);
+
+    searchBox.addEventListener('input', fetchProducts);
+    categorySelect.addEventListener('change', fetchProducts);
+});
+</script>
+
+
 </body>
 </html>
 

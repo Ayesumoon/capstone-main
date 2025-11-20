@@ -25,7 +25,7 @@ $stmt->close();
 $admin_name = $admin['full_name'] ?? "Admin";
 $admin_role = $admin['role_name'] ?? "Administrator";
 
-// ✅ Handle Add Role
+// ➕ Add Role
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_role'])) {
     $role_name = trim($_POST['role_name']);
     if (!empty($role_name)) {
@@ -41,7 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_role'])) {
     exit();
 }
 
-// ✅ Handle Edit Role
+// ✏️ Edit Role
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_role'])) {
     $role_id = intval($_POST['role_id']);
     $role_name = trim($_POST['role_name']);
@@ -59,13 +59,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_role'])) {
     exit();
 }
 
-// ✅ Handle Delete Role
+// 🗑️ Delete Role
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_role'])) {
     $role_id = intval($_POST['role_id']);
 
     if ($role_id == 2) {
         $_SESSION['message'] = "Admin role cannot be deleted!";
     } else {
+
         // Check if role is assigned to users
         $check = $conn->prepare("SELECT COUNT(*) FROM adminusers WHERE role_id = ?");
         $check->bind_param("i", $role_id);
@@ -88,7 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_role'])) {
     exit();
 }
 
-// ✅ Fetch all roles
+// 📌 Fetch Roles
 $roles = $conn->query("SELECT * FROM roles ORDER BY role_id ASC");
 ?>
 <!DOCTYPE html>
@@ -104,10 +105,11 @@ $roles = $conn->query("SELECT * FROM roles ORDER BY role_id ASC");
   <style>
     :root { --rose: #e59ca8; --rose-hover: #d27b8c; }
     body { font-family: 'Poppins', sans-serif; background: #f9fafb; color: #374151; }
-    .active { background-color: #fce8eb; color: var(--rose); font-weight: 600; border-radius: .5rem; }
   </style>
 </head>
+
 <body class="min-h-screen flex bg-gray-100">
+
 
 <!-- 🧭 Sidebar -->
 <aside id="sidebar" class="w-64 bg-white shadow-lg flex flex-col justify-between transition-all duration-300">
@@ -137,7 +139,7 @@ $roles = $conn->query("SELECT * FROM roles ORDER BY role_id ASC");
         </button>
         <div x-show="userMenu" x-transition class="pl-8 space-y-1">
           <a href="manage_users.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-user mr-2"></i>Users</a>
-          <a href="manage_roles.php" class="block py-1 active"><i class="fas fa-id-badge mr-2"></i>Roles</a>
+          <a href="manage_roles.php" class="block py-1 bg-pink-50 text-[var(--rose)] font-medium rounded-md"><i class="fas fa-id-badge mr-2"></i>Roles</a>
         </div>
       </div>
 
@@ -165,6 +167,7 @@ $roles = $conn->query("SELECT * FROM roles ORDER BY role_id ASC");
     </nav>
   </div>
 </aside>
+
 <!-- 🧩 Main Content -->
 <main class="flex-1 p-8">
   <header class="flex justify-between items-center mb-8">
@@ -194,17 +197,34 @@ $roles = $conn->query("SELECT * FROM roles ORDER BY role_id ASC");
             <th class="px-4 py-3 text-center">Actions</th>
           </tr>
         </thead>
+
         <tbody class="divide-y divide-gray-200">
           <?php while ($role = $roles->fetch_assoc()): ?>
             <tr class="hover:bg-gray-50">
               <td class="px-4 py-3"><?= $role['role_id']; ?></td>
               <td class="px-4 py-3"><?= htmlspecialchars($role['role_name']); ?></td>
-              <td class="px-4 py-3 text-center space-x-3">
-                <button onclick="openEditModal(<?= $role['role_id']; ?>, '<?= htmlspecialchars($role['role_name']); ?>')" class="text-blue-500 hover:text-blue-700">Edit</button>
-                <?php if ($role['role_id'] != 2): ?>
-                  <button onclick="openDeleteModal(<?= $role['role_id']; ?>)" class="text-red-500 hover:text-red-700">Delete</button>
-                <?php endif; ?>
+
+              <!-- FIXED SPACING (THIS PART ONLY) -->
+              <td class="px-4 py-3">
+                <div class="flex items-center justify-center gap-4">
+
+                  <!-- Edit Icon -->
+                  <button onclick="openEditModal(<?= $role['role_id']; ?>, '<?= $role['role_name']; ?>')" 
+                          class="text-blue-500 hover:text-blue-700 text-base">
+                    <i class="fas fa-pen-to-square"></i>
+                  </button>
+
+                  <?php if ($role['role_id'] != 2): ?>
+                    <!-- Delete Icon -->
+                    <button onclick="openDeleteModal(<?= $role['role_id']; ?>)" 
+                            class="text-red-500 hover:text-red-700 text-base">
+                      <i class="fas fa-trash"></i>
+                    </button>
+                  <?php endif; ?>
+
+                </div>
               </td>
+
             </tr>
           <?php endwhile; ?>
         </tbody>
@@ -218,7 +238,8 @@ $roles = $conn->query("SELECT * FROM roles ORDER BY role_id ASC");
   <div class="bg-white p-6 rounded-xl shadow-lg w-96">
     <h2 class="text-xl font-semibold mb-4">Add New Role</h2>
     <form method="POST">
-      <input type="text" name="role_name" placeholder="Role Name" required class="w-full border border-gray-300 rounded-lg p-2 mb-4 focus:ring-2 focus:ring-[var(--rose)]">
+      <input type="text" name="role_name" placeholder="Role Name" required 
+             class="w-full border border-gray-300 rounded-lg p-2 mb-4 focus:ring-2 focus:ring-[var(--rose)]">
       <div class="flex justify-end gap-3">
         <button type="button" onclick="closeModal('addModal')" class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300">Cancel</button>
         <button type="submit" name="add_role" class="px-4 py-2 bg-[var(--rose)] text-white rounded-lg hover:bg-[var(--rose-hover)]">Save</button>
@@ -233,7 +254,8 @@ $roles = $conn->query("SELECT * FROM roles ORDER BY role_id ASC");
     <h2 class="text-xl font-semibold mb-4">Edit Role</h2>
     <form method="POST">
       <input type="hidden" name="role_id" id="editRoleId">
-      <input type="text" name="role_name" id="editRoleName" required class="w-full border border-gray-300 rounded-lg p-2 mb-4 focus:ring-2 focus:ring-[var(--rose)]">
+      <input type="text" name="role_name" id="editRoleName" required 
+             class="w-full border border-gray-300 rounded-lg p-2 mb-4 focus:ring-2 focus:ring-[var(--rose)]">
       <div class="flex justify-end gap-3">
         <button type="button" onclick="closeModal('editModal')" class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300">Cancel</button>
         <button type="submit" name="edit_role" class="px-4 py-2 bg-[var(--rose)] text-white rounded-lg hover:bg-[var(--rose-hover)]">Update</button>
@@ -258,17 +280,19 @@ $roles = $conn->query("SELECT * FROM roles ORDER BY role_id ASC");
 </div>
 
 <script>
-  function openModal(id){ document.getElementById(id).classList.remove('hidden'); }
-  function closeModal(id){ document.getElementById(id).classList.add('hidden'); }
-  function openEditModal(id, name){
-    document.getElementById("editRoleId").value = id;
-    document.getElementById("editRoleName").value = name;
-    openModal('editModal');
-  }
-  function openDeleteModal(id){
-    document.getElementById("deleteRoleId").value = id;
-    openModal('deleteModal');
-  }
+function openModal(id){ document.getElementById(id).classList.remove('hidden'); }
+function closeModal(id){ document.getElementById(id).classList.add('hidden'); }
+
+function openEditModal(id, name){
+  document.getElementById("editRoleId").value = id;
+  document.getElementById("editRoleName").value = name;
+  openModal('editModal');
+}
+
+function openDeleteModal(id){
+  document.getElementById("deleteRoleId").value = id;
+  openModal('deleteModal');
+}
 </script>
 
 </body>

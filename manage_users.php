@@ -86,7 +86,7 @@ body { font-family: 'Poppins', sans-serif; background-color: #f9fafb; }
           <i class="fas fa-chevron-down" :class="{ 'rotate-180': userMenu }"></i>
         </button>
         <div x-show="userMenu" x-transition class="pl-8 space-y-1">
-          <a href="manage_users.php" class="block py-1 active"><i class="fas fa-user mr-2"></i>Users</a>
+          <a href="manage_users.php" class="block py-1 bg-pink-50 text-[var(--rose)] font-medium rounded-md"><i class="fas fa-user mr-2"></i>Users</a>
           <a href="manage_roles.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-id-badge mr-2"></i>Roles</a>
         </div>
       </div>
@@ -139,7 +139,6 @@ body { font-family: 'Poppins', sans-serif; background-color: #f9fafb; }
     <table class="min-w-full border border-gray-200 text-sm">
       <thead class="bg-gray-100 text-gray-700">
         <tr>
-          <th class="px-4 py-2 text-left">#</th>
           <th class="px-4 py-2 text-left">Username</th>
           <th class="px-4 py-2 text-left">Name</th>
           <th class="px-4 py-2 text-left">Email</th>
@@ -151,7 +150,6 @@ body { font-family: 'Poppins', sans-serif; background-color: #f9fafb; }
       <tbody class="divide-y divide-gray-200">
   <?php while ($user = $result->fetch_assoc()): ?>
     <tr class="hover:bg-gray-50 transition <?= $user['status_id'] == 2 ? 'opacity-60' : ''; ?>">
-      <td class="px-4 py-2"><?= $user['admin_id']; ?></td>
       <td class="px-4 py-2"><?= htmlspecialchars($user['username']); ?></td>
       <td class="px-4 py-2"><?= htmlspecialchars($user['full_name']); ?></td>
       <td class="px-4 py-2"><?= htmlspecialchars($user['admin_email']); ?></td>
@@ -163,26 +161,39 @@ body { font-family: 'Poppins', sans-serif; background-color: #f9fafb; }
       </td>
 
       <td class="px-4 py-2 text-center space-x-3">
-        <!-- ✏️ Edit -->
-        <a href="edit_user.php?id=<?= $user['admin_id']; ?>" 
-           class="text-blue-600 hover:text-blue-800 font-medium">Edit</a>
 
-        <?php if ($admin_role_id == 2 && $user['admin_id'] != $admin_id): ?>
-          <!-- 🔄 Activate / Deactivate -->
-          <?php if ($user['status_id'] == 1): ?>
-            <a href="toggle_user.php?id=<?= $user['admin_id']; ?>&status=2" 
-               class="text-yellow-600 hover:text-yellow-800 font-medium">Deactivate</a>
-          <?php else: ?>
-            <a href="toggle_user.php?id=<?= $user['admin_id']; ?>&status=1" 
-               class="text-green-600 hover:text-green-800 font-medium">Activate</a>
-          <?php endif; ?>
+  <!-- ✏️ Edit -->
+  <a href="edit_user.php?id=<?= $user['admin_id']; ?>" 
+     class="text-blue-600 hover:text-blue-800">
+     <i class="fas fa-edit text-lg"></i>
+  </a>
 
-          <!-- 🗑️ Delete -->
-          <a href="delete_user.php?id=<?= $user['admin_id']; ?>" 
-             onclick="return confirm('Are you sure you want to delete this user?')" 
-             class="text-red-600 hover:text-red-800 font-medium">Delete</a>
-        <?php endif; ?>
-      </td>
+  <?php if ($admin_role_id == 2 && $user['admin_id'] != $admin_id): ?>
+
+    <!-- 🔄 Activate / Deactivate -->
+    <?php if ($user['status_id'] == 1): ?>
+      <a href="toggle_user.php?id=<?= $user['admin_id']; ?>&status=2" 
+         class="text-yellow-600 hover:text-yellow-800">
+         <i class="fas fa-user-slash text-lg"></i>
+      </a>
+    <?php else: ?>
+      <a href="toggle_user.php?id=<?= $user['admin_id']; ?>&status=1" 
+         class="text-green-600 hover:text-green-800">
+         <i class="fas fa-user-check text-lg"></i>
+      </a>
+    <?php endif; ?>
+
+    <!-- 🗑️ Delete -->
+    <a href="delete_user.php?id=<?= $user['admin_id']; ?>" 
+       onclick="return confirm('Are you sure you want to delete this user?')" 
+       class="text-red-600 hover:text-red-800">
+       <i class="fas fa-trash text-lg"></i>
+    </a>
+
+  <?php endif; ?>
+
+</td>
+
     </tr>
   <?php endwhile; ?>
 </tbody>

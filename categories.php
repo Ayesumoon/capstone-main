@@ -185,10 +185,29 @@ if ($search !== "") {
                 <td class="px-4 py-2"><?= htmlspecialchars($row['category_code']) ?></td>
                 <td class="px-4 py-2"><?= htmlspecialchars($row['category_name']) ?></td>
                 <td class="px-4 py-2 space-x-2">
-                  <button @click="showEditModal = true; selectedCategory = { id: '<?= $row['category_id'] ?>', code: '<?= $row['category_code'] ?>', name: '<?= htmlspecialchars($row['category_name']) ?>' }" 
-                    class="text-blue-600 hover:underline"><i class="fas fa-edit"></i> Edit</button>
-                  <button @click="showDeleteModal = true; selectedCategory = { id: '<?= $row['category_id'] ?>', name: '<?= htmlspecialchars($row['category_name']) ?>' }" 
-                    class="text-red-600 hover:underline"><i class="fas fa-trash-alt"></i> Delete</button>
+                  <button 
+    @click="showEditModal = true; selectedCategory = { 
+        id: '<?= $row['category_id'] ?>', 
+        code: '<?= $row['category_code'] ?>', 
+        name: '<?= htmlspecialchars($row['category_name']) ?>' 
+    }"
+    class="text-blue-600 hover:text-blue-800 p-2"
+    title="Edit"
+>
+    <i class="fas fa-edit"></i>
+</button>
+
+<button 
+    @click="showDeleteModal = true; selectedCategory = { 
+        id: '<?= $row['category_id'] ?>', 
+        name: '<?= htmlspecialchars($row['category_name']) ?>' 
+    }"
+    class="text-red-600 hover:text-red-800 p-2"
+    title="Delete"
+>
+    <i class="fas fa-trash-alt"></i>
+</button>
+
                 </td>
               </tr>
             <?php endwhile; ?>

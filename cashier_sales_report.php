@@ -64,7 +64,7 @@ $sql = "
       COALESCE(SUM(o.total_amount), 0) AS total_sales
   FROM adminusers a
   LEFT JOIN orders o ON a.admin_id = o.admin_id AND $date_condition
-  WHERE a.role_id = 0
+  WHERE a.role_id = 1
   GROUP BY a.admin_id
   ORDER BY total_sales DESC
 ";

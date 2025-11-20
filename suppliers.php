@@ -2,13 +2,14 @@
 require 'conn.php';
 include 'auth_session.php';
 
-// ✅ Get admin info
+// ======================================
+// FETCH ADMIN DETAILS
+// ======================================
 
 $admin_id   = $_SESSION['admin_id'] ?? null;
 $admin_name = "Admin";
 $admin_role = "Admin";
 
-// 🔹 Fetch admin details
 if ($admin_id) {
     $query = "
         SELECT CONCAT(first_name, ' ', last_name) AS full_name, r.role_name
@@ -29,31 +30,39 @@ if ($admin_id) {
 }
 
 
-// ✅ Handle add supplier form submission
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $supplier_name  = trim($_POST['supplier_name']);
-    $category_id    = intval($_POST['category_id']);
-    $supplier_email = trim($_POST['supplier_email']);
-    $supplier_phone = trim($_POST['supplier_phone']);
+// ======================================
+// ADD SUPPLIER (NO MORE CATEGORY FIELD)
+// ======================================
 
-    if (!empty($supplier_name) && !empty($category_id)) {
-        $sql = "INSERT INTO suppliers (supplier_name, category_id, supplier_email, supplier_phone, created_at)
-                VALUES (?, ?, ?, ?, NOW())";
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+
+    $supplier_name  = trim($_POST['supplier_name']);
+    $supplier_email = trim($_POST['supplier_email'] ?? '');
+    $supplier_phone = trim($_POST['supplier_phone'] ?? '');
+
+    if (!empty($supplier_name)) {
+
+        $sql = "INSERT INTO suppliers (supplier_name, supplier_email, supplier_phone, created_at)
+                VALUES (?, ?, ?, NOW())";
+
         $stmt = $conn->prepare($sql);
-        $stmt->bind_param("siss", $supplier_name, $category_id, $supplier_email, $supplier_phone);
+        $stmt->bind_param("sss", $supplier_name, $supplier_email, $supplier_phone);
         $stmt->execute();
         $stmt->close();
+
         header("Location: suppliers.php?success=1");
         exit;
     }
 }
 
-// ✅ Fetch suppliers
+
+// ======================================
+// FETCH SUPPLIERS
+// ======================================
 $suppliers = $conn->query("
-    SELECT s.*, c.category_name 
-    FROM suppliers s 
-    LEFT JOIN categories c ON s.category_id = c.category_id
-    ORDER BY s.created_at ASC
+    SELECT supplier_id, supplier_name, supplier_email, supplier_phone, created_at
+    FROM suppliers
+    ORDER BY created_at ASC
 ");
 ?>
 
@@ -109,19 +118,21 @@ $suppliers = $conn->query("
     <nav class="p-4 space-y-1">
       <a href="dashboard.php" class="block px-4 py-2 rounded hover:bg-gray-100 transition"><i class="fas fa-tachometer-alt mr-2"></i>Dashboard</a>
 
+      <!-- User Management -->
       <button @click="userMenu = !userMenu" class="w-full text-left px-4 py-2 flex justify-between items-center hover:bg-gray-100 rounded transition">
         <span><i class="fas fa-users-cog mr-2"></i>User Management</span>
-        <i class="fas fa-chevron-down transition-transform duration-200" :class="{ 'rotate-180': userMenu }"></i>
+        <i class="fas fa-chevron-down" :class="{ 'rotate-180': userMenu }"></i>
       </button>
-      <ul x-show="userMenu" x-transition class="pl-8 text-sm space-y-1">
+      <ul x-show="userMenu" x-transition class="pl-8 space-y-1 text-sm">
         <li><a href="manage_users.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-user mr-2"></i>Manage Users</a></li>
-        <a href="manage_roles.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-id-badge mr-2"></i>Manage Roles</a>
+        <li><a href="manage_roles.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-id-badge mr-2"></i>Manage Roles</a></li>
         <li><a href="customers.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-users mr-2"></i>Customers</a></li>
       </ul>
 
+      <!-- Product Management -->
       <button @click="productMenu = !productMenu" class="w-full text-left px-4 py-2 flex justify-between items-center hover:bg-gray-100 rounded transition">
         <span><i class="fas fa-box-open mr-2"></i>Product Management</span>
-        <i class="fas fa-chevron-down transition-transform duration-200" :class="{ 'rotate-180': productMenu }"></i>
+        <i class="fas fa-chevron-down" :class="{ 'rotate-180': productMenu }"></i>
       </button>
       <ul x-show="productMenu" x-transition class="pl-8 text-sm space-y-1">
         <li><a href="categories.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-tags mr-2"></i>Category</a></li>
@@ -131,24 +142,36 @@ $suppliers = $conn->query("
       </ul>
 
       <a href="orders.php" class="block px-4 py-2 hover:bg-gray-100 rounded transition"><i class="fas fa-shopping-cart mr-2"></i>Orders</a>
-      <a href="cashier_sales_report.php" class="block px-4 py-2 rounded hover:bg-gray-100 transition"><i class="fas fa-chart-line mr-2"></i>Cashier Sales</a>
+      <a href="cashier_sales_report.php" class="block px-4 py-2 hover:bg-gray-100 rounded transition"><i class="fas fa-chart-line mr-2"></i>Cashier Sales</a>
+
       <a href="suppliers.php" class="block px-4 py-2 active-link"><i class="fas fa-industry mr-2"></i>Suppliers</a>
+
       <a href="system_logs.php" class="block px-4 py-2 hover:bg-gray-100 rounded transition"><i class="fas fa-file-alt mr-2"></i>System Logs</a>
       <a href="logout.php" class="block px-4 py-2 text-red-600 hover:bg-red-50 rounded transition"><i class="fas fa-sign-out-alt mr-2"></i>Log out</a>
     </nav>
   </aside>
 
-  <!-- Main Content -->
+  <!-- Main Content Area -->
   <main class="flex-1 p-8 bg-gray-50 overflow-auto">
+
+    <!-- Status Messages -->
+    <?php if (isset($_GET['success'])): ?>
+      <div class="bg-green-100 text-green-700 px-4 py-2 rounded-lg mb-4">
+        ✅ Supplier added successfully.
+      </div>
+    <?php endif; ?>
+
     <?php if (isset($_GET['deleted'])): ?>
-  <div class="bg-green-100 text-green-700 px-4 py-2 rounded-lg mb-4">
-    ✅ Supplier deleted successfully.
-  </div>
-<?php elseif (isset($_GET['error'])): ?>
-  <div class="bg-red-100 text-red-700 px-4 py-2 rounded-lg mb-4">
-    ⚠️ Error: <?= htmlspecialchars($_GET['error']); ?>
-  </div>
-<?php endif; ?>
+      <div class="bg-green-100 text-green-700 px-4 py-2 rounded-lg mb-4">
+        🗑 Supplier deleted successfully.
+      </div>
+    <?php endif; ?>
+
+    <?php if (isset($_GET['error'])): ?>
+      <div class="bg-red-100 text-red-700 px-4 py-2 rounded-lg mb-4">
+        ⚠ <?= htmlspecialchars($_GET['error']); ?>
+      </div>
+    <?php endif; ?>
 
     <div class="bg-[var(--rose)] text-white p-5 rounded-t-2xl shadow-sm flex justify-between items-center">
       <h1 class="text-2xl font-semibold">Suppliers Information</h1>
@@ -157,37 +180,29 @@ $suppliers = $conn->query("
       </button>
     </div>
 
-    <!-- Add Supplier Modal -->
-    <div x-show="addModal" x-cloak @click.self="addModal = false" x-transition.opacity
+    <!-- ADD SUPPLIER MODAL -->
+    <div x-show="addModal" x-cloak @click.self="addModal=false"
          class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div class="bg-white rounded-xl shadow-lg max-w-md w-full p-6">
-        <h2 class="text-xl font-semibold text-[#c97f91] mb-4">Add Supplier</h2>
-        <form method="POST" class="space-y-4">
+      <div class="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
+        <h2 class="text-xl font-semibold text-[var(--rose-hover)] mb-4">Add Supplier</h2>
+
+        <form action="" method="POST" class="space-y-4">
           <div>
-            <label class="block text-gray-700 font-medium">Supplier Name</label>
+            <label class="block font-medium text-gray-700">Supplier Name</label>
             <input type="text" name="supplier_name" required class="w-full border p-2 rounded-lg focus:ring-2 focus:ring-[var(--rose)]">
           </div>
+
           <div>
-            <label class="block text-gray-700 font-medium">Category</label>
-            <select name="category_id" required class="w-full border p-2 rounded-lg focus:ring-2 focus:ring-[var(--rose)]">
-              <option disabled selected>Select Category</option>
-              <?php
-              $catRes = $conn->query("SELECT * FROM categories");
-              while ($cat = $catRes->fetch_assoc()):
-              ?>
-                <option value="<?= $cat['category_id'] ?>"><?= htmlspecialchars($cat['category_name']) ?></option>
-              <?php endwhile; ?>
-            </select>
-          </div>
-          <div>
-            <label class="block text-gray-700 font-medium">Email</label>
+            <label class="block font-medium text-gray-700">Email</label>
             <input type="email" name="supplier_email" class="w-full border p-2 rounded-lg focus:ring-2 focus:ring-[var(--rose)]">
           </div>
+
           <div>
-            <label class="block text-gray-700 font-medium">Phone</label>
+            <label class="block font-medium text-gray-700">Phone</label>
             <input type="text" name="supplier_phone" class="w-full border p-2 rounded-lg focus:ring-2 focus:ring-[var(--rose)]">
           </div>
-          <div class="flex justify-end gap-3 pt-2">
+
+          <div class="flex justify-end gap-3">
             <button type="button" @click="addModal=false" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-md">Cancel</button>
             <button type="submit" class="px-4 py-2 bg-[var(--rose-hover)] hover:bg-[var(--rose)] text-white rounded-md">Save</button>
           </div>
@@ -195,14 +210,14 @@ $suppliers = $conn->query("
       </div>
     </div>
 
-    <!-- Supplier Table -->
-    <section class="bg-white p-6 rounded-b-2xl shadow mt-6">
+    <!-- SUPPLIERS TABLE -->
+    <section class="bg-white p-6 rounded-b-2xl shadow">
       <h2 class="text-gray-700 font-medium mb-4">All Registered Suppliers</h2>
+
       <div class="overflow-x-auto">
         <table class="min-w-full border border-gray-200 rounded-lg text-sm">
-          <thead class="bg-gray-100 text-gray-600 uppercase text-xs font-semibold">
+          <thead class="bg-gray-100 text-gray-600 uppercase text-xs">
             <tr>
-              <th class="px-4 py-3 text-left">Category</th>
               <th class="px-4 py-3 text-left">Supplier</th>
               <th class="px-4 py-3 text-left">Date Added</th>
               <th class="px-4 py-3 text-left">Email</th>
@@ -210,27 +225,39 @@ $suppliers = $conn->query("
               <th class="px-4 py-3 text-left">Actions</th>
             </tr>
           </thead>
+
           <tbody class="divide-y divide-gray-100 text-gray-700">
             <?php if ($suppliers->num_rows > 0): ?>
               <?php while ($row = $suppliers->fetch_assoc()): ?>
-              <tr class="hover:bg-gray-50 transition">
-                <td class="px-4 py-2"><?= htmlspecialchars($row['category_name']); ?></td>
-                <td class="px-4 py-2 font-semibold text-gray-800"><?= htmlspecialchars($row['supplier_name']); ?></td>
-                <td class="px-4 py-2"><?= date('M d, Y', strtotime($row['created_at'])); ?></td>
-                <td class="px-4 py-2"><?= htmlspecialchars($row['supplier_email']); ?></td>
-                <td class="px-4 py-2"><?= htmlspecialchars($row['supplier_phone']); ?></td>
-                <td class="px-4 py-2 flex gap-2">
-                  <a href="edit_supplier.php?id=<?= $row['supplier_id'] ?>" class="text-green-600 hover:text-green-700 border border-green-300 rounded px-2 py-1" title="Edit"><i class="fas fa-edit"></i></a>
-                  <a href="delete_supplier.php?id=<?= $row['supplier_id'] ?>" onclick="return confirm('Delete this supplier?')" class="text-red-600 hover:text-red-700 border border-red-300 rounded px-2 py-1" title="Delete"><i class="fas fa-trash-alt"></i></a>
-                </td>
-              </tr>
-              <?php endwhile; else: ?>
-              <tr><td colspan="6" class="text-center py-6 text-gray-500">No suppliers found.</td></tr>
+                <tr class="hover:bg-gray-50 transition">
+                  <td class="px-4 py-2 font-semibold"><?= htmlspecialchars($row['supplier_name']); ?></td>
+                  <td class="px-4 py-2"><?= date('M d, Y', strtotime($row['created_at'])); ?></td>
+                  <td class="px-4 py-2"><?= htmlspecialchars($row['supplier_email']); ?></td>
+                  <td class="px-4 py-2"><?= htmlspecialchars($row['supplier_phone']); ?></td>
+
+                  <td class="px-4 py-2 flex gap-2">
+                    <a href="edit_supplier.php?id=<?= $row['supplier_id'] ?>" 
+                       class="text-green-600 hover:text-green-700 border border-green-300 rounded px-2 py-1" title="Edit">
+                      <i class="fas fa-edit"></i>
+                    </a>
+
+                    <a href="delete_supplier.php?id=<?= $row['supplier_id'] ?>" 
+                       onclick="return confirm('Delete this supplier?')" 
+                       class="text-red-600 hover:text-red-700 border border-red-300 rounded px-2 py-1" title="Delete">
+                      <i class="fas fa-trash-alt"></i>
+                    </a>
+                  </td>
+                </tr>
+              <?php endwhile; ?>
+            <?php else: ?>
+              <tr><td colspan="5" class="text-center py-6 text-gray-500">No suppliers found.</td></tr>
             <?php endif; ?>
           </tbody>
+
         </table>
       </div>
     </section>
+
   </main>
 </div>
 </body>

@@ -79,42 +79,113 @@ $totalSales = $totalStmt->get_result()->fetch_assoc()['total_sales'] ?? 0;
 <title>Cashier Transactions | Seven Dwarfs Boutique</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
-:root { --rose: #d37689; --rose-hover: #b75f6f; }
-body { background-color: #fef9fa; font-family: 'Poppins', sans-serif; }
-
+:root { --rose:#d37689; --rose-hover:#b75f6f; --card-bg: #fff; --cart-bg: #f9e9ed; --shadow: 0 4px 24px rgba(211,118,137,0.08);}
+body { background:#fef9fa; font-family:'Poppins',sans-serif; }
 .sidebar {
-  width: 240px;
-  background-color: white;
-  border-right: 1px solid #e5e7eb;
+  width: 250px;
+  background: linear-gradient(135deg, #fef2f4 0%, #f9e9ed 100%);
+  border-right: 1px solid #f3dbe2;
   position: fixed;
   top: 0;
   left: 0;
   height: 100vh;
-  padding: 1rem;
+  padding: 1.5rem 1rem 1rem 1rem;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  box-shadow: 2px 0 6px rgba(0,0,0,0.05);
+  border-top-right-radius: 24px;
+  border-bottom-right-radius: 24px;
+  z-index: 20;
+}
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #f3dbe2;
+}
+.sidebar-logo {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(211,118,137,0.10);
+  background: #fff;
+  object-fit: cover;
+}
+.sidebar-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--rose);
+  letter-spacing: 0.03em;
+}
+.sidebar nav {
+  margin-top: 1rem;
 }
 .sidebar a {
-  display: block;
-  padding: 0.75rem 1rem;
-  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.7rem 1rem;
+  border-radius: 10px;
   font-weight: 500;
   color: #4b5563;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.3rem;
+  font-size: 1rem;
+  transition: background 0.18s, color 0.18s;
+  text-decoration: none;
+}
+.sidebar a .sidebar-icon {
+  font-size: 1.2em;
+  width: 1.5em;
+  text-align: center;
 }
 .sidebar a:hover {
-  background-color: #fef2f4;
+  background-color: #f9e9ed;
   color: var(--rose-hover);
 }
 .active-link {
-  background-color: var(--rose);
-  color: white !important;
+  background: linear-gradient(90deg, var(--rose) 70%, #f9e9ed 100%);
+  color: #fff !important;
+  box-shadow: 0 2px 8px rgba(211,118,137,0.10);
+}
+.sidebar-footer {
+  margin-top: auto;
+  border-top: 1px solid #f3dbe2;
+  padding-top: 1.2rem;
+}
+.sidebar-cashier {
+  font-size: 0.98rem;
+  color: #6b7280;
+  margin-bottom: 0.7rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.sidebar-cashier .cashier-icon {
+  color: var(--rose);
+  font-size: 1.1em;
+}
+.sidebar-logout-btn {
+  width: 100%;
+  text-align: left;
+  color: #e11d48;
+  font-weight: 600;
+  background: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.7rem 1rem;
+  margin-top: 0.5rem;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+}
+.sidebar-logout-btn:hover {
+  background: #f9e9ed;
+  color: #b91c1c;
 }
 .main-content {
-  margin-left: 260px;
-  padding: 1.5rem;
+  margin-left:260px;
+  padding:1.5rem;
 }
 </style>
 </head>
@@ -123,23 +194,54 @@ body { background-color: #fef9fa; font-family: 'Poppins', sans-serif; }
 <!-- 🌸 Sidebar -->
 <aside class="sidebar">
   <div>
-    <div class="flex items-center gap-3 mb-6">
-      <img src="logo.png" class="w-10 h-10 rounded-full" alt="Logo">
-      <h1 class="text-lg font-semibold text-[var(--rose)]">Seven Dwarfs</h1>
+    <div class="sidebar-header">
+      <img src="logo.png" class="sidebar-logo" alt="Logo">
+      <span class="sidebar-title">Seven Dwarfs</span>
     </div>
     <nav>
-      <a href="cashier_pos.php">🛍️ POS</a>
-      <a href="cashier_transactions.php" class="active-link">💰 Transactions</a>
-      <a href="cashier_inventory.php">📦 Inventory</a>
+      <a href="cashier_pos.php">
+        <span class="sidebar-icon" aria-label="POS">
+          <!-- Shopping Bag SVG -->
+          <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24">
+            <path d="M6 7V6a6 6 0 1 1 12 0v1" />
+            <rect x="4" y="7" width="16" height="13" rx="3" />
+            <path d="M9 11v2m6-2v2" />
+          </svg>
+        </span>
+        POS
+      </a>
+      <a href="cashier_transactions.php" class="active-link">
+        <span class="sidebar-icon" aria-label="Transactions">
+          <!-- Credit Card SVG -->
+          <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24">
+            <rect x="3" y="7" width="18" height="10" rx="2" />
+            <path d="M3 10h18" />
+            <path d="M7 15h2" />
+          </svg>
+        </span>
+        Transactions
+      </a>
+      <a href="cashier_inventory.php">
+        <span class="sidebar-icon" aria-label="Inventory">
+          <!-- Box SVG -->
+          <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24">
+            <rect x="3" y="7" width="18" height="10" rx="2" />
+            <path d="M3 7l9 5 9-5" />
+            <path d="M12 12v5" />
+          </svg>
+        </span>
+        Inventory
+      </a>
     </nav>
   </div>
 
-  <div class="mt-auto border-t pt-3">
-    <p class="text-sm text-gray-600 mb-2">Cashier: 
-      <span class="font-medium text-[var(--rose)]"><?= htmlspecialchars($cashier_name); ?></span>
-    </p>
+  <div class="sidebar-footer">
+    <div class="sidebar-cashier">
+      <span class="cashier-icon">👤</span>
+      Cashier: <span class="font-medium text-[var(--rose)]"><?= htmlspecialchars($cashier_name); ?></span>
+    </div>
     <form action="logout.php" method="POST">
-      <button class="w-full text-left text-red-500 hover:text-red-600 font-medium">🚪 Logout</button>
+      <button class="sidebar-logout-btn">🚪 Logout</button>
     </form>
   </div>
 </aside>

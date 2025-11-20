@@ -11,8 +11,8 @@ if (!isset($_GET['id']) || empty($_GET['id'])) {
 
 $admin_id = (int) $_GET['id'];
 
-// ✅ Fetch user details
-$stmt = $conn->prepare("SELECT admin_id, username, admin_email, first_name, last_name FROM adminusers WHERE admin_id = ?");
+// ✅ Fetch user details including role
+$stmt = $conn->prepare("SELECT admin_id, username, admin_email, first_name, last_name, role_id FROM adminusers WHERE admin_id = ?");
 $stmt->bind_param("i", $admin_id);
 $stmt->execute();
 $result = $stmt->get_result();
@@ -26,8 +26,16 @@ if ($result->num_rows == 0) {
 $user = $result->fetch_assoc();
 $stmt->close();
 
+// ✅ Fetch roles for dropdown
+$roles = [];
+$roleQuery = $conn->query("SELECT role_id, role_name FROM roles ORDER BY role_name ASC");
+while ($row = $roleQuery->fetch_assoc()) {
+    $roles[] = $row;
+}
+
 // ✅ Handle form submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+
     $updates = [];
     $params = [];
     $types = "";
@@ -36,6 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $email = trim($_POST['admin_email']);
     $first_name = trim($_POST['first_name']);
     $last_name = trim($_POST['last_name']);
+    $role_id = (int) $_POST['role_id'];
 
     if (!empty($username) && $username !== $user['username']) {
         $updates[] = "username = ?";
@@ -58,7 +67,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $types .= "s";
     }
 
-    // ✅ Password change validation
+    // ✅ Role update
+    if ($role_id != $user['role_id']) {
+        $updates[] = "role_id = ?";
+        $params[] = $role_id;
+        $types .= "i";
+    }
+
+    // ✅ Password update
     if (!empty($_POST['new_password']) || !empty($_POST['confirm_password'])) {
         if ($_POST['new_password'] !== $_POST['confirm_password']) {
             $_SESSION['message'] = "Passwords do not match!";
@@ -124,7 +140,7 @@ body {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   padding: 2rem;
 }
-input, button {
+input, button, select {
   transition: all 0.2s ease;
 }
 </style>
@@ -177,6 +193,22 @@ input, button {
         <label class="block text-gray-700 font-medium mb-1">Email</label>
         <input type="email" name="admin_email" value="<?= htmlspecialchars($user['admin_email']); ?>" 
           class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[var(--rose)] focus:outline-none">
+      </div>
+
+      <!-- Role -->
+      <div>
+        <label class="block text-gray-700 font-medium mb-1">Role</label>
+        <select name="role_id"
+          class="w-full border border-gray-300 rounded-lg p-3 bg-white focus:ring-2 focus:ring-[var(--rose)]">
+
+          <?php foreach ($roles as $r): ?>
+            <option value="<?= $r['role_id']; ?>"
+              <?= ($user['role_id'] == $r['role_id']) ? 'selected' : ''; ?>>
+              <?= htmlspecialchars($r['role_name']); ?>
+            </option>
+          <?php endforeach; ?>
+
+        </select>
       </div>
 
       <!-- Password -->
