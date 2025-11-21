@@ -7,14 +7,9 @@ $admin_id   = $_SESSION['admin_id'] ?? null;
 $admin_name = "Admin";
 $admin_role = "Admin";
 
-// 🔹 Get admin info
 if ($admin_id) {
-    $query = "
-        SELECT CONCAT(first_name, ' ', last_name) AS full_name, r.role_name 
-        FROM adminusers a
-        LEFT JOIN roles r ON a.role_id = r.role_id
-        WHERE a.admin_id = ?
-    ";
+    $query = "SELECT CONCAT(first_name, ' ', last_name) AS full_name, r.role_name 
+              FROM adminusers a LEFT JOIN roles r ON a.role_id = r.role_id WHERE a.admin_id = ?";
     $stmt = $conn->prepare($query);
     $stmt->bind_param("i", $admin_id);
     $stmt->execute();
@@ -39,6 +34,7 @@ while ($status_row = $status_result->fetch_assoc()) {
 $where  = ["1=1"];
 $params = [];
 $types  = "";
+$report_title = "All Orders Report"; // Default Title
 
 // Status filter
 if (isset($_GET['status']) && $_GET['status'] !== '' && $_GET['status'] !== 'all') {
@@ -53,27 +49,27 @@ $date_filter = $_GET['date_range'] ?? 'all';
 switch ($date_filter) {
     case 'today':
         $where[] = "DATE(o.created_at) = CURDATE()";
+        $report_title = "Daily Sales Report (" . date('M d, Y') . ")";
         break;
     case 'week':
         $where[] = "YEARWEEK(o.created_at, 1) = YEARWEEK(CURDATE(), 1)";
+        $report_title = "Weekly Sales Report (Week " . date('W, Y') . ")";
         break;
     case 'month':
         $where[] = "MONTH(o.created_at) = MONTH(CURDATE()) AND YEAR(o.created_at) = YEAR(CURDATE())";
+        $report_title = "Monthly Sales Report (" . date('F Y') . ")";
         break;
     case 'year':
         $where[] = "YEAR(o.created_at) = YEAR(CURDATE())";
+        $report_title = "Annual Sales Report (" . date('Y') . ")";
         break;
 }
 
 // 🔹 Main query
 $sql = "
     SELECT 
-        o.order_id,
-        c.first_name,
-        c.last_name,
-        o.total_amount,
-        os.order_status_name AS order_status,
-        pm.payment_method_name AS payment_method,
+        o.order_id, c.first_name, c.last_name, o.total_amount,
+        os.order_status_name AS order_status, pm.payment_method_name AS payment_method,
         o.created_at,
         GROUP_CONCAT(DISTINCT p.product_name ORDER BY p.product_name SEPARATOR ', ') AS products
     FROM orders o
@@ -97,16 +93,31 @@ $result = $stmt->get_result();
 $orders = $result->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
 $conn->close();
+
+// 🔹 CALCULATE SUMMARIES (PHP Side)
+$total_sales = 0;
+$total_orders = count($orders);
+$payment_counts = [];
+
+foreach ($orders as $order) {
+    $total_sales += $order['total_amount'];
+    
+    // Count by Payment Method for summary
+    $pm = $order['payment_method'] ?? 'N/A';
+    if (!isset($payment_counts[$pm])) $payment_counts[$pm] = 0;
+    $payment_counts[$pm] += $order['total_amount'];
+}
 ?>
 
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Admin Orders | Seven Dwarfs Boutique</title>
+<title>Orders Report | Seven Dwarfs Boutique</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
 <style>
 :root {
@@ -119,51 +130,68 @@ body {
   color: #374151;
 }
 [x-cloak] { display: none !important; }
-.active-link {
-  background-color: #fef3f5;
-  color: var(--rose);
-  font-weight: 600;
-  border-radius: 0.5rem;
-}
-/* 🖨 Print Styles (Simple) */
+
+/* 🖨 PRINT STYLES */
 @media print {
-  body, main {
-    background: white;
-    color: black;
+  @page { margin: 10mm; size: landscape; } /* Landscape for better table view */
+  
+  body, main { 
+    background: white !important; 
+    color: black !important; 
+    margin: 0 !important; 
+    padding: 0 !important; 
+    width: 100% !important;
   }
-  aside, form, .print-btn, .filters, .rounded-t-2xl, .shadow-sm {
-    display: none !important;
+  
+  /* Hide UI elements */
+  aside, .no-print, .filters, .print-btn { 
+    display: none !important; 
   }
+
+  /* Header Styling */
+  .report-header {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 2px solid var(--rose);
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+  }
+  
+  /* Summary Box Styling for Print */
+  .summary-box {
+    display: flex !important;
+    justify-content: space-between;
+    background-color: #fdf2f4 !important; /* Light pink bg for print */
+    border: 1px solid #eccace;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    -webkit-print-color-adjust: exact; /* Force background color */
+  }
+  
+  .summary-item {
+    text-align: center;
+    flex: 1;
+    border-right: 1px solid #eccace;
+  }
+  .summary-item:last-child { border-right: none; }
+
+  /* Table Styling */
   table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 12px;
+    font-size: 11px; 
   }
   th, td {
-    border: 1px solid #ccc;
-    padding: 6px 8px;
+    border: 1px solid #ddd;
+    padding: 6px;
     text-align: left;
   }
   th {
-    background: #f2f2f2;
-    font-weight: 600;
-  }
-  .report-header {
-    text-align: center;
-    margin-bottom: 20px;
-  }
-  .report-header img {
-    width: 60px;
-    height: 60px;
-  }
-  .report-header h2 {
-    margin: 10px 0 0;
-    font-size: 18px;
-  }
-  .report-meta {
-    text-align: center;
-    margin-bottom: 20px;
-    font-size: 12px;
+    background-color: #f3f4f6 !important;
+    -webkit-print-color-adjust: exact;
+    font-weight: bold;
   }
 }
 </style>
@@ -172,146 +200,196 @@ body {
 <body class="text-sm" x-data="{ userMenu:false, productMenu:false }">
 <div class="flex min-h-screen">
 
-  <!-- Sidebar -->
- <!-- 🌸 Sidebar -->
-  <aside class="w-64 bg-white shadow-md min-h-screen" x-data="{ open: true }">
-    <div class="p-4 border-b">
-      <div class="flex items-center space-x-3">
-        <img src="logo2.png" alt="Logo" class="w-10 h-10 rounded-full">
-        <h2 class="text-lg font-bold text-[var(--rose)]">SevenDwarfs</h2>
-      </div>
-    </div>
-
-    <div class="p-4 border-b flex items-center space-x-3">
-      <img src="newID.jpg" alt="Admin" class="w-10 h-10 rounded-full">
-      <div>
-        <p class="font-semibold"><?= htmlspecialchars($admin_name) ?></p>
-        <p class="text-xs text-gray-500"><?= htmlspecialchars($admin_role) ?></p>
-      </div>
-    </div>
-
-    <!-- Navigation -->
-    <nav class="p-4 space-y-1">
-      <a href="dashboard.php" class="block px-4 py-2 rounded-md hover:bg-gray-100 transition">
-        <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
-      </a>
-
-      <!-- User Management -->
-      <div>
-        <button @click="userMenu = !userMenu" 
-          class="w-full text-left px-4 py-2 flex justify-between items-center rounded-md hover:bg-gray-100 transition">
-          <span><i class="fas fa-users-cog mr-2"></i>User Management</span>
-          <i class="fas fa-chevron-down transition-transform duration-200" :class="{ 'rotate-180': userMenu }"></i>
-        </button>
-
-        <ul x-show="userMenu" x-transition class="pl-8 space-y-1 mt-1 text-sm">
-          <li><a href="manage_users.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-user mr-2"></i>Users</a></li>
-          <li><a href="manage_roles.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-id-badge mr-2"></i>Roles</a></li>
-        </ul>
+    <!-- 🧭 Sidebar -->
+    <aside class="w-64 bg-white sidebar" x-data="{ userMenu: false, productMenu: true }">
+      <div class="p-5 border-b">
+        <div class="flex items-center space-x-3">
+          <img src="logo2.png" alt="Logo" class="rounded-full w-10 h-10" />
+          <h2 class="text-lg font-bold text-[var(--rose)]">SevenDwarfs</h2>
+        </div>
       </div>
 
-      <!-- Product Management -->
-      <div>
-        <button @click="productMenu = !productMenu" 
-          class="w-full text-left px-4 py-2 flex justify-between items-center rounded-md hover:bg-gray-100 transition">
-          <span><i class="fas fa-box-open mr-2"></i>Product Management</span>
-          <i class="fas fa-chevron-down transition-transform duration-200" :class="{ 'rotate-180': productMenu }"></i>
-        </button>
-
-        <ul x-show="productMenu" x-transition class="pl-8 space-y-1 mt-1 text-sm">
-          <li><a href="categories.php" class="block py-1 hover:text-[var(--rose)"><i class="fas fa-tags mr-2"></i>Category</a></li>
-          <li><a href="products.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-box mr-2"></i>Products</a></li>
-          <li><a href="inventory.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-warehouse mr-2"></i>Inventory</a></li>
-          <li><a href="stock_management.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-boxes mr-2"></i>Stock Management</a></li>
-        </ul>
+      <div class="p-5 border-b flex items-center space-x-3">
+        <img src="newID.jpg" alt="Admin" class="rounded-full w-10 h-10" />
+        <div>
+          <p class="font-semibold text-gray-800"><?php echo htmlspecialchars($admin_name); ?></p>
+          <p class="text-xs text-gray-500"><?php echo htmlspecialchars($admin_role); ?></p>
+        </div>
       </div>
 
-      <a href="orders.php" class="block py-1 bg-pink-50 text-[var(--rose)] font-medium rounded-md"><i class="fas fa-shopping-cart mr-2"></i>Orders</a>
-      <a href="cashier_sales_report.php" class="block px-4 py-2 rounded-md hover:bg-gray-100 transition"><i class="fas fa-chart-line mr-2"></i>Cashier Sales</a>
-      <a href="suppliers.php" class="block px-4 py-2 rounded-md hover:bg-gray-100 transition"><i class="fas fa-industry mr-2"></i>Suppliers</a>
+      <!-- Navigation -->
+      <nav class="p-4 space-y-1">
+        <a href="dashboard.php" class="block px-4 py-2 hover:bg-gray-100 rounded-md transition">
+          <i class="fas fa-tachometer-alt mr-2"></i> Dashboard
+        </a>
+
+        <!-- User Management -->
+        <div>
+          <button @click="userMenu = !userMenu"
+            class="w-full text-left px-4 py-2 flex justify-between items-center hover:bg-gray-100 rounded-md transition">
+            <span><i class="fas fa-users-cog mr-2"></i> User Management</span>
+            <i class="fas fa-chevron-down transition-transform duration-200"
+              :class="{ 'rotate-180': userMenu }"></i>
+          </button>
+          <div x-show="userMenu" x-transition class="pl-8 space-y-1 mt-1">
+            <a href="manage_users.php" class="block py-1 hover:text-[var(--rose)]">
+              <i class="fas fa-user mr-2"></i>Users</a>
+            <a href="manage_roles.php" class="block py-1 hover:text-[var(--rose)]">
+              <i class="fas fa-id-badge mr-2"></i>Roles</a>
+          </div>
+        </div>
+
+        <!-- Product Management -->
+        <div>
+          <button @click="productMenu = !productMenu"
+            class="w-full text-left px-4 py-2 flex justify-between items-center hover:bg-gray-100 rounded-md transition">
+            <span><i class="fas fa-box-open mr-2"></i> Product Management</span>
+            <i class="fas fa-chevron-down transition-transform duration-200"
+              :class="{ 'rotate-180': productMenu }"></i>
+          </button>
+          <div x-show="productMenu" x-transition class="pl-8 space-y-1 mt-1">
+            <a href="categories.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-tags mr-2"></i> Category</a>
+            <a href="products.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-box mr-2"></i> Product</a>
+            <a href="inventory.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-warehouse mr-2"></i> Inventory</a>
+            <a href="stock_management.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-boxes mr-2"></i> Stock Management</a>
+          </div>
+        </div>
+
+        <a href="orders.php" class="block py-1 bg-pink-50 text-[var(--rose)] font-medium rounded-md">
+          <i class="fas fa-shopping-cart mr-2"></i> Orders</a>
+                <a href="cashier_sales_report.php" class="block px-4 py-2 rounded-md hover:bg-gray-100 transitio"><i class="fas fa-chart-line mr-2"></i>Cashier Sales</a>
+
+        <a href="suppliers.php" class="block px-4 py-2 hover:bg-gray-100 rounded-md transition">
+          <i class="fas fa-industry mr-2"></i> Suppliers</a>
 
       <a href="system_logs.php" class="block px-4 py-2 hover:bg-gray-100 rounded transition"><i class="fas fa-file-alt mr-2"></i>System Logs</a>
 
-      <a href="logout.php" class="block px-4 py-2 text-red-600 hover:bg-red-50 rounded-md transition"><i class="fas fa-sign-out-alt mr-2"></i>Logout</a>
-    </nav>
-  </aside>
+        <a href="logout.php" class="block px-4 py-2 text-red-600 hover:bg-red-50 rounded-md transition">
+          <i class="fas fa-sign-out-alt mr-2"></i> Logout</a>
+      </nav>
+    </aside>
+
   <!-- Main Content -->
-  <main class="flex-1 p-8 bg-gray-50 space-y-6 overflow-auto">
-    <div class="bg-[var(--rose)] text-white p-5 rounded-t-2xl shadow-sm flex justify-between items-center">
-      <h1 class="text-2xl font-semibold">Orders</h1>
-      <!-- 🖨 Print Button -->
-      <button onclick="window.print()" class="print-btn bg-white text-[var(--rose)] px-4 py-2 rounded-md shadow hover:bg-gray-100 flex items-center gap-2">
-        <i class="fas fa-print"></i> Generate Report
+  <main class="flex-1 p-8 bg-gray-50 space-y-6 overflow-auto w-full">
+    
+    <!-- Top Bar -->
+    <div class="bg-[var(--rose)] text-white p-5 rounded-t-2xl shadow-sm flex justify-between items-center no-print">
+      <h1 class="text-2xl font-semibold">Order Management</h1>
+      <button onclick="window.print()" class="print-btn bg-white text-[var(--rose)] px-4 py-2 rounded-md shadow hover:bg-gray-100 font-bold transition">
+        <i class="fas fa-print mr-2"></i> Generate Printable Report
       </button>
     </div>
 
     <!-- Filters -->
-    <form method="GET" class="bg-white p-5 rounded-b-2xl shadow flex flex-wrap items-center gap-4 filters">
+    <form method="GET" class="bg-white p-5 rounded-b-2xl shadow flex flex-wrap items-center gap-4 filters no-print">
       <div class="flex items-center gap-2">
-        <label for="status" class="font-medium text-gray-700">Status:</label>
-        <select name="status" id="status" onchange="this.form.submit()"
-          class="p-2 border rounded-md focus:ring-2 focus:ring-[var(--rose)] focus:outline-none">
-          <option value="all" <?= ($_GET['status'] ?? 'all') === 'all' ? 'selected' : '' ?>>All</option>
+        <label class="font-medium text-gray-700">Filter Status:</label>
+        <select name="status" onchange="this.form.submit()" class="p-2 border rounded focus:ring-[var(--rose)]">
+          <option value="all" <?= ($_GET['status'] ?? 'all') === 'all' ? 'selected' : '' ?>>All Statuses</option>
           <?= $status_options ?>
         </select>
       </div>
       <div class="flex items-center gap-2">
-        <label for="date_range" class="font-medium text-gray-700">Date:</label>
-        <select name="date_range" id="date_range" onchange="this.form.submit()"
-          class="p-2 border rounded-md focus:ring-2 focus:ring-[var(--rose)] focus:outline-none">
-          <option value="all" <?= ($date_filter === 'all') ? 'selected' : '' ?>>All</option>
+        <label class="font-medium text-gray-700">Time Period:</label>
+        <select name="date_range" onchange="this.form.submit()" class="p-2 border rounded focus:ring-[var(--rose)]">
+          <option value="all" <?= ($date_filter === 'all') ? 'selected' : '' ?>>All Time</option>
           <option value="today" <?= ($date_filter === 'today') ? 'selected' : '' ?>>Today</option>
-          <option value="week" <?= ($date_filter === 'week') ? 'selected' : '' ?>>This Week</option>
-          <option value="month" <?= ($date_filter === 'month') ? 'selected' : '' ?>>This Month</option>
+          <option value="week" <?= ($date_filter === 'week') ? 'selected' : '' ?>>This Week (Weekly Report)</option>
+          <option value="month" <?= ($date_filter === 'month') ? 'selected' : '' ?>>This Month (Monthly Report)</option>
           <option value="year" <?= ($date_filter === 'year') ? 'selected' : '' ?>>This Year</option>
         </select>
       </div>
     </form>
 
-    <!-- Orders Table -->
-    <div class="bg-white p-6 rounded-2xl shadow">
-      <div class="report-header hidden print:block">
-        <img src="logo2.png" alt="Logo">
-        <h2>Seven Dwarfs Boutique</h2>
-      </div>
-      <div class="report-meta hidden print:block">
-        <p>Generated by <?= htmlspecialchars($admin_name) ?> (<?= htmlspecialchars($admin_role) ?>)</p>
-        <p><?= date('F d, Y h:i A') ?></p>
+    <!-- 📄 REPORT AREA -->
+    <div class="bg-white p-8 rounded-2xl shadow-sm print:shadow-none print:p-0">
+      
+      <!-- 🖨 PRINT HEADER (Hidden on Screen, Visible on Print) -->
+      <div class="report-header hidden print:flex mb-6">
+        <div class="flex items-center gap-4">
+            <img src="logo2.png" alt="Logo" class="w-16 h-16 object-contain">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800">Seven Dwarfs Boutique</h1>
+                <p class="text-sm text-gray-500">Sales & Order Report</p>
+            </div>
+        </div>
+        <div class="text-right">
+            <h2 class="text-xl font-bold text-[var(--rose)]"><?= $report_title ?></h2>
+            <p class="text-xs text-gray-500">Generated on: <?= date('M d, Y h:i A') ?></p>
+            <p class="text-xs text-gray-500">By: <?= htmlspecialchars($admin_name) ?></p>
+        </div>
       </div>
 
-      <h2 class="text-lg font-semibold mb-4 text-gray-800">Order List</h2>
+      <!-- 📊 SUMMARY DASHBOARD (Visible Screen & Print) -->
+      <div class="summary-box grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 p-4 bg-pink-50 rounded-lg border border-pink-100">
+        <div class="summary-item text-center md:text-left md:pl-4">
+            <p class="text-gray-500 text-xs uppercase tracking-wider font-semibold">Total Orders</p>
+            <p class="text-2xl font-bold text-gray-800"><?= number_format($total_orders) ?></p>
+        </div>
+        <div class="summary-item text-center md:border-l md:border-r border-pink-200">
+            <p class="text-gray-500 text-xs uppercase tracking-wider font-semibold">Total Sales</p>
+            <p class="text-2xl font-bold text-[var(--rose)]">₱<?= number_format($total_sales, 2) ?></p>
+        </div>
+        <div class="summary-item text-center md:text-right md:pr-4">
+            <p class="text-gray-500 text-xs uppercase tracking-wider font-semibold">Payment Breakdown</p>
+            <div class="text-xs text-gray-600 mt-1">
+                <?php foreach($payment_counts as $method => $amount): ?>
+                    <div><?= htmlspecialchars($method) ?>: <span class="font-semibold">₱<?= number_format($amount, 2) ?></span></div>
+                <?php endforeach; ?>
+                <?php if(empty($payment_counts)) echo "No Data"; ?>
+            </div>
+        </div>
+      </div>
+
+      <!-- Order List Table -->
       <div class="overflow-x-auto">
-        <table class="min-w-full border border-gray-200 rounded-lg text-sm">
+        <table class="min-w-full border border-gray-200 text-sm">
           <thead class="bg-gray-100 text-gray-600 uppercase text-xs">
             <tr>
-              <th class="px-4 py-3 text-left">Order ID</th>
-              <th class="px-4 py-3 text-left">Customer</th>
-              <th class="px-4 py-3 text-left">Products</th>
-              <th class="px-4 py-3 text-left">Total</th>
-              <th class="px-4 py-3 text-left">Status</th>
-              <th class="px-4 py-3 text-left">Payment</th>
+              <th class="px-4 py-3 text-left">Order #</th>
               <th class="px-4 py-3 text-left">Date</th>
+              <th class="px-4 py-3 text-left">Customer</th>
+              <th class="px-4 py-3 text-left w-1/3">Items</th>
+              <th class="px-4 py-3 text-left">Status</th>
+              <th class="px-4 py-3 text-right">Total</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-100 text-gray-700">
             <?php if (!empty($orders)): ?>
               <?php foreach ($orders as $order): ?>
-              <tr class="hover:bg-gray-50 transition">
-                <td class="px-4 py-3"><?= $order['order_id']; ?></td>
-                <td class="px-4 py-3"><?= htmlspecialchars($order['first_name'] . ' ' . $order['last_name']); ?></td>
-                <td class="px-4 py-3"><?= htmlspecialchars($order['products']); ?></td>
-                <td class="px-4 py-3 font-semibold">₱<?= number_format($order['total_amount'], 2); ?></td>
-                <td class="px-4 py-3"><?= htmlspecialchars($order['order_status']); ?></td>
-                <td class="px-4 py-3"><?= htmlspecialchars($order['payment_method']); ?></td>
-                <td class="px-4 py-3"><?= htmlspecialchars(date('M d, Y h:i A', strtotime($order['created_at']))); ?></td>
+              <tr class="hover:bg-gray-50">
+                <td class="px-4 py-2 font-mono font-semibold text-gray-500">#<?= $order['order_id']; ?></td>
+                <td class="px-4 py-2 whitespace-nowrap"><?= date('M d, Y', strtotime($order['created_at'])); ?></td>
+                <td class="px-4 py-2"><?= htmlspecialchars($order['first_name'] . ' ' . $order['last_name']); ?></td>
+                <td class="px-4 py-2 text-xs text-gray-500"><?= htmlspecialchars($order['products']); ?></td>
+                <td class="px-4 py-2">
+                    <span class="px-2 py-1 rounded text-xs font-semibold bg-gray-100 border border-gray-300">
+                        <?= htmlspecialchars($order['order_status']); ?>
+                    </span>
+                </td>
+                <td class="px-4 py-2 text-right font-bold">₱<?= number_format($order['total_amount'], 2); ?></td>
               </tr>
               <?php endforeach; ?>
             <?php else: ?>
-              <tr><td colspan="7" class="text-center py-6 text-gray-500">No orders found</td></tr>
+              <tr><td colspan="6" class="text-center py-6 text-gray-500">No orders found for this period.</td></tr>
             <?php endif; ?>
           </tbody>
+          <!-- Table Footer for Print -->
+          <tfoot class="hidden print:table-row-group bg-gray-50 font-bold">
+            <tr>
+                <td colspan="5" class="px-4 py-2 text-right">GRAND TOTAL:</td>
+                <td class="px-4 py-2 text-right">₱<?= number_format($total_sales, 2); ?></td>
+            </tr>
+          </tfoot>
         </table>
       </div>
+      
+      <!-- Print Footer -->
+      <div class="hidden print:block mt-8 pt-8 border-t border-gray-300 flex justify-between text-xs text-gray-500">
+        <p>Printed from Seven Dwarfs Admin Panel</p>
+        <p>Page 1 of 1</p>
+      </div>
+
     </div>
   </main>
 </div>

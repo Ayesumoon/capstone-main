@@ -34,18 +34,26 @@ if ($admin_id) {
 // Get search term
 $search = isset($_GET['search']) ? trim($_GET['search']) : "";
 
-// Fetch categories with optional search
+// 🔹 Fetch categories (Sorted Newest to Oldest)
 if ($search !== "") {
-    $query = "SELECT * FROM categories WHERE category_name LIKE ? OR category_code LIKE ?";
+    // Search Mode: Filter by name/code AND Sort DESC
+    $query = "SELECT * FROM categories 
+              WHERE category_name LIKE ? OR category_code LIKE ? 
+              ORDER BY category_id DESC"; // Changed to DESC
+    
     $stmt = $conn->prepare($query);
     $like = "%" . $search . "%";
     $stmt->bind_param("ss", $like, $like);
     $stmt->execute();
     $result = $stmt->get_result();
 } else {
-    $query = "SELECT * FROM categories";
+    // Default Mode: Sort Newest to Oldest
+    $query = "SELECT * FROM categories ORDER BY category_id DESC"; // Changed to DESC
     $result = $conn->query($query);
 }
+
+// 🔹 Optional: Count total categories for a summary (useful for reports)
+$total_categories = $result->num_rows;
 ?>
 <!DOCTYPE html>
 <html lang="en">
