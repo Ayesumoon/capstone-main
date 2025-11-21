@@ -439,6 +439,7 @@ body{background:#fef9fa;font-family:'Poppins',sans-serif}
 
     </div>
 
+    
     <!-- Cart -->
     <aside class="cart-section" aria-label="Cart area">
       <h3 style="color:var(--rose);font-weight:700">Cart</h3>
