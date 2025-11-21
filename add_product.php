@@ -12,7 +12,6 @@ $supplier_result = $conn->query("SELECT supplier_id, supplier_name FROM supplier
 // Server-side handling
 // -----------------------------
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    // Trim and fetch inputs
     $product_name   = trim($_POST['product_name'] ?? '');
     $price          = isset($_POST['price_id']) ? floatval($_POST['price_id']) : 0;
     $supplier_price = isset($_POST['supplier_price']) ? floatval($_POST['supplier_price']) : 0;
@@ -21,95 +20,68 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     $errors = [];
 
-    // Basic required checks
-    if ($product_name === '') {
-        $errors[] = "Product name is required.";
-    }
-    if ($price <= 0) {
-        $errors[] = "Selling price must be greater than 0.";
-    }
-    if ($supplier_price <= 0) {
-        $errors[] = "Supplier price must be greater than 0.";
-    }
-    if ($category_id <= 0) {
-        $errors[] = "Please select a valid category.";
-    }
-    if ($supplier_id <= 0) {
-        $errors[] = "Please select a valid supplier.";
-    }
-    if ($price < $supplier_price) {
-        $errors[] = "Selling price cannot be lower than supplier price.";
-    }
+    // Validation Logic
+    if ($product_name === '') $errors[] = "Product name is required.";
+    if ($price <= 0) $errors[] = "Selling price must be greater than 0.";
+    if ($supplier_price < 0) $errors[] = "Supplier price cannot be negative."; // Changed to allow 0
+    if ($category_id <= 0) $errors[] = "Please select a valid category.";
+    if ($supplier_id <= 0) $errors[] = "Please select a valid supplier.";
+    if ($price < $supplier_price) $errors[] = "Selling price cannot be lower than supplier price.";
 
     // Check category exists
     $cat_check = $conn->prepare("SELECT category_id FROM categories WHERE category_id = ?");
     $cat_check->bind_param("i", $category_id);
     $cat_check->execute();
-    $cat_check_res = $cat_check->get_result();
-    if ($cat_check_res->num_rows === 0) {
-        $errors[] = "Selected category does not exist.";
-    }
+    if ($cat_check->get_result()->num_rows === 0) $errors[] = "Selected category does not exist.";
     $cat_check->close();
 
     // Check supplier exists
     $sup_check = $conn->prepare("SELECT supplier_id FROM suppliers WHERE supplier_id = ?");
     $sup_check->bind_param("i", $supplier_id);
     $sup_check->execute();
-    $sup_check_res = $sup_check->get_result();
-    if ($sup_check_res->num_rows === 0) {
-        $errors[] = "Selected supplier does not exist.";
-    }
+    if ($sup_check->get_result()->num_rows === 0) $errors[] = "Selected supplier does not exist.";
     $sup_check->close();
 
-    // Duplicate product name check (case-insensitive)
+    // Duplicate check
     $dup_check = $conn->prepare("SELECT product_id FROM products WHERE LOWER(product_name) = LOWER(?) LIMIT 1");
     $dup_check->bind_param("s", $product_name);
     $dup_check->execute();
-    $dup_res = $dup_check->get_result();
-    if ($dup_res->num_rows > 0) {
-        $errors[] = "A product with that name already exists.";
-    }
+    if ($dup_check->get_result()->num_rows > 0) $errors[] = "A product with that name already exists.";
     $dup_check->close();
 
-    // Image validation - require at least 1 image
+    // Image validation
     $image_filenames = [];
-    $has_images = !empty($_FILES['images']['name'][0]) && $_FILES['images']['name'][0] !== '';
+    $has_images = !empty($_FILES['images']['name'][0]);
+    
     if (!$has_images) {
         $errors[] = "Please upload at least one product image.";
     } else {
-        // Validate extensions & upload errors
-        $allowed = ["jpg", "jpeg", "png", "gif"];
+        $allowed = ["jpg", "jpeg", "png", "gif", "webp"];
         foreach ($_FILES['images']['name'] as $i => $filename) {
             if (empty($filename)) continue;
             $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
             if (!in_array($ext, $allowed)) {
-                $errors[] = "Only JPG, PNG, and GIF images are allowed.";
+                $errors[] = "Only JPG, PNG, WEBP and GIF images are allowed.";
                 break;
             }
-            if (!isset($_FILES['images']['error'][$i]) || $_FILES['images']['error'][$i] !== 0) {
-                $errors[] = "One of the image files failed to upload. Please try again.";
-                break;
-            }
-            // Optional: limit file size (example 5MB)
-            if (isset($_FILES['images']['size'][$i]) && $_FILES['images']['size'][$i] > 5 * 1024 * 1024) {
-                $errors[] = "Each image must be smaller than 5MB.";
+            if ($_FILES['images']['error'][$i] !== 0) {
+                $errors[] = "Image upload failed. Try again.";
                 break;
             }
         }
     }
 
-    // If errors, set flash message and redirect back
     if (!empty($errors)) {
-        $_SESSION['message'] = implode("<br>", $errors);
-        header("Location: add_product.php" . ($preselectedCategoryId ? "?category_id=".$preselectedCategoryId : ""));
+        $_SESSION['error'] = implode("<br>", $errors);
+        // Keep input values
+        $_SESSION['old_inputs'] = $_POST;
+        header("Location: add_product.php");
         exit;
     }
 
-    // Proceed with upload (we already validated)
+    // Process Uploads
     $target_dir = "uploads/products/";
-    if (!is_dir($target_dir)) {
-        mkdir($target_dir, 0777, true);
-    }
+    if (!is_dir($target_dir)) mkdir($target_dir, 0777, true);
 
     foreach ($_FILES['images']['name'] as $i => $filename) {
         if (empty($filename)) continue;
@@ -118,41 +90,34 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $unique_name = uniqid('prod_') . '.' . $ext;
         $target_file = $target_dir . $unique_name;
         if (move_uploaded_file($tmp_name, $target_file)) {
-            // store filename only
-            $image_filenames[] = $target_file; // keep path relative so it's easy to render later
+            $image_filenames[] = $target_file;
         }
     }
 
-    // JSON encode image paths
     $image_url_str = json_encode($image_filenames, JSON_UNESCAPED_SLASHES);
+    $revenue = $price - $supplier_price; // Calculated field
 
-    // Compute revenue
-    $revenue = $price - $supplier_price;
-
-    // Insert product using prepared statement
-    $sql = "INSERT INTO products (product_name, price_id, supplier_price, revenue, category_id, image_url, supplier_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?)";
+    // Insert
+    $sql = "INSERT INTO products (product_name, price_id, supplier_price, revenue, category_id, image_url, supplier_id, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, NOW())";
     $stmt = $conn->prepare($sql);
-    if (!$stmt) {
-        $_SESSION['message'] = "Database prepare error: " . $conn->error;
-        header("Location: add_product.php");
-        exit;
-    }
-    // bind types: s d d d i s i  -> "sdddisi"
     $stmt->bind_param("sdddisi", $product_name, $price, $supplier_price, $revenue, $category_id, $image_url_str, $supplier_id);
 
     if ($stmt->execute()) {
         $_SESSION['success'] = "Product added successfully!";
-        $stmt->close();
+        unset($_SESSION['old_inputs']); // Clear old inputs
         header("Location: products.php");
         exit;
     } else {
-        $_SESSION['message'] = "Database error: " . $stmt->error;
-        $stmt->close();
+        $_SESSION['error'] = "Database error: " . $stmt->error;
         header("Location: add_product.php");
         exit;
     }
 }
+
+// Retrieve old inputs if validation failed
+$old = $_SESSION['old_inputs'] ?? [];
+unset($_SESSION['old_inputs']);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -161,292 +126,266 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <title>Add Product | Seven Dwarfs Boutique</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <script src="https://cdn.tailwindcss.com"></script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
-  --rose: #d37689;
-  --rose-hover: #b75f6f;
+  --rose: #e5a5b2;
+  --rose-hover: #d48b98;
+  --rose-light: #fff0f3;
 }
 body {
   font-family: 'Poppins', sans-serif;
-  background-color: #f9fafb;
+  background-color: #f3f4f6;
+  color: #374151;
 }
-.card {
-  background: #fff;
-  border-radius: 1rem;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  padding: 2rem;
+.input-field {
+    transition: all 0.2s ease-in-out;
 }
-input, select, button {
-  transition: all 0.2s ease;
+.input-field:focus {
+    border-color: var(--rose);
+    box-shadow: 0 0 0 4px var(--rose-light);
+    background-color: #fff;
 }
-.img-preview {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
-  gap: 0.5rem;
-}
-.img-preview img {
-  width: 100%;
-  height: 90px;
-  object-fit: cover;
-  border-radius: 0.5rem;
-  border: 1px solid #e5e7eb;
-}
-.flash {
-  transition: all .2s ease;
-}
+/* Custom Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
 </style>
 </head>
 
-<body class="min-h-screen flex items-center justify-center px-4 py-10">
+<body class="min-h-screen flex items-center justify-center p-6">
 
-  <div class="card w-full max-w-3xl">
+  <div class="max-w-4xl w-full bg-white shadow-xl rounded-2xl overflow-hidden">
+    
     <!-- Header -->
-    <div class="text-center mb-8">
-      <h2 class="text-3xl font-bold text-[var(--rose)]">🛍️ Add New Product</h2>
-      <p class="text-gray-500 text-sm mt-1">Fill in the product details below</p>
+    <div class="bg-white border-b border-gray-100 p-6 flex items-center justify-between">
+      <div>
+        <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2">
+          <span class="bg-[var(--rose-light)] text-[var(--rose)] p-2 rounded-lg"><i class="fas fa-plus"></i></span>
+          Add New Product
+        </h2>
+        <p class="text-gray-400 text-sm mt-1">Create a new item for your inventory.</p>
+      </div>
+      <a href="products.php" class="group flex items-center gap-2 text-gray-500 hover:text-[var(--rose)] transition font-medium text-sm">
+        <i class="fas fa-arrow-left group-hover:-translate-x-1 transition-transform"></i> Back to List
+      </a>
     </div>
 
-    <!-- Flash Message -->
-    <?php if (isset($_SESSION['message'])): ?>
-      <div id="flash" class="mb-4 px-4 py-3 rounded bg-red-100 text-red-700 font-medium text-center flash">
-        <?= htmlspecialchars($_SESSION['message'], ENT_QUOTES, 'UTF-8'); unset($_SESSION['message']); ?>
-      </div>
-    <?php elseif (isset($_SESSION['success'])): ?>
-      <div id="flash" class="mb-4 px-4 py-3 rounded bg-green-100 text-green-700 font-medium text-center flash">
-        <?= htmlspecialchars($_SESSION['success'], ENT_QUOTES, 'UTF-8'); unset($_SESSION['success']); ?>
+    <!-- Flash Messages -->
+    <?php if (isset($_SESSION['error'])): ?>
+      <div class="m-6 mb-0 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg flex items-start gap-3">
+        <i class="fas fa-exclamation-circle mt-0.5"></i>
+        <div>
+            <p class="font-bold text-sm">Validation Error</p>
+            <p class="text-sm leading-relaxed"><?= $_SESSION['error']; unset($_SESSION['error']); ?></p>
+        </div>
       </div>
     <?php endif; ?>
 
-    <!-- Product Form -->
-    <form id="productForm" action="add_product.php<?= $preselectedCategoryId ? '?category_id='.$preselectedCategoryId : '' ?>" method="POST" enctype="multipart/form-data" class="space-y-8" novalidate>
-      
-      <!-- 🧩 Product Info -->
-      <div>
-        <h3 class="text-lg font-semibold text-gray-800 border-b pb-2 mb-4">Product Information</h3>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <!-- Form Content -->
+    <div class="p-8">
+      <form id="productForm" method="POST" enctype="multipart/form-data" class="space-y-8" novalidate>
+        
+        <!-- Section 1: General Info -->
+        <div>
+          <h3 class="text-xs uppercase tracking-wider text-gray-500 font-bold mb-4">General Information</h3>
           <div>
-            <label for="product_name" class="block text-gray-700 font-medium mb-1">Product Name</label>
-            <input id="product_name" type="text" name="product_name" required
-              class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[var(--rose)] focus:outline-none" placeholder="e.g. Floral Blouse">
-            <p id="product_name_error" class="text-sm text-red-600 mt-1 hidden"></p>
-          </div>
-
-          <div>
-            <label for="supplier_price" class="block text-gray-700 font-medium mb-1">Supplier Price</label>
-            <input id="supplier_price" type="number" step="0.01" name="supplier_price" required
-              class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[var(--rose)] focus:outline-none" placeholder="0.00">
-            <p id="supplier_price_error" class="text-sm text-red-600 mt-1 hidden"></p>
-          </div>
-
-          <div>
-            <label for="price_id" class="block text-gray-700 font-medium mb-1">Selling Price</label>
-            <input id="price_id" type="number" step="0.01" name="price_id" required
-              class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[var(--rose)] focus:outline-none" placeholder="0.00">
-            <p id="price_id_error" class="text-sm text-red-600 mt-1 hidden"></p>
+            <label class="block text-gray-700 font-semibold mb-2 text-sm">Product Name <span class="text-red-500">*</span></label>
+            <div class="relative">
+                <span class="absolute left-4 top-3.5 text-gray-400"><i class="fas fa-tag"></i></span>
+                <input type="text" name="product_name" id="product_name" required
+                  value="<?= htmlspecialchars($old['product_name'] ?? '') ?>"
+                  placeholder="e.g. Summer Floral Dress"
+                  class="input-field w-full border border-gray-300 rounded-xl pl-10 pr-4 py-3 outline-none bg-gray-50 text-gray-800 placeholder-gray-400 font-medium">
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- 🏷️ Category & Supplier -->
-      <div>
-        <h3 class="text-lg font-semibold text-gray-800 border-b pb-2 mb-4">Category & Supplier</h3>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label for="category" class="block text-gray-700 font-medium mb-1">Category</label>
-            <select id="category" name="category" required
-              class="w-full border border-gray-300 rounded-lg p-3 bg-white focus:ring-2 focus:ring-[var(--rose)] focus:outline-none">
-              <option value="">Select a category</option>
-              <?php
-                // we must rewind the result sets since we fetched earlier
-                if ($category_result) {
-                    $category_result->data_seek(0);
-                    while ($row = $category_result->fetch_assoc()):
-              ?>
-              <option value="<?= intval($row['category_id']); ?>" <?= ($preselectedCategoryId == $row['category_id']) ? 'selected' : '' ?>>
-                <?= htmlspecialchars($row['category_name']); ?>
-              </option>
-              <?php
-                    endwhile;
-                }
-              ?>
-            </select>
-            <p id="category_error" class="text-sm text-red-600 mt-1 hidden"></p>
-          </div>
+        <hr class="border-gray-100">
 
-          <div>
-            <label for="supplier_id" class="block text-gray-700 font-medium mb-1">Supplier</label>
-            <select id="supplier_id" name="supplier_id" required
-              class="w-full border border-gray-300 rounded-lg p-3 bg-white focus:ring-2 focus:ring-[var(--rose)] focus:outline-none">
-              <option value="">Select a supplier</option>
-              <?php
-                if ($supplier_result) {
-                    $supplier_result->data_seek(0);
-                    while ($row = $supplier_result->fetch_assoc()):
-              ?>
-              <option value="<?= intval($row['supplier_id']); ?>"><?= htmlspecialchars($row['supplier_name']); ?></option>
-              <?php
-                    endwhile;
-                }
-              ?>
-            </select>
-            <p id="supplier_error" class="text-sm text-red-600 mt-1 hidden"></p>
+        <!-- Section 2: Pricing -->
+        <div>
+          <h3 class="text-xs uppercase tracking-wider text-gray-500 font-bold mb-4">Pricing Strategy</h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Selling Price -->
+            <div>
+              <label class="block text-gray-700 font-semibold mb-2 text-sm">Selling Price (₱) <span class="text-red-500">*</span></label>
+              <div class="relative">
+                <span class="absolute left-4 top-3.5 text-gray-400 font-bold">₱</span>
+                <input type="number" step="0.01" name="price_id" id="price_id" required
+                  value="<?= htmlspecialchars($old['price_id'] ?? '') ?>"
+                  class="input-field w-full border border-gray-300 rounded-xl pl-10 pr-4 py-3 outline-none bg-gray-50 font-semibold text-gray-800">
+              </div>
+            </div>
+            <!-- Supplier Price -->
+            <div>
+              <label class="block text-gray-700 font-semibold mb-2 text-sm">Supplier Cost (₱) <span class="text-red-500">*</span></label>
+              <div class="relative">
+                <span class="absolute left-4 top-3.5 text-gray-400 font-bold">₱</span>
+                <input type="number" step="0.01" name="supplier_price" id="supplier_price" required
+                  value="<?= htmlspecialchars($old['supplier_price'] ?? '') ?>"
+                  class="input-field w-full border border-gray-300 rounded-xl pl-10 pr-4 py-3 outline-none bg-gray-50 text-gray-600">
+              </div>
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- 🖼️ Product Images -->
-      <div>
-        <h3 class="text-lg font-semibold text-gray-800 border-b pb-2 mb-4">Product Images</h3>
-        <input id="images" type="file" name="images[]" accept="image/*" multiple required
-          class="block w-full text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-[var(--rose)] file:text-white hover:file:bg-[var(--rose-hover)] transition cursor-pointer">
-        <p id="images_error" class="text-sm text-red-600 mt-2 hidden"></p>
-        <p class="text-sm text-gray-500 mt-2">You can select multiple images at once. Max 5MB per image.</p>
+        <hr class="border-gray-100">
 
-        <div class="mt-4 img-preview" id="imgPreview"></div>
-      </div>
+        <!-- Section 3: Organization -->
+        <div>
+          <h3 class="text-xs uppercase tracking-wider text-gray-500 font-bold mb-4">Organization</h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Category -->
+            <div>
+              <label class="block text-gray-700 font-semibold mb-2 text-sm">Category <span class="text-red-500">*</span></label>
+              <div class="relative">
+                <span class="absolute left-4 top-3.5 text-gray-400"><i class="fas fa-layer-group"></i></span>
+                <select name="category" id="category" required
+                  class="input-field w-full border border-gray-300 rounded-xl pl-10 pr-10 py-3 outline-none bg-gray-50 appearance-none cursor-pointer">
+                  <option value="">Select Category</option>
+                  <?php 
+                    if ($category_result) {
+                        $category_result->data_seek(0);
+                        while ($row = $category_result->fetch_assoc()): 
+                  ?>
+                    <option value="<?= $row['category_id'] ?>" <?= (($old['category'] ?? $preselectedCategoryId) == $row['category_id']) ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($row['category_name']) ?>
+                    </option>
+                  <?php endwhile; } ?>
+                </select>
+                <i class="fas fa-chevron-down absolute right-4 top-4 text-gray-400 pointer-events-none text-xs"></i>
+              </div>
+            </div>
+            <!-- Supplier -->
+            <div>
+              <label class="block text-gray-700 font-semibold mb-2 text-sm">Supplier <span class="text-red-500">*</span></label>
+              <div class="relative">
+                <span class="absolute left-4 top-3.5 text-gray-400"><i class="fas fa-truck"></i></span>
+                <select name="supplier_id" id="supplier_id" required
+                  class="input-field w-full border border-gray-300 rounded-xl pl-10 pr-10 py-3 outline-none bg-gray-50 appearance-none cursor-pointer">
+                  <option value="">Select Supplier</option>
+                  <?php 
+                    if ($supplier_result) {
+                        $supplier_result->data_seek(0);
+                        while ($row = $supplier_result->fetch_assoc()): 
+                  ?>
+                    <option value="<?= $row['supplier_id'] ?>" <?= (($old['supplier_id'] ?? '') == $row['supplier_id']) ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($row['supplier_name']) ?>
+                    </option>
+                  <?php endwhile; } ?>
+                </select>
+                <i class="fas fa-chevron-down absolute right-4 top-4 text-gray-400 pointer-events-none text-xs"></i>
+              </div>
+            </div>
+          </div>
+        </div>
 
-      <!-- 🧾 Buttons -->
-      <div class="flex gap-4 pt-6">
-        <button id="submitBtn" type="submit"
-          class="flex-1 bg-[var(--rose)] text-white px-6 py-3 rounded-lg font-semibold shadow-md hover:bg-[var(--rose-hover)] active:scale-95 transition-all">
-          <i class="fas fa-plus-circle mr-2"></i> Add Product
-        </button>
-        <a href="products.php"
-          class="flex-1 bg-gray-100 text-gray-700 text-center px-6 py-3 rounded-lg font-medium hover:bg-gray-200 shadow-sm active:scale-95 transition-all">
-          Cancel
-        </a>
-      </div>
-    </form>
+        <hr class="border-gray-100">
+
+        <!-- Section 4: Images -->
+        <div>
+            <h3 class="text-xs uppercase tracking-wider text-gray-500 font-bold mb-4">Product Media</h3>
+            
+            <!-- Upload Area -->
+            <label class="relative flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer bg-gray-50 hover:bg-[var(--rose-light)] hover:border-[var(--rose)] transition-all group">
+                <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                    <div class="w-12 h-12 rounded-full bg-gray-100 group-hover:bg-white flex items-center justify-center mb-3 transition-colors">
+                        <i class="fas fa-cloud-upload-alt text-2xl text-gray-400 group-hover:text-[var(--rose)] transition-colors"></i>
+                    </div>
+                    <p class="text-sm text-gray-500"><span class="font-semibold text-[var(--rose)]">Click to upload</span> images</p>
+                    <p class="text-xs text-gray-400 mt-1">JPG, PNG, WebP (Max 5MB)</p>
+                </div>
+                <input id="images" type="file" name="images[]" accept="image/*" multiple class="hidden" required>
+            </label>
+            <p id="file-count" class="text-xs text-right text-gray-400 mt-2 h-4"></p>
+
+            <!-- Image Preview Container -->
+            <div id="imgPreview" class="grid grid-cols-4 md:grid-cols-6 gap-4 mt-4 empty:hidden"></div>
+        </div>
+
+        <!-- Footer Buttons -->
+        <div class="flex items-center justify-end gap-4 pt-4">
+            <a href="products.php" class="text-gray-500 hover:text-gray-800 font-medium text-sm transition">
+                Cancel
+            </a>
+            <button type="submit" id="submitBtn"
+                class="bg-[var(--rose)] hover:bg-[var(--rose-hover)] text-white px-8 py-3 rounded-xl shadow-md hover:shadow-lg transform hover:-translate-y-0.5 transition-all font-semibold flex items-center gap-2">
+                <i class="fas fa-check"></i> Save Product
+            </button>
+        </div>
+
+      </form>
+    </div>
   </div>
 
-  <!-- Scripts -->
+  <!-- JavaScript Logic -->
   <script>
-    // Helper: show/hide error text
-    function showError(id, message) {
-      const el = document.getElementById(id);
-      if (!el) return;
-      if (message) {
-        el.innerText = message;
-        el.classList.remove('hidden');
-      } else {
-        el.innerText = '';
-        el.classList.add('hidden');
-      }
-    }
-
-    // Auto-capitalize product name on blur
-    document.getElementById('product_name').addEventListener('blur', function() {
-      this.value = this.value.replace(/\s+/g, ' ').trim();
-      // Capitalize first letter of each word
-      this.value = this.value.split(' ').map(w => w ? w.charAt(0).toUpperCase() + w.slice(1) : '').join(' ');
-    });
-
-    // Live image preview
+    // 1. Image Preview & Count Logic
     const imagesInput = document.getElementById('images');
     const imgPreview = document.getElementById('imgPreview');
+    const fileCount = document.getElementById('file-count');
+
     imagesInput.addEventListener('change', function() {
       imgPreview.innerHTML = '';
       const files = Array.from(this.files);
-      if (!files.length) return;
+
+      // Update count text
+      if (files.length > 0) {
+          fileCount.textContent = `${files.length} file(s) selected`;
+          fileCount.classList.add('text-[var(--rose)]');
+      } else {
+          fileCount.textContent = '';
+      }
+
+      // Generate Previews
       files.forEach(file => {
         if (!file.type.startsWith('image/')) return;
         const reader = new FileReader();
         reader.onload = function(e) {
+          const div = document.createElement('div');
+          div.className = 'relative group aspect-square';
+          
           const img = document.createElement('img');
           img.src = e.target.result;
-          img.alt = file.name;
-          imgPreview.appendChild(img);
+          img.className = 'w-full h-full object-cover rounded-lg border border-gray-200 shadow-sm';
+          
+          div.appendChild(img);
+          imgPreview.appendChild(div);
         };
         reader.readAsDataURL(file);
       });
     });
 
-    // Client-side validation
+    // 2. Client-Side Validation (Basic visual cues)
     document.getElementById('productForm').addEventListener('submit', function(e) {
-      // reset errors
-      showError('product_name_error', '');
-      showError('supplier_price_error', '');
-      showError('price_id_error', '');
-      showError('category_error', '');
-      showError('supplier_error', '');
-      showError('images_error', '');
+        let isValid = true;
+        const requiredInputs = this.querySelectorAll('[required]');
+        
+        requiredInputs.forEach(input => {
+            if (!input.value) {
+                isValid = false;
+                input.classList.add('border-red-400', 'bg-red-50');
+                // Remove error style on focus
+                input.addEventListener('input', function() {
+                    this.classList.remove('border-red-400', 'bg-red-50');
+                }, {once: true});
+            }
+        });
 
-      let valid = true;
-
-      const name = document.getElementById('product_name').value.trim();
-      const supplierPrice = parseFloat(document.getElementById('supplier_price').value);
-      const price = parseFloat(document.getElementById('price_id').value);
-      const category = document.getElementById('category').value;
-      const supplier = document.getElementById('supplier_id').value;
-      const files = document.getElementById('images').files;
-
-      if (!name) {
-        showError('product_name_error', 'Product name is required.');
-        valid = false;
-      }
-      if (isNaN(supplierPrice) || supplierPrice <= 0) {
-        showError('supplier_price_error', 'Supplier price must be greater than 0.');
-        valid = false;
-      }
-      if (isNaN(price) || price <= 0) {
-        showError('price_id_error', 'Selling price must be greater than 0.');
-        valid = false;
-      }
-      if (!isNaN(price) && !isNaN(supplierPrice) && price < supplierPrice) {
-        showError('price_id_error', 'Selling price cannot be lower than supplier price.');
-        valid = false;
-      }
-      if (!category) {
-        showError('category_error', 'Please select a category.');
-        valid = false;
-      }
-      if (!supplier) {
-        showError('supplier_error', 'Please select a supplier.');
-        valid = false;
-      }
-      if (!files || files.length === 0) {
-        showError('images_error', 'Please upload at least one image.');
-        valid = false;
-      } else {
-        // Check file types & sizes client-side
-        for (let i = 0; i < files.length; i++) {
-          const f = files[i];
-          if (!f.type.startsWith('image/')) {
-            showError('images_error', 'Only image files are allowed.');
-            valid = false;
-            break;
-          }
-          if (f.size > 5 * 1024 * 1024) {
-            showError('images_error', 'Each image must be smaller than 5MB.');
-            valid = false;
-            break;
-          }
+        if (!isValid) {
+            e.preventDefault();
+            // Simple shake animation or scroll to top
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
-      }
-
-      if (!valid) {
-        e.preventDefault();
-        // scroll to top of form to show validation
-        window.scrollTo({ top: document.querySelector('.card').offsetTop - 20, behavior: 'smooth' });
-        return false;
-      }
-
-      // let the form submit
-      return true;
     });
 
-    // Auto-hide flash after 4s
-    const flash = document.getElementById('flash');
-    if (flash) {
-      setTimeout(() => {
-        flash.style.opacity = '0';
-        setTimeout(() => flash.remove(), 400);
-      }, 4000);
-    }
+    // 3. Auto-Capitalize Product Name
+    document.getElementById('product_name').addEventListener('blur', function() {
+        if(this.value) {
+            this.value = this.value.replace(/\w\S*/g, (w) => (w.replace(/^\w/, (c) => c.toUpperCase())));
+        }
+    });
   </script>
-
-  <!-- FontAwesome (icons) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js" defer></script>
 </body>
 </html>
