@@ -361,7 +361,15 @@ body{background:#fef9fa;font-family:'Poppins',sans-serif}
   </div>
   <div class="sidebar-footer">
     <div class="sidebar-cashier">👤 <span class="ml-2">Cashier: <strong style="color:var(--rose)"><?= htmlspecialchars($cashier_name); ?></strong></span></div>
-    <form action="logout.php" method="POST"><button class="sidebar-logout-btn" style="background:#fff;border-radius:8px;padding:8px;border:1px solid #f3dbe2;color:#e11d48;cursor:pointer;width:100%">🚪 Logout</button></form>
+    <form action="logout.php" method="POST">
+      <button class="sidebar-logout-btn flex items-center justify-center gap-2 w-full px-4 py-3 rounded-lg border border-pink-200 bg-white text-pink-600 font-bold text-base hover:bg-pink-50 hover:text-pink-700 transition shadow-sm"
+        style="margin-top:10px;">
+        <span class="inline-block bg-pink-100 text-pink-600 rounded-full p-1">
+          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 16l-4-4 4-4"/><path d="M5 12h12"/><path d="M17 16v1a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"/></svg>
+        </span>
+        Logout
+      </button>
+    </form>
   </div>
 </aside>
 
@@ -470,6 +478,7 @@ body{background:#fef9fa;font-family:'Poppins',sans-serif}
           <div id="gcashRefDiv" style="display:none">
             <label class="text-sm font-medium">GCash Reference Number</label>
             <input type="text" name="gcash_ref" id="gcashRefInput" class="border-2 border-[var(--rose)] rounded px-3 py-2" maxlength="50" placeholder="Enter GCash Ref #">
+            <button type="button" id="openReturnModal" style="margin-left:8px;background:var(--rose);color:#fff;padding:8px 14px;border-radius:8px;font-weight:600;">Return</button>
           </div>
 
           <button type="submit" name="checkout" class="checkout-btn">Checkout</button>
@@ -488,6 +497,57 @@ body{background:#fef9fa;font-family:'Poppins',sans-serif}
     <div id="sizeDiv"><label class="text-sm font-medium">Size</label><div id="sizeOptions" style="display:flex;gap:8px;margin-top:8px"></div></div>
     <div id="colorDiv" style="margin-top:12px"><label class="text-sm font-medium">Color</label><div id="colorOptions" style="display:flex;gap:8px;margin-top:8px"></div></div>
     <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px"><button id="cancelModal" class="" style="padding:8px 12px;border-radius:8px;border:1px solid #e6e6e6">Cancel</button><button id="confirmAdd" style="background:var(--rose);color:#fff;padding:8px 12px;border-radius:8px">Add</button></div>
+  </div>
+</div>
+
+<!-- Return Modal -->
+<!-- Return Drawer Modal -->
+<div id="returnModal" class="fixed top-0 right-0 z-[100] h-full w-full max-w-sm bg-white shadow-2xl border-l border-pink-100 transition-transform duration-300 ease-in-out"
+     style="transform:translateX(100%);display:block;pointer-events:none;">
+  <div class="flex flex-col h-full">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-pink-100">
+      <div class="flex items-center gap-2">
+        <span class="inline-block bg-pink-100 text-pink-600 rounded-full p-2">
+          <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12v-2a9 9 0 1 1 9 9h-2"/><path d="M3 12l4-4"/><path d="M3 12l4 4"/></svg>
+        </span>
+        <h4 class="font-bold text-lg text-pink-700">Return Item</h4>
+      </div>
+      <button id="closeReturnModal" class="text-pink-400 hover:text-pink-600 text-2xl font-bold focus:outline-none" style="background:none;border:none;">&times;</button>
+    </div>
+    <form id="returnForm" class="flex-1 px-6 py-5 space-y-4 overflow-y-auto">
+      <div>
+        <label class="block text-sm font-semibold text-pink-700 mb-1" for="returnOrderId">Order ID</label>
+        <input type="text" id="returnOrderId" class="w-full border border-pink-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-pink-300" required autocomplete="off">
+      </div>
+      <div>
+        <label class="block text-sm font-semibold text-pink-700 mb-1" for="returnProductName">Product Name</label>
+        <input type="text" id="returnProductName" class="w-full border border-pink-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-pink-300" required autocomplete="off">
+      </div>
+      <div class="flex flex-col sm:flex-row gap-4">
+        <div class="flex-1">
+          <label class="block text-sm font-semibold text-pink-700 mb-1" for="returnQty">Quantity</label>
+          <input type="number" id="returnQty" class="w-full border border-pink-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-pink-300" min="1" required>
+        </div>
+        <div class="flex-1">
+          <label class="block text-sm font-semibold text-pink-700 mb-1" for="returnReason">Reason</label>
+          <select id="returnReason" class="w-full border border-pink-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-pink-300" required>
+            <option value="">Select reason</option>
+            <option value="Damaged">Damaged</option>
+            <option value="Wrong Item">Wrong Item</option>
+            <option value="Customer Request">Customer Request</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm font-semibold text-pink-700 mb-1" for="returnNotes">Additional Notes</label>
+        <textarea id="returnNotes" class="w-full border border-pink-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-pink-300 resize-none" rows="2"></textarea>
+      </div>
+      <div class="flex justify-end gap-3 pt-2">
+        <button type="button" id="cancelReturnModal" class="px-4 py-2 rounded-lg border border-pink-200 text-pink-600 hover:bg-pink-50 font-semibold transition">Cancel</button>
+        <button type="submit" class="px-4 py-2 rounded-lg bg-pink-600 text-white font-bold hover:bg-pink-700 transition">Submit Return</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -623,8 +683,44 @@ document.getElementById('sidebarToggle').onclick = function() {
     mainContent.style.width = 'calc(100vw - 260px)';
   }
 };
+document.getElementById('openReturnModal').onclick = function() {
+  var modal = document.getElementById('returnModal');
+  modal.style.transform = 'translateX(0)';
+  modal.style.pointerEvents = 'auto';
+  modal.style.boxShadow = '0 8px 32px rgba(211,118,137,0.18)';
+};
+document.getElementById('closeReturnModal').onclick = function() {
+  var modal = document.getElementById('returnModal');
+  modal.style.transform = 'translateX(100%)';
+  modal.style.pointerEvents = 'none';
+};
+document.getElementById('cancelReturnModal').onclick = function() {
+  var modal = document.getElementById('returnModal');
+  modal.style.transform = 'translateX(100%)';
+  modal.style.pointerEvents = 'none';
+};
+document.getElementById('returnForm').onsubmit = function(e) {
+  e.preventDefault();
+  // Placeholder: handle return logic here
+  const orderId = document.getElementById('returnOrderId').value;
+  const productName = document.getElementById('returnProductName').value;
+  const qty = document.getElementById('returnQty').value;
+  const reason = document.getElementById('returnReason').value;
+  const notes = document.getElementById('returnNotes').value;
+  alert(
+    'Return submitted!\n' +
+    'Order ID: ' + orderId +
+    '\nProduct: ' + productName +
+    '\nQty: ' + qty +
+    '\nReason: ' + reason +
+    (notes ? '\nNotes: ' + notes : '')
+  );
+  document.getElementById('returnModal').style.display = 'none';
+};
 </script>
 </body>
 </html>
+
+
 
 

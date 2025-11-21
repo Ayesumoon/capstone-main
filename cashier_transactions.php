@@ -70,6 +70,67 @@ $totalStmt = $conn->prepare("
 $totalStmt->bind_param("i", $admin_id);
 $totalStmt->execute();
 $totalSales = $totalStmt->get_result()->fetch_assoc()['total_sales'] ?? 0;
+/* --- Trending Products Query --- */
+$trendingStmt = $conn->prepare("
+    SELECT p.product_name, SUM(oi.qty) as total_sold
+    FROM order_items oi
+    JOIN orders o ON oi.order_id = o.order_id
+    JOIN products p ON oi.product_id = p.product_id
+    WHERE $dateCondition AND o.admin_id = ?
+    GROUP BY oi.product_id
+    ORDER BY total_sold DESC
+    LIMIT 5
+");
+$trendingStmt->bind_param("i", $admin_id);
+$trendingStmt->execute();
+$trendingProducts = $trendingStmt->get_result();
+// Prepare trending data for pie chart
+$trendingLabels = [];
+$trendingData = [];
+$trendingColors = ['#d37689', '#f9e9ed', '#b75f6f', '#fbb6ce', '#f472b6'];
+while ($prod = $trendingProducts->fetch_assoc()) {
+    $trendingLabels[] = $prod['product_name'];
+    $trendingData[] = $prod['total_sold'];
+}
+
+/* --- Sales Chart Data Query --- */
+if ($filter === 'month') {
+    $chartQuery = "
+        SELECT DATE(o.created_at) as label, SUM(o.total_amount) as total
+        FROM orders o
+        WHERE $dateCondition AND o.admin_id = ?
+        GROUP BY DATE(o.created_at)
+        ORDER BY DATE(o.created_at)
+    ";
+} elseif ($filter === 'week') {
+    $chartQuery = "
+        SELECT DATE(o.created_at) as label, SUM(o.total_amount) as total
+        FROM orders o
+        WHERE $dateCondition AND o.admin_id = ?
+        GROUP BY DATE(o.created_at)
+        ORDER BY DATE(o.created_at)
+    ";
+} else {
+    $chartQuery = "
+        SELECT HOUR(o.created_at) as label, SUM(o.total_amount) as total
+        FROM orders o
+        WHERE $dateCondition AND o.admin_id = ?
+        GROUP BY HOUR(o.created_at)
+        ORDER BY HOUR(o.created_at)
+    ";
+}
+$chartStmt = $conn->prepare($chartQuery);
+$chartStmt->bind_param("i", $admin_id);
+$chartStmt->execute();
+$chartData = $chartStmt->get_result();
+$chartLabels = [];
+$chartTotals = [];
+while ($row = $chartData->fetch_assoc()) {
+    $chartLabels[] = $row['label'];
+    $chartTotals[] = $row['total'];
+}
+$trendingStmt->close();
+$chartStmt->close();
 ?>
 
 <!DOCTYPE html>
@@ -241,7 +302,7 @@ body { background:#fef9fa; font-family:'Poppins',sans-serif; }
       Cashier: <span class="font-medium text-[var(--rose)]"><?= htmlspecialchars($cashier_name); ?></span>
     </div>
     <form action="logout.php" method="POST">
-      <button class="sidebar-logout-btn">🚪 Logout</button>
+      <button class="sidebar-logout-btn" style="background:#fff;border-radius:8px;padding:8px;border:1px solid #f3dbe2;color:#e11d48;cursor:pointer;width:100%">🚪 Logout</button>
     </form>
   </div>
 </aside>
@@ -268,6 +329,26 @@ body { background:#fef9fa; font-family:'Poppins',sans-serif; }
     <p class="text-3xl font-bold text-[var(--rose)]">₱<?= number_format($totalSales, 2); ?></p>
   </div>
 
+  <!-- 📊 Trending & Sales Chart -->
+  <div class="flex flex-wrap gap-6 mb-6">
+    <!-- Trending Products -->
+    <div class="bg-white rounded-lg shadow p-6 flex-1 min-w-[320px]">
+      <h2 class="font-semibold text-lg text-gray-700 mb-2">Trending Products (Top 5)</h2>
+      <?php if (count($trendingLabels) > 0): ?>
+        <div style="width:200px;max-width:100%;margin:auto;">
+          <canvas id="trendingPieChart" width="200" height="200"></canvas>
+        </div>
+      <?php else: ?>
+        <p class="text-gray-500">No trending products for <?= strtolower($label); ?>.</p>
+      <?php endif; ?>
+    </div>
+    <!-- Sales Chart -->
+    <div class="bg-white rounded-lg shadow p-6 flex-1 min-w-[320px]">
+      <h2 class="font-semibold text-lg text-gray-700 mb-2">Sales Chart (<?= $label; ?>)</h2>
+      <canvas id="salesChart" height="120"></canvas>
+    </div>
+  </div>
+  
   <!-- 📋 Transactions Table -->
   <div class="bg-white rounded-lg shadow p-6">
     <h2 class="font-semibold text-lg mb-4"><?= $label; ?> Sales Summary</h2>
@@ -307,6 +388,64 @@ body { background:#fef9fa; font-family:'Poppins',sans-serif; }
   </div>
 </div>
 
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+const ctx = document.getElementById('salesChart').getContext('2d');
+const salesChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+        labels: <?= json_encode($chartLabels); ?>,
+        datasets: [{
+            label: 'Sales',
+            data: <?= json_encode($chartTotals); ?>,
+            backgroundColor: 'rgba(211, 118, 137, 0.6)',
+            borderColor: 'rgba(211, 118, 137, 1)',
+            borderWidth: 1,
+            borderRadius: 6,
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: { display: false },
+            title: { display: false }
+        },
+        scales: {
+            x: { title: { display: true, text: '<?= $filter === "today" ? "Hour" : "Date"; ?>' } },
+            y: { title: { display: true, text: 'Sales (₱)' }, beginAtZero: true }
+        }
+    }
+});
+if (typeof Chart !== "undefined") {
+  // Trending Products Pie Chart
+  const trendingLabels = <?= json_encode($trendingLabels); ?>;
+  const trendingData = <?= json_encode($trendingData); ?>;
+  const trendingColors = <?= json_encode($trendingColors); ?>;
+  if (trendingLabels.length > 0) {
+    new Chart(document.getElementById('trendingPieChart').getContext('2d'), {
+      type: 'pie',
+      data: {
+        labels: trendingLabels,
+        datasets: [{
+          data: trendingData,
+          backgroundColor: trendingColors,
+          borderColor: '#fff',
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: false,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom' },
+          title: { display: false }
+        }
+      }
+    });
+  }
+}
+</script>
 </body>
 </html>
 
@@ -315,3 +454,4 @@ $stmt->close();
 $totalStmt->close();
 $conn->close(); 
 ?>
+
