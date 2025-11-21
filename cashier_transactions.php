@@ -20,7 +20,7 @@ $cashierRow = $cashierRes->get_result()->fetch_assoc();
 $cashier_name = $cashierRow ? $cashierRow['first_name'] : 'Unknown Cashier';
 $cashierRes->close();
 
-// ✅ Determine selected filter (today, week, month)
+// ✅ Determine selected filter
 $filter = isset($_GET['filter']) ? $_GET['filter'] : 'today';
 
 // ✅ Build query based on filter
@@ -38,7 +38,7 @@ switch ($filter) {
         $label = "Today";
 }
 
-// ✅ Fetch filtered transactions
+// ✅ Fetch Transactions (Filtered by Date)
 $stmt = $conn->prepare("
     SELECT 
         o.order_id,
@@ -47,12 +47,10 @@ $stmt = $conn->prepare("
         o.changes,
         o.created_at,
         pm.payment_method_name,
-        a.first_name AS cashier_name,
         COUNT(oi.product_id) AS total_items
     FROM orders o
     LEFT JOIN order_items oi ON o.order_id = oi.order_id
     LEFT JOIN payment_methods pm ON o.payment_method_id = pm.payment_method_id
-    LEFT JOIN adminusers a ON o.admin_id = a.admin_id
     WHERE $dateCondition AND o.admin_id = ?
     GROUP BY o.order_id
     ORDER BY o.created_at DESC
@@ -60,8 +58,9 @@ $stmt = $conn->prepare("
 $stmt->bind_param("i", $admin_id);
 $stmt->execute();
 $result = $stmt->get_result();
+$transactionCount = $result->num_rows;
 
-// ✅ Compute total sales for selected filter
+// ✅ Compute Total Sales (Filtered by Date)
 $totalStmt = $conn->prepare("
     SELECT COALESCE(SUM(total_amount), 0) AS total_sales
     FROM orders o
@@ -70,65 +69,69 @@ $totalStmt = $conn->prepare("
 $totalStmt->bind_param("i", $admin_id);
 $totalStmt->execute();
 $totalSales = $totalStmt->get_result()->fetch_assoc()['total_sales'] ?? 0;
-/* --- Trending Products Query --- */
+
+// ✅ Fetch OVERALL Trending Products (All Time - Date Filter Removed)
 $trendingStmt = $conn->prepare("
-    SELECT p.product_name, SUM(oi.qty) as total_sold
+    SELECT p.product_name, p.image_url, p.price_id as price, SUM(oi.qty) as total_sold
     FROM order_items oi
     JOIN orders o ON oi.order_id = o.order_id
     JOIN products p ON oi.product_id = p.product_id
-    WHERE $dateCondition AND o.admin_id = ?
+    WHERE o.admin_id = ?  -- Removed date condition to show Overall Trends
     GROUP BY oi.product_id
     ORDER BY total_sold DESC
     LIMIT 5
 ");
 $trendingStmt->bind_param("i", $admin_id);
 $trendingStmt->execute();
-$trendingProducts = $trendingStmt->get_result();
-// Prepare trending data for pie chart
-$trendingLabels = [];
-$trendingData = [];
-$trendingColors = ['#d37689', '#f9e9ed', '#b75f6f', '#fbb6ce', '#f472b6'];
-while ($prod = $trendingProducts->fetch_assoc()) {
-    $trendingLabels[] = $prod['product_name'];
-    $trendingData[] = $prod['total_sold'];
+$trendingResult = $trendingStmt->get_result();
+$trendingItems = [];
+while($row = $trendingResult->fetch_assoc()) {
+    // Handle image parsing if stored as JSON or CSV
+    $img = 'uploads/default.png';
+    if (!empty($row['image_url'])) {
+        if (str_starts_with(trim($row['image_url']), '[')) {
+            $decoded = json_decode($row['image_url'], true);
+            $img = !empty($decoded) ? $decoded[0] : 'uploads/default.png';
+        } elseif (str_contains($row['image_url'], ',')) {
+            $parts = explode(',', $row['image_url']);
+            $img = trim($parts[0]);
+        } else {
+            $img = trim($row['image_url']);
+        }
+    }
+    $row['final_image'] = $img;
+    $trendingItems[] = $row;
 }
 
-/* --- Sales Chart Data Query --- */
-if ($filter === 'month') {
-    $chartQuery = "
-        SELECT DATE(o.created_at) as label, SUM(o.total_amount) as total
-        FROM orders o
-        WHERE $dateCondition AND o.admin_id = ?
-        GROUP BY DATE(o.created_at)
-        ORDER BY DATE(o.created_at)
-    ";
-} elseif ($filter === 'week') {
-    $chartQuery = "
-        SELECT DATE(o.created_at) as label, SUM(o.total_amount) as total
-        FROM orders o
-        WHERE $dateCondition AND o.admin_id = ?
-        GROUP BY DATE(o.created_at)
-        ORDER BY DATE(o.created_at)
-    ";
-} else {
-    $chartQuery = "
-        SELECT HOUR(o.created_at) as label, SUM(o.total_amount) as total
-        FROM orders o
-        WHERE $dateCondition AND o.admin_id = ?
-        GROUP BY HOUR(o.created_at)
-        ORDER BY HOUR(o.created_at)
-    ";
-}
+// ✅ Sales Chart Data (Filtered by Date)
+$groupBy = ($filter === 'today') ? 'HOUR(o.created_at)' : 'DATE(o.created_at)';
+$orderBy = ($filter === 'today') ? 'HOUR(o.created_at)' : 'DATE(o.created_at)';
+$selectLabel = ($filter === 'today') ? 'HOUR(o.created_at)' : 'DATE(o.created_at)';
+
+$chartQuery = "
+    SELECT $selectLabel as label, SUM(o.total_amount) as total
+    FROM orders o
+    WHERE $dateCondition AND o.admin_id = ?
+    GROUP BY $groupBy
+    ORDER BY $orderBy
+";
+
 $chartStmt = $conn->prepare($chartQuery);
 $chartStmt->bind_param("i", $admin_id);
 $chartStmt->execute();
-$chartData = $chartStmt->get_result();
+$chartDataRes = $chartStmt->get_result();
+
 $chartLabels = [];
 $chartTotals = [];
-while ($row = $chartData->fetch_assoc()) {
-    $chartLabels[] = $row['label'];
+while ($row = $chartDataRes->fetch_assoc()) {
+    if($filter === 'today') {
+        $chartLabels[] = date("g A", strtotime($row['label'] . ":00"));
+    } else {
+        $chartLabels[] = date("M d", strtotime($row['label']));
+    }
     $chartTotals[] = $row['total'];
 }
+
 $trendingStmt->close();
 $chartStmt->close();
 ?>
@@ -136,322 +139,312 @@ $chartStmt->close();
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Cashier Transactions | Seven Dwarfs Boutique</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<style>
-:root { --rose:#d37689; --rose-hover:#b75f6f; --card-bg: #fff; --cart-bg: #f9e9ed; --shadow: 0 4px 24px rgba(211,118,137,0.08);}
-body { background:#fef9fa; font-family:'Poppins',sans-serif; }
-.sidebar {
-  width: 250px;
-  background: linear-gradient(135deg, #fef2f4 0%, #f9e9ed 100%);
-  border-right: 1px solid #f3dbe2;
-  position: fixed;
-  top: 0;
-  left: 0;
-  height: 100vh;
-  padding: 1.5rem 1rem 1rem 1rem;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  border-top-right-radius: 24px;
-  border-bottom-right-radius: 24px;
-  z-index: 20;
-}
-.sidebar-header {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 2rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid #f3dbe2;
-}
-.sidebar-logo {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(211,118,137,0.10);
-  background: #fff;
-  object-fit: cover;
-}
-.sidebar-title {
-  font-size: 1.35rem;
-  font-weight: 700;
-  color: var(--rose);
-  letter-spacing: 0.03em;
-}
-.sidebar nav {
-  margin-top: 1rem;
-}
-.sidebar a {
-  display: flex;
-  align-items: center;
-  gap: 0.7rem;
-  padding: 0.7rem 1rem;
-  border-radius: 10px;
-  font-weight: 500;
-  color: #4b5563;
-  margin-bottom: 0.3rem;
-  font-size: 1rem;
-  transition: background 0.18s, color 0.18s;
-  text-decoration: none;
-}
-.sidebar a .sidebar-icon {
-  font-size: 1.2em;
-  width: 1.5em;
-  text-align: center;
-}
-.sidebar a:hover {
-  background-color: #f9e9ed;
-  color: var(--rose-hover);
-}
-.active-link {
-  background: linear-gradient(90deg, var(--rose) 70%, #f9e9ed 100%);
-  color: #fff !important;
-  box-shadow: 0 2px 8px rgba(211,118,137,0.10);
-}
-.sidebar-footer {
-  margin-top: auto;
-  border-top: 1px solid #f3dbe2;
-  padding-top: 1.2rem;
-}
-.sidebar-cashier {
-  font-size: 0.98rem;
-  color: #6b7280;
-  margin-bottom: 0.7rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.sidebar-cashier .cashier-icon {
-  color: var(--rose);
-  font-size: 1.1em;
-}
-.sidebar-logout-btn {
-  width: 100%;
-  text-align: left;
-  color: #e11d48;
-  font-weight: 600;
-  background: #fff;
-  border: none;
-  border-radius: 8px;
-  padding: 0.7rem 1rem;
-  margin-top: 0.5rem;
-  cursor: pointer;
-  transition: background 0.18s, color 0.18s;
-}
-.sidebar-logout-btn:hover {
-  background: #f9e9ed;
-  color: #b91c1c;
-}
-.main-content {
-  margin-left:260px;
-  padding:1.5rem;
-}
-</style>
+    <meta charset="UTF-8">
+    <title>Transactions | Seven Dwarfs Boutique</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        rose: { 50: '#fff1f2', 100: '#ffe4e6', 400: '#fb7185', 500: '#f43f5e', 600: '#e11d48', 700: '#be123c' }
+                    },
+                    fontFamily: { sans: ['Poppins', 'sans-serif'] }
+                }
+            }
+        }
+    </script>
+    <style>
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 10px; }
+        .glass-header { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(0,0,0,0.03); }
+    </style>
 </head>
-<body class="text-gray-800">
+<body class="bg-slate-50 text-slate-800 flex h-screen overflow-hidden antialiased">
 
-<!-- 🌸 Sidebar -->
-<aside class="sidebar">
-  <div>
-    <div class="sidebar-header">
-      <img src="logo.png" class="sidebar-logo" alt="Logo">
-      <span class="sidebar-title">Seven Dwarfs</span>
-    </div>
-    <nav>
-      <a href="cashier_pos.php">
-        <span class="sidebar-icon" aria-label="POS">
-          <!-- Shopping Bag SVG -->
-          <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24">
-            <path d="M6 7V6a6 6 0 1 1 12 0v1" />
-            <rect x="4" y="7" width="16" height="13" rx="3" />
-            <path d="M9 11v2m6-2v2" />
-          </svg>
-        </span>
-        POS
-      </a>
-      <a href="cashier_transactions.php" class="active-link">
-        <span class="sidebar-icon" aria-label="Transactions">
-          <!-- Credit Card SVG -->
-          <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24">
-            <rect x="3" y="7" width="18" height="10" rx="2" />
-            <path d="M3 10h18" />
-            <path d="M7 15h2" />
-          </svg>
-        </span>
-        Transactions
-      </a>
-      <a href="cashier_inventory.php">
-        <span class="sidebar-icon" aria-label="Inventory">
-          <!-- Box SVG -->
-          <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24">
-            <rect x="3" y="7" width="18" height="10" rx="2" />
-            <path d="M3 7l9 5 9-5" />
-            <path d="M12 12v5" />
-          </svg>
-        </span>
-        Inventory
-      </a>
-    </nav>
-  </div>
-
-  <div class="sidebar-footer">
-    <div class="sidebar-cashier">
-      <span class="cashier-icon">👤</span>
-      Cashier: <span class="font-medium text-[var(--rose)]"><?= htmlspecialchars($cashier_name); ?></span>
-    </div>
-    <form action="logout.php" method="POST">
-      <button class="sidebar-logout-btn" style="background:#fff;border-radius:8px;padding:8px;border:1px solid #f3dbe2;color:#e11d48;cursor:pointer;width:100%">🚪 Logout</button>
-    </form>
-  </div>
-</aside>
-
-<!-- 🌸 Main Content -->
-<div class="main-content">
-  <div class="flex justify-between items-center mb-6">
-    <h1 class="text-2xl font-semibold text-[var(--rose)]">Cashier Transactions (<?= $label; ?>)</h1>
-
-    <!-- 🔽 Filter Dropdown -->
-    <form method="GET" class="flex items-center space-x-2">
-      <label for="filter" class="text-gray-600 font-medium">Filter:</label>
-      <select name="filter" id="filter" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--rose)]" onchange="this.form.submit()">
-        <option value="today" <?= $filter === 'today' ? 'selected' : ''; ?>>Today</option>
-        <option value="week" <?= $filter === 'week' ? 'selected' : ''; ?>>This Week</option>
-        <option value="month" <?= $filter === 'month' ? 'selected' : ''; ?>>This Month</option>
-      </select>
-    </form>
-  </div>
-
-  <!-- 💰 Total Sales Summary -->
-  <div class="bg-white rounded-lg shadow p-6 mb-6 text-center">
-    <h2 class="font-semibold text-lg text-gray-700 mb-2">Total Sales (<?= $label; ?>)</h2>
-    <p class="text-3xl font-bold text-[var(--rose)]">₱<?= number_format($totalSales, 2); ?></p>
-  </div>
-
-  <!-- 📊 Trending & Sales Chart -->
-  <div class="flex flex-wrap gap-6 mb-6">
-    <!-- Trending Products -->
-    <div class="bg-white rounded-lg shadow p-6 flex-1 min-w-[320px]">
-      <h2 class="font-semibold text-lg text-gray-700 mb-2">Trending Products (Top 5)</h2>
-      <?php if (count($trendingLabels) > 0): ?>
-        <div style="width:200px;max-width:100%;margin:auto;">
-          <canvas id="trendingPieChart" width="200" height="200"></canvas>
+    <!-- SIDEBAR -->
+    <aside class="w-[260px] bg-white border-r border-slate-100 flex flex-col z-30 transition-all duration-300" id="sidebar">
+        <div class="h-20 flex items-center px-6 border-b border-slate-50">
+            <div>
+                <h1 class="text-xl font-bold text-rose-600 tracking-tight">Seven Dwarfs</h1>
+                <p class="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Boutique POS</p>
+            </div>
         </div>
-      <?php else: ?>
-        <p class="text-gray-500">No trending products for <?= strtolower($label); ?>.</p>
-      <?php endif; ?>
-    </div>
-    <!-- Sales Chart -->
-    <div class="bg-white rounded-lg shadow p-6 flex-1 min-w-[320px]">
-      <h2 class="font-semibold text-lg text-gray-700 mb-2">Sales Chart (<?= $label; ?>)</h2>
-      <canvas id="salesChart" height="120"></canvas>
-    </div>
-  </div>
-  
-  <!-- 📋 Transactions Table -->
-  <div class="bg-white rounded-lg shadow p-6">
-    <h2 class="font-semibold text-lg mb-4"><?= $label; ?> Sales Summary</h2>
 
-    <?php if ($result->num_rows > 0): ?>
-    <table class="w-full text-sm text-left border-collapse">
-      <thead class="bg-[var(--rose)] text-white">
-        <tr>
-          <th class="px-3 py-2">Order ID</th>
-          <th class="px-3 py-2">Items</th>
-          <th class="px-3 py-2">Total</th>
-          <th class="px-3 py-2">Cash Given</th>
-          <th class="px-3 py-2">Change</th>
-          <th class="px-3 py-2">Payment</th>
-          <th class="px-3 py-2">Time</th>
-          <th class="px-3 py-2">Cashier</th>
-        </tr>
-      </thead>
-      <tbody>
-        <?php while ($row = $result->fetch_assoc()): ?>
-        <tr class="border-b hover:bg-pink-50 transition">
-          <td class="px-3 py-2 font-medium">#<?= $row['order_id']; ?></td>
-          <td class="px-3 py-2"><?= $row['total_items']; ?></td>
-          <td class="px-3 py-2 text-[var(--rose)] font-semibold">₱<?= number_format($row['total_amount'], 2); ?></td>
-          <td class="px-3 py-2">₱<?= number_format($row['cash_given'], 2); ?></td>
-          <td class="px-3 py-2">₱<?= number_format($row['changes'], 2); ?></td>
-          <td class="px-3 py-2"><?= htmlspecialchars($row['payment_method_name']); ?></td>
-          <td class="px-3 py-2"><?= date('h:i A', strtotime($row['created_at'])); ?></td>
-          <td class="px-3 py-2 text-gray-600"><?= htmlspecialchars($row['cashier_name']); ?></td>
-        </tr>
-        <?php endwhile; ?>
-      </tbody>
-    </table>
-    <?php else: ?>
-      <p class="text-gray-500">No transactions found for <?= strtolower($label); ?>.</p>
-    <?php endif; ?>
-  </div>
-</div>
+        <nav class="flex-1 p-4 space-y-1 overflow-y-auto">
+            <a href="cashier_pos.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-50 hover:text-rose-600 font-medium transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+                POS Terminal
+            </a>
+            <a href="cashier_transactions.php" class="flex items-center gap-3 px-4 py-3 rounded-xl bg-rose-50 text-rose-600 font-semibold transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                Transactions
+            </a>
+            <a href="cashier_inventory.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-50 hover:text-rose-600 font-medium transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                Inventory
+            </a>
+        </nav>
 
-<!-- Chart.js -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-const ctx = document.getElementById('salesChart').getContext('2d');
-const salesChart = new Chart(ctx, {
-    type: 'bar',
-    data: {
-        labels: <?= json_encode($chartLabels); ?>,
-        datasets: [{
-            label: 'Sales',
-            data: <?= json_encode($chartTotals); ?>,
-            backgroundColor: 'rgba(211, 118, 137, 0.6)',
-            borderColor: 'rgba(211, 118, 137, 1)',
-            borderWidth: 1,
-            borderRadius: 6,
-        }]
-    },
-    options: {
-        responsive: true,
-        plugins: {
-            legend: { display: false },
-            title: { display: false }
+        <div class="p-4 border-t border-slate-100 bg-slate-50/50">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 font-bold text-sm shadow-sm">
+                    <?= strtoupper(substr($cashier_name ?? 'C', 0, 1)) ?>
+                </div>
+                <div class="overflow-hidden">
+                    <p class="text-sm font-bold text-slate-700 truncate"><?= htmlspecialchars($cashier_name) ?></p>
+                    <p class="text-xs text-slate-400">Logged in</p>
+                </div>
+            </div>
+            <form action="logout.php" method="POST">
+                <button class="w-full flex justify-center items-center gap-2 py-2.5 rounded-lg border border-slate-200 text-slate-500 text-sm font-medium hover:bg-white hover:text-rose-600 hover:border-rose-200 shadow-sm transition-all">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                    Sign Out
+                </button>
+            </form>
+        </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="flex-1 flex flex-col relative overflow-hidden h-full">
+        
+        <!-- Header -->
+        <header class="h-20 glass-header flex items-center justify-between px-8 z-20 shrink-0">
+            <div>
+                <h2 class="text-2xl font-bold text-slate-800">Transactions</h2>
+                <p class="text-xs text-slate-500 font-medium">Overview for <span class="text-rose-600 font-bold"><?= $label ?></span></p>
+            </div>
+
+            <!-- Filter -->
+            <form method="GET" class="flex items-center bg-white rounded-xl border border-slate-200 p-1 shadow-sm">
+                <button type="submit" name="filter" value="today" class="px-4 py-1.5 rounded-lg text-sm font-medium transition-all <?= $filter=='today'?'bg-rose-100 text-rose-700 shadow-sm':'text-slate-500 hover:bg-slate-50' ?>">Today</button>
+                <button type="submit" name="filter" value="week" class="px-4 py-1.5 rounded-lg text-sm font-medium transition-all <?= $filter=='week'?'bg-rose-100 text-rose-700 shadow-sm':'text-slate-500 hover:bg-slate-50' ?>">Week</button>
+                <button type="submit" name="filter" value="month" class="px-4 py-1.5 rounded-lg text-sm font-medium transition-all <?= $filter=='month'?'bg-rose-100 text-rose-700 shadow-sm':'text-slate-500 hover:bg-slate-50' ?>">Month</button>
+            </form>
+        </header>
+
+        <!-- Scrollable Content -->
+        <div class="flex-1 overflow-y-auto p-8">
+            
+            <!-- 1. Stats Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <!-- Sales Card -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Total Revenue</p>
+                        <h3 class="text-3xl font-bold text-rose-600 mt-1">₱<?= number_format($totalSales, 2) ?></h3>
+                    </div>
+                    <div class="w-12 h-12 bg-rose-50 rounded-full flex items-center justify-center text-rose-500">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    </div>
+                </div>
+                <!-- Orders Card -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Transactions</p>
+                        <h3 class="text-3xl font-bold text-slate-800 mt-1"><?= number_format($transactionCount) ?></h3>
+                    </div>
+                    <div class="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center text-blue-500">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                    </div>
+                </div>
+                <!-- Top Product Summary -->
+                <div class="bg-gradient-to-br from-rose-500 to-pink-600 p-6 rounded-2xl shadow-lg text-white flex items-center justify-between relative overflow-hidden">
+                    <div class="relative z-10">
+                        <p class="text-xs font-bold text-rose-100 uppercase tracking-wider">Overall Top Item</p>
+                        <h3 class="text-xl font-bold mt-1 truncate w-40">
+                            <?= !empty($trendingItems) ? htmlspecialchars($trendingItems[0]['product_name']) : 'N/A' ?>
+                        </h3>
+                        <p class="text-sm mt-1 text-rose-100">
+                            <?= !empty($trendingItems) ? $trendingItems[0]['total_sold'] . ' sold (All Time)' : '-' ?>
+                        </p>
+                    </div>
+                    <div class="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm relative z-10">
+                        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/></svg>
+                    </div>
+                    <!-- Decorative Circle -->
+                    <div class="absolute -bottom-6 -right-6 w-32 h-32 bg-white/10 rounded-full"></div>
+                </div>
+            </div>
+
+            <!-- 2. Analytics & Trending Split -->
+            <div class="flex flex-col lg:flex-row gap-6 mb-8 min-h-[350px]">
+                
+                <!-- Left: Sales Chart -->
+                <div class="flex-1 bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-bold text-lg text-slate-800">Sales Analytics</h3>
+                        <span class="text-xs font-medium text-slate-400 bg-slate-100 px-2 py-1 rounded"><?= $label ?></span>
+                    </div>
+                    <div class="flex-1 relative w-full">
+                         <canvas id="salesChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Right: Trending List (ALL TIME) -->
+                <div class="w-full lg:w-[350px] bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col">
+                    <div class="flex justify-between items-end mb-4">
+                        <h3 class="font-bold text-lg text-slate-800">Overall Best Sellers</h3>
+                        <span class="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded">All Time</span>
+                    </div>
+                    
+                    <?php if (count($trendingItems) > 0): 
+                        $top = $trendingItems[0];
+                        $rest = array_slice($trendingItems, 1);
+                    ?>
+                        <!-- #1 Champion Item -->
+                        <div class="bg-rose-50 rounded-xl p-4 flex gap-4 items-center mb-4 border border-rose-100 relative overflow-hidden group">
+                            <div class="absolute top-0 left-0 bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-br-lg z-10">#1</div>
+                            <img src="<?= htmlspecialchars($top['final_image']) ?>" class="w-16 h-16 rounded-lg object-cover bg-white shadow-sm group-hover:scale-105 transition-transform duration-300">
+                            <div class="min-w-0">
+                                <h4 class="font-bold text-slate-800 text-sm truncate"><?= htmlspecialchars($top['product_name']) ?></h4>
+                                <div class="text-xs text-rose-600 font-bold mt-0.5"><?= $top['total_sold'] ?> units sold</div>
+                                <div class="text-[10px] text-slate-400 mt-0.5">All Time Top Earner</div>
+                            </div>
+                        </div>
+
+                        <!-- Runners Up List -->
+                        <div class="flex-1 overflow-y-auto space-y-3 pr-1">
+                            <?php foreach ($rest as $index => $item): ?>
+                            <div class="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg transition-colors">
+                                <div class="font-bold text-slate-300 text-sm w-4 text-center"><?= $index + 2 ?></div>
+                                <img src="<?= htmlspecialchars($item['final_image']) ?>" class="w-10 h-10 rounded-md object-cover bg-slate-100">
+                                <div class="flex-1 min-w-0">
+                                    <h5 class="text-xs font-bold text-slate-700 truncate"><?= htmlspecialchars($item['product_name']) ?></h5>
+                                    <p class="text-[10px] text-slate-500"><?= $item['total_sold'] ?> sold</p>
+                                </div>
+                                <div class="text-xs font-semibold text-slate-400">
+                                    ₱<?= number_format($item['price'], 0) ?>
+                                </div>
+                            </div>
+                            <?php endforeach; ?>
+                        </div>
+
+                    <?php else: ?>
+                        <div class="flex-1 flex flex-col items-center justify-center text-slate-400">
+                            <svg class="w-12 h-12 mb-2 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg>
+                            <p class="text-sm">No sales yet</p>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <!-- 3. Transactions Table -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                <div class="px-6 py-4 border-b border-slate-50 bg-slate-50/50">
+                    <h3 class="font-bold text-slate-800">Transaction History</h3>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-slate-50 text-slate-500 uppercase text-xs tracking-wider font-semibold border-b border-slate-100">
+                            <tr>
+                                <th class="px-6 py-4">Order ID</th>
+                                <th class="px-6 py-4">Items</th>
+                                <th class="px-6 py-4">Total</th>
+                                <th class="px-6 py-4">Received</th>
+                                <th class="px-6 py-4">Payment</th>
+                                <th class="px-6 py-4">Date/Time</th>
+                                <th class="px-6 py-4 text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-50">
+                            <?php if ($result->num_rows > 0): ?>
+                                <?php while ($row = $result->fetch_assoc()): ?>
+                                <tr class="hover:bg-rose-50/30 transition-colors group">
+                                    <td class="px-6 py-4 font-medium text-rose-600">#<?= $row['order_id']; ?></td>
+                                    <td class="px-6 py-4 text-slate-600"><?= $row['total_items']; ?> Items</td>
+                                    <td class="px-6 py-4 font-bold text-slate-800">₱<?= number_format($row['total_amount'], 2); ?></td>
+                                    <td class="px-6 py-4 text-slate-500">
+                                        ₱<?= number_format($row['cash_given'], 2); ?>
+                                        <span class="text-[10px] text-slate-400 block">Change: ₱<?= number_format($row['changes'], 2); ?></span>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <span class="px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wide 
+                                            <?= strtolower($row['payment_method_name']) == 'gcash' ? 'bg-blue-50 text-blue-600 border border-blue-100' : 'bg-green-50 text-green-600 border border-green-100' ?>">
+                                            <?= htmlspecialchars($row['payment_method_name']); ?>
+                                        </span>
+                                    </td>
+                                    <td class="px-6 py-4 text-slate-500">
+                                        <?= date('M d, Y', strtotime($row['created_at'])); ?>
+                                        <span class="text-slate-400 text-xs ml-1"><?= date('h:i A', strtotime($row['created_at'])); ?></span>
+                                    </td>
+                                    <td class="px-6 py-4 text-right">
+                                        <a href="receipt.php?order_id=<?= $row['order_id']; ?>" class="text-slate-400 hover:text-rose-600 transition font-medium text-xs group-hover:underline">View Receipt</a>
+                                    </td>
+                                </tr>
+                                <?php endwhile; ?>
+                            <?php else: ?>
+                                <tr>
+                                    <td colspan="7" class="px-6 py-12 text-center text-slate-400 text-sm">No transactions found for this period.</td>
+                                </tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Chart Script -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+    const ctx = document.getElementById('salesChart').getContext('2d');
+    
+    // Gradient for Chart
+    const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+    gradient.addColorStop(0, 'rgba(225, 29, 72, 0.2)'); // Rose-600 low opacity
+    gradient.addColorStop(1, 'rgba(225, 29, 72, 0)');
+
+    new Chart(ctx, {
+        type: 'line', // Switched to line for "smoother" look, bar also fine
+        data: {
+            labels: <?= json_encode($chartLabels); ?>,
+            datasets: [{
+                label: 'Sales (₱)',
+                data: <?= json_encode($chartTotals); ?>,
+                backgroundColor: gradient,
+                borderColor: '#e11d48', // Rose-600
+                borderWidth: 2,
+                pointBackgroundColor: '#fff',
+                pointBorderColor: '#e11d48',
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                fill: true,
+                tension: 0.4 // Makes line curvy/smooth
+            }]
         },
-        scales: {
-            x: { title: { display: true, text: '<?= $filter === "today" ? "Hour" : "Date"; ?>' } },
-            y: { title: { display: true, text: 'Sales (₱)' }, beginAtZero: true }
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: '#1f2937',
+                    padding: 12,
+                    cornerRadius: 8,
+                    displayColors: false,
+                    callbacks: {
+                        label: function(context) {
+                            return 'Sales: ₱' + context.parsed.y.toLocaleString(undefined, {minimumFractionDigits: 2});
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: { grid: { display: false }, ticks: { color: '#9ca3af', font: { size: 11 } } },
+                y: { 
+                    grid: { color: '#f3f4f6', borderDash: [5, 5] },
+                    ticks: { color: '#9ca3af', font: { size: 11 }, callback: function(value) { return '₱' + value; } },
+                    beginAtZero: true 
+                }
+            }
         }
-    }
-});
-if (typeof Chart !== "undefined") {
-  // Trending Products Pie Chart
-  const trendingLabels = <?= json_encode($trendingLabels); ?>;
-  const trendingData = <?= json_encode($trendingData); ?>;
-  const trendingColors = <?= json_encode($trendingColors); ?>;
-  if (trendingLabels.length > 0) {
-    new Chart(document.getElementById('trendingPieChart').getContext('2d'), {
-      type: 'pie',
-      data: {
-        labels: trendingLabels,
-        datasets: [{
-          data: trendingData,
-          backgroundColor: trendingColors,
-          borderColor: '#fff',
-          borderWidth: 2
-        }]
-      },
-      options: {
-        responsive: false,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { position: 'bottom' },
-          title: { display: false }
-        }
-      }
     });
-  }
-}
-</script>
+    </script>
 </body>
 </html>
-
-<?php 
-$stmt->close(); 
-$totalStmt->close();
-$conn->close(); 
-?>
-
+<?php $stmt->close(); $totalStmt->close(); $conn->close(); ?>
