@@ -25,9 +25,7 @@ if ($row = $result->fetch_assoc()) {
 }
 $stmt->close();
 
-// ---------------------------------------------------------
-// 🚀 SHARED QUERY LOGIC (Used for both Initial Load & AJAX)
-// ---------------------------------------------------------
+
 function getLogs($conn) {
     $filter_role   = $_GET['role'] ?? '';
     $filter_action = $_GET['action'] ?? '';
@@ -77,9 +75,7 @@ function getLogs($conn) {
     return $stmt->get_result();
 }
 
-// ---------------------------------------------------------
-// 🔄 AJAX HANDLER (Returns ONLY HTML Rows)
-// ---------------------------------------------------------
+
 if (isset($_GET['ajax'])) {
     $logs = getLogs($conn);
     if ($logs->num_rows > 0) {
@@ -104,9 +100,7 @@ if (isset($_GET['ajax'])) {
     exit; // Stop script here for AJAX requests
 }
 
-// ---------------------------------------------------------
-// 📄 NORMAL PAGE LOAD
-// ---------------------------------------------------------
+
 $logs = getLogs($conn); 
 ?>
 
