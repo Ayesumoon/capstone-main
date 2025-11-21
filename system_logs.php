@@ -13,12 +13,8 @@ $admin_name = "Admin";
 $admin_role = "Admin";
 
 // Fetch logged-in admin details
-$query = "
-  SELECT CONCAT(first_name, ' ', last_name) AS full_name, r.role_name 
-  FROM adminusers a
-  LEFT JOIN roles r ON a.role_id = r.role_id
-  WHERE a.admin_id = ?
-";
+$query = "SELECT CONCAT(first_name, ' ', last_name) AS full_name, r.role_name 
+          FROM adminusers a LEFT JOIN roles r ON a.role_id = r.role_id WHERE a.admin_id = ?";
 $stmt = $conn->prepare($query);
 $stmt->bind_param("i", $admin_id);
 $stmt->execute();
@@ -29,64 +25,89 @@ if ($row = $result->fetch_assoc()) {
 }
 $stmt->close();
 
-// Handle filters
-$filter_role   = $_GET['role'] ?? '';
-$filter_action = $_GET['action'] ?? '';
-$search        = $_GET['search'] ?? '';
+// ---------------------------------------------------------
+// 🚀 SHARED QUERY LOGIC (Used for both Initial Load & AJAX)
+// ---------------------------------------------------------
+function getLogs($conn) {
+    $filter_role   = $_GET['role'] ?? '';
+    $filter_action = $_GET['action'] ?? '';
+    $search        = $_GET['search'] ?? '';
 
-$where  = [];
-$params = [];
-$types  = '';
+    $where  = [];
+    $params = [];
+    $types  = '';
 
-// ✅ Role filter should match role name, not ID
-if (!empty($filter_role)) {
-  $where[] = "r.role_name = ?";
-  $params[] = $filter_role;
-  $types .= 's';
+    if (!empty($filter_role)) {
+        $where[] = "r.role_name = ?";
+        $params[] = $filter_role;
+        $types .= 's';
+    }
+    if (!empty($filter_action)) {
+        $where[] = "l.action = ?";
+        $params[] = $filter_action;
+        $types .= 's';
+    }
+    if (!empty($search)) {
+        $where[] = "(a.username LIKE ? OR CONCAT(a.first_name, ' ', a.last_name) LIKE ?)";
+        $searchTerm = "%$search%";
+        $params[] = $searchTerm;
+        $params[] = $searchTerm;
+        $types .= 'ss';
+    }
+
+    $sql = "
+      SELECT 
+        l.log_id, l.user_id, r.role_name, l.action, l.created_at,
+        CONCAT(a.first_name, ' ', a.last_name) AS full_name, a.username
+      FROM system_logs l
+      LEFT JOIN adminusers a ON l.user_id = a.admin_id
+      LEFT JOIN roles r ON l.role_id = r.role_id
+    ";
+
+    if (!empty($where)) {
+        $sql .= " WHERE " . implode(" AND ", $where);
+    }
+    $sql .= " ORDER BY l.created_at DESC";
+
+    $stmt = $conn->prepare($sql);
+    if (!empty($params)) {
+        $stmt->bind_param($types, ...$params);
+    }
+    $stmt->execute();
+    return $stmt->get_result();
 }
 
-// Action filter
-if (!empty($filter_action)) {
-  $where[] = "l.action = ?";
-  $params[] = $filter_action;
-  $types .= 's';
+// ---------------------------------------------------------
+// 🔄 AJAX HANDLER (Returns ONLY HTML Rows)
+// ---------------------------------------------------------
+if (isset($_GET['ajax'])) {
+    $logs = getLogs($conn);
+    if ($logs->num_rows > 0) {
+        while ($log = $logs->fetch_assoc()) {
+            $statusColor = ($log['action'] === 'Login') ? 'text-green-600' : 'text-red-500';
+            $date = date('M d, Y h:i A', strtotime($log['created_at']));
+            $user = htmlspecialchars($log['full_name'] ?: $log['username'] ?: 'Unknown');
+            $role = htmlspecialchars($log['role_name']);
+            $action = htmlspecialchars($log['action']);
+            
+            echo "<tr class='hover:bg-gray-50 transition'>
+                    <td class='px-4 py-3'>{$log['log_id']}</td>
+                    <td class='px-4 py-3'>{$user}</td>
+                    <td class='px-4 py-3'>{$role}</td>
+                    <td class='px-4 py-3 font-semibold {$statusColor}'>{$action}</td>
+                    <td class='px-4 py-3'>{$date}</td>
+                  </tr>";
+        }
+    } else {
+        echo "<tr><td colspan='5' class='text-center py-6 text-gray-500'>No logs found matching your filters.</td></tr>";
+    }
+    exit; // Stop script here for AJAX requests
 }
 
-// Search filter (by username or full name)
-if (!empty($search)) {
-  $where[] = "(a.username LIKE ? OR CONCAT(a.first_name, ' ', a.last_name) LIKE ?)";
-  $searchTerm = "%$search%";
-  $params[] = $searchTerm;
-  $params[] = $searchTerm;
-  $types .= 'ss';
-}
-
-// ✅ Updated query
-$sql = "
-  SELECT 
-    l.log_id,
-    l.user_id,
-    r.role_name,
-    l.action,
-    l.created_at,
-    CONCAT(a.first_name, ' ', a.last_name) AS full_name,
-    a.username
-  FROM system_logs l
-  LEFT JOIN adminusers a ON l.user_id = a.admin_id
-  LEFT JOIN roles r ON l.role_id = r.role_id
-";
-
-if (!empty($where)) {
-  $sql .= " WHERE " . implode(" AND ", $where);
-}
-$sql .= " ORDER BY l.created_at DESC";
-
-$stmt = $conn->prepare($sql);
-if (!empty($params)) {
-  $stmt->bind_param($types, ...$params);
-}
-$stmt->execute();
-$logs = $stmt->get_result();
+// ---------------------------------------------------------
+// 📄 NORMAL PAGE LOAD
+// ---------------------------------------------------------
+$logs = getLogs($conn); 
 ?>
 
 <!DOCTYPE html>
@@ -97,7 +118,7 @@ $logs = $stmt->get_result();
   <title>System Logs | Seven Dwarfs Boutique</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet" />
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet" />
 
   <style>
@@ -164,8 +185,7 @@ $logs = $stmt->get_result();
       </ul>
 
       <a href="orders.php" class="block px-4 py-2 hover:bg-gray-100 rounded transition"><i class="fas fa-shopping-cart mr-2"></i>Orders</a>
-            <a href="cashier_sales_report.php" class="block px-4 py-2 rounded-md hover:bg-gray-100 transitio"><i class="fas fa-chart-line mr-2"></i>Cashier Sales</a>
-
+      <a href="cashier_sales_report.php" class="block px-4 py-2 rounded-md hover:bg-gray-100 transitio"><i class="fas fa-chart-line mr-2"></i>Cashier Sales</a>
       <a href="suppliers.php" class="block px-4 py-2 hover:bg-gray-100 rounded transition"><i class="fas fa-industry mr-2"></i>Suppliers</a>
 
       <a href="system_logs.php" class="block px-4 py-2 active-link"><i class="fas fa-file-alt mr-2"></i>System Logs</a>
@@ -179,34 +199,38 @@ $logs = $stmt->get_result();
       <h1 class="text-2xl font-semibold">System Logs</h1>
     </div>
 
-    <!-- Filters -->
-    <form method="GET" class="bg-white p-4 rounded-b-2xl shadow-md flex flex-wrap items-center gap-4 mt-0">
+    <!-- Filters Section (No Form Tag needed for AJAX) -->
+    <div class="bg-white p-4 rounded-b-2xl shadow-md flex flex-wrap items-center gap-4 mt-0">
       <div>
         <label class="text-sm font-medium text-gray-700">Role:</label>
-        <select name="role" class="border p-2 rounded focus:ring-1 focus:ring-[var(--rose)]">
+        <!-- Added ID 'role' and onchange event -->
+        <select id="role" onchange="fetchLogs()" class="border p-2 rounded focus:ring-1 focus:ring-[var(--rose)] w-32">
           <option value="">All</option>
-          <option value="Admin" <?= $filter_role === 'Admin' ? 'selected' : '' ?>>Admin</option>
-          <option value="Cashier" <?= $filter_role === 'Cashier' ? 'selected' : '' ?>>Cashier</option>
+          <option value="Admin">Admin</option>
+          <option value="Cashier">Cashier</option>
         </select>
       </div>
 
       <div>
         <label class="text-sm font-medium text-gray-700">Action:</label>
-        <select name="action" class="border p-2 rounded focus:ring-1 focus:ring-[var(--rose)]">
+        <!-- Added ID 'action' and onchange event -->
+        <select id="action" onchange="fetchLogs()" class="border p-2 rounded focus:ring-1 focus:ring-[var(--rose)] w-32">
           <option value="">All</option>
-          <option value="Login" <?= $filter_action === 'Login' ? 'selected' : '' ?>>Login</option>
-          <option value="Logout" <?= $filter_action === 'Logout' ? 'selected' : '' ?>>Logout</option>
+          <option value="Login">Login</option>
+          <option value="Logout">Logout</option>
         </select>
       </div>
 
       <div class="flex items-center gap-2 ml-auto">
         <label for="search" class="text-sm text-gray-700">Search:</label>
-        <input id="search" name="search" type="search" value="<?= htmlspecialchars($search) ?>" placeholder="Search user..."
-          class="border p-2 rounded focus:ring-1 focus:ring-[var(--rose)]">
+        <!-- Added ID 'search' and oninput event -->
+        <div class="relative">
+            <input id="search" type="search" placeholder="Search user..." oninput="debounceSearch()"
+            class="border p-2 pl-8 rounded focus:ring-1 focus:ring-[var(--rose)] w-64">
+            <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
+        </div>
       </div>
-
-      <button type="submit" class="bg-[var(--rose)] text-white px-4 py-2 rounded hover:bg-[var(--rose-hover)] transition">Filter</button>
-    </form>
+    </div>
 
     <!-- Logs Table -->
     <div class="mt-6 bg-white shadow rounded-lg overflow-x-auto">
@@ -220,7 +244,8 @@ $logs = $stmt->get_result();
             <th class="px-4 py-3 text-left">Date & Time</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-100">
+        <!-- ID added to tbody for AJAX injection -->
+        <tbody id="logTableBody" class="divide-y divide-gray-100">
           <?php if ($logs->num_rows > 0): ?>
             <?php while ($log = $logs->fetch_assoc()): ?>
               <tr class="hover:bg-gray-50 transition">
@@ -241,5 +266,40 @@ $logs = $stmt->get_result();
     </div>
   </main>
 </div>
+
+<script>
+let timeout = null;
+
+// Function to fetch logs automatically
+function fetchLogs() {
+    // Get values from inputs
+    const role = document.getElementById('role').value;
+    const action = document.getElementById('action').value;
+    const search = document.getElementById('search').value;
+    
+    // Create URL parameters
+    const params = new URLSearchParams({
+        ajax: '1',
+        role: role,
+        action: action,
+        search: search
+    });
+
+    // Fetch data
+    fetch('system_logs.php?' + params.toString())
+        .then(response => response.text())
+        .then(html => {
+            document.getElementById('logTableBody').innerHTML = html;
+        })
+        .catch(error => console.error('Error loading logs:', error));
+}
+
+// Debounce function for Search input (waits 300ms after typing stops)
+function debounceSearch() {
+    clearTimeout(timeout);
+    timeout = setTimeout(fetchLogs, 300);
+}
+</script>
+
 </body>
 </html>
