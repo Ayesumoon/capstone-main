@@ -1,79 +1,64 @@
 <?php
 session_start();
-require 'conn.php'; // Include database connection
+require 'conn.php'; 
 
 $admin_id   = $_SESSION['admin_id'] ?? null;
 $admin_name = "Admin";
 $admin_role = "Admin";
 
-// 🔹 Fetch admin details if logged in
+// 🔹 Fetch admin details
 if ($admin_id) {
-    $query = "
-        SELECT 
-            CONCAT(first_name, ' ', last_name) AS full_name, 
-            r.role_name 
-        FROM adminusers a
-        LEFT JOIN roles r ON a.role_id = r.role_id
-        WHERE a.admin_id = ?
-    ";
+    $query = "SELECT CONCAT(first_name, ' ', last_name) AS full_name, r.role_name 
+              FROM adminusers a LEFT JOIN roles r ON a.role_id = r.role_id WHERE a.admin_id = ?";
     $stmt = $conn->prepare($query);
     $stmt->bind_param("i", $admin_id);
     $stmt->execute();
     $result = $stmt->get_result();
-
     if ($row = $result->fetch_assoc()) {
         $admin_name = $row['full_name'];
         $admin_role = $row['role_name'] ?? 'Admin';
     }
 }
 
-// 🔹 Fetch categories
+// 🔹 Fetch dropdowns (Categories, Colors, Sizes)
 $categories = [];
 $resultCategories = $conn->query("SELECT category_id, category_name FROM categories ORDER BY category_name ASC");
-while ($row = $resultCategories->fetch_assoc()) {
-    $categories[] = $row;
-}
+while ($row = $resultCategories->fetch_assoc()) $categories[] = $row;
 
-// 🔹 Fetch colors
 $colors = [];
 $resultColors = $conn->query("SELECT color_id, color FROM colors ORDER BY color ASC");
-while ($row = $resultColors->fetch_assoc()) {
-    $colors[] = $row;
-}
+while ($row = $resultColors->fetch_assoc()) $colors[] = $row;
 
-// 🔹 Fetch sizes
 $sizes = [];
 $resultSizes = $conn->query("SELECT size_id, size FROM sizes ORDER BY size ASC");
-while ($row = $resultSizes->fetch_assoc()) {
-    $sizes[] = $row;
-}
+while ($row = $resultSizes->fetch_assoc()) $sizes[] = $row;
 
 // 🔹 Selected filters
 $selectedCategory = $_GET['category'] ?? 'all';
 $selectedColor    = $_GET['color'] ?? 'all';
 $selectedSize     = $_GET['size'] ?? 'all';
 
-// 🔹 Build query (grouped per product)
+// 🔹 Build Query
 $sqlProducts = "
     SELECT 
         p.product_id,
         p.product_name,
         c.category_name,
-        GROUP_CONCAT(DISTINCT col.color ORDER BY col.color SEPARATOR ', ') AS colors,
-        GROUP_CONCAT(DISTINCT sz.size ORDER BY sz.size SEPARATOR ', ') AS sizes,
-        SUM(st.current_qty) AS total_stock,
+        col.color,
+        sz.size,
+        st.current_qty AS total_stock,
         p.created_at,
         s.supplier_name
-    FROM products p
+    FROM stock st
+    INNER JOIN products p ON st.product_id = p.product_id
     INNER JOIN categories c ON p.category_id = c.category_id
     LEFT JOIN suppliers s ON p.supplier_id = s.supplier_id
-    LEFT JOIN stock st ON p.product_id = st.product_id
     LEFT JOIN colors col ON st.color_id = col.color_id
     LEFT JOIN sizes sz ON st.size_id = sz.size_id
 ";
 
 // 🔹 Dynamic WHERE filters
-$where  = [];
+$where  = ["1=1"];
 $params = [];
 $types  = "";
 
@@ -97,7 +82,9 @@ if ($where) {
     $sqlProducts .= " WHERE " . implode(" AND ", $where);
 }
 
-$sqlProducts .= " GROUP BY p.product_id ORDER BY p.product_id DESC";
+// 🔹 ORDER BY NEWEST TO OLDEST (Descending)
+// We sort by Created Date DESC, then Product Name as a secondary sort
+$sqlProducts .= " ORDER BY p.created_at DESC, p.product_name ASC";
 
 // 🔹 Execute query
 $stmt = $conn->prepare($sqlProducts);
@@ -118,6 +105,8 @@ if ($resultProducts && $resultProducts->num_rows > 0) {
 $stmt->close();
 $conn->close();
 ?>
+
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -274,46 +263,105 @@ $conn->close();
       </section>
 
       <!-- Table -->
-      <div class="overflow-x-auto">
-        <table class="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm text-sm">
-          <thead class="bg-gray-100 text-gray-700">
-            <tr>
-              <th class="px-4 py-3 text-left">Product Name</th>
-              <th class="px-4 py-3 text-left">Category</th>
-              <th class="px-4 py-3 text-left">Colors</th>
-              <th class="px-4 py-3 text-left">Sizes</th>
-              <th class="px-4 py-3 text-left">Created At</th>
-              <th class="px-4 py-3 text-center">Stock</th>
-              <th class="px-4 py-3 text-center">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            <?php 
-              if (!empty($inventory)) { 
-                foreach ($inventory as $item) {
-                  $stock = (int)$item['total_stock'];
-                  $status = ($stock > 20) ? "In Stock" : (($stock > 0) ? "Low Stock" : "Out of Stock");
-            ?>
-            <tr class="hover:bg-gray-50 transition">
-              <td class="px-4 py-2 border"><?php echo htmlspecialchars($item['product_name']); ?></td>
-              <td class="px-4 py-2 border"><?php echo htmlspecialchars($item['category_name']); ?></td>
-              <td class="px-4 py-2 border"><?php echo $item['colors'] ?: '—'; ?></td>
-              <td class="px-4 py-2 border"><?php echo $item['sizes'] ?: '—'; ?></td>
-              <td class="px-4 py-2 border"><?php echo htmlspecialchars($item['created_at']); ?></td>
-              <td class="px-4 py-2 border text-center font-medium"><?php echo $stock; ?></td>
-              <td class="px-4 py-2 border text-center font-semibold capitalize
-                <?php echo ($status === 'In Stock') ? 'text-green-600' : (($status === 'Low Stock') ? 'text-yellow-600' : 'text-red-600'); ?>">
-                <?php echo $status; ?>
-              </td>
-            </tr>
-            <?php }} else { ?>
-            <tr>
-              <td colspan="7" class="text-center px-4 py-6 text-gray-500 border">No products found</td>
-            </tr>
-            <?php } ?>
-          </tbody>
-        </table>
-      </div>
+<div class="overflow-x-auto">
+  <table class="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm text-sm">
+    <thead class="bg-gray-100 text-gray-700 uppercase text-xs font-semibold">
+      <tr>
+        <th class="px-4 py-3 text-left">Product Name</th>
+        <th class="px-4 py-3 text-left">Category</th>
+        <th class="px-4 py-3 text-center">Color</th>
+        <th class="px-4 py-3 text-center">Size</th>
+        <th class="px-4 py-3 text-center">Stock</th>
+        <th class="px-4 py-3 text-center">Status</th>
+        <th class="px-4 py-3 text-right">Created At</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-100">
+      <?php 
+        if (!empty($inventory)) { 
+          foreach ($inventory as $item) {
+            $stock = (int)$item['total_stock'];
+            
+            // Determine Status Color
+            if ($stock == 0) {
+                $status_label = "Out of Stock";
+                $status_class = "bg-red-100 text-red-700 border-red-200";
+            } elseif ($stock < 0) { // You can adjust this threshold
+                $status_label = "Low Stock";
+                $status_class = "bg-yellow-100 text-yellow-700 border-yellow-200";
+            } else {
+                $status_label = "In Stock";
+                $status_class = "bg-green-100 text-green-700 border-green-200";
+            }
+      ?>
+      <tr class="hover:bg-gray-50 transition duration-150">
+        <!-- Product Name -->
+        <td class="px-4 py-3 font-medium text-gray-900">
+            <?php echo htmlspecialchars($item['product_name']); ?>
+        </td>
+
+        <!-- Category -->
+        <td class="px-4 py-3 text-gray-600">
+            <span class="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs border">
+                <?php echo htmlspecialchars($item['category_name']); ?>
+            </span>
+        </td>
+
+        <!-- 🎨 Color (Badge Style) -->
+        <td class="px-4 py-3 text-center">
+            <?php if (!empty($item['color'])): ?>
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border border-gray-200 shadow-sm bg-white text-gray-800">
+                    <!-- Optional: Add a small colored dot if you want -->
+                    <span class="w-2 h-2 mr-1.5 rounded-full bg-gray-400"></span>
+                    <?php echo htmlspecialchars($item['color']); ?>
+                </span>
+            <?php else: ?>
+                <span class="text-gray-400">—</span>
+            <?php endif; ?>
+        </td>
+
+        <!-- 📏 Size (Square Badge Style) -->
+        <td class="px-4 py-3 text-center">
+            <?php if (!empty($item['size'])): ?>
+                <span class="inline-block w-8 h-8 leading-8 text-center rounded bg-white border border-gray-300 text-xs font-bold text-gray-700 shadow-sm">
+                    <?php echo htmlspecialchars($item['size']); ?>
+                </span>
+            <?php else: ?>
+                <span class="text-gray-400">—</span>
+            <?php endif; ?>
+        </td>
+
+        <!-- Stock Count -->
+        <td class="px-4 py-3 text-center font-bold text-gray-700">
+            <?php echo $stock; ?>
+        </td>
+
+        <!-- Status -->
+        <td class="px-4 py-3 text-center">
+            <span class="px-2 py-1 rounded-md text-xs font-semibold border <?php echo $status_class; ?>">
+                <?php echo $status_label; ?>
+            </span>
+        </td>
+
+        <!-- Date -->
+        <td class="px-4 py-3 text-right text-gray-500 text-xs">
+            <?php echo date('M d, Y', strtotime($item['created_at'])); ?>
+        </td>
+      </tr>
+      <?php 
+          }
+        } else { 
+      ?>
+      <tr>
+        <td colspan="7" class="text-center px-4 py-8 text-gray-400">
+            <i class="fas fa-box-open text-2xl mb-2 block"></i>
+            No inventory items found matching your filters.
+        </td>
+      </tr>
+      <?php } ?>
+    </tbody>
+  </table>
+</div>
     </main>
   </div>
 </body>

@@ -31,17 +31,16 @@ if ($admin_id) {
 
 
 // ======================================
-// ADD SUPPLIER (NO MORE CATEGORY FIELD)
+// ADD SUPPLIER
 // ======================================
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if (isset($_POST['add_supplier'])) {
 
     $supplier_name  = trim($_POST['supplier_name']);
     $supplier_email = trim($_POST['supplier_email'] ?? '');
     $supplier_phone = trim($_POST['supplier_phone'] ?? '');
 
     if (!empty($supplier_name)) {
-
         $sql = "INSERT INTO suppliers (supplier_name, supplier_email, supplier_phone, created_at)
                 VALUES (?, ?, ?, NOW())";
 
@@ -57,13 +56,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 
 // ======================================
+// UPDATE SUPPLIER
+// ======================================
+
+if (isset($_POST['edit_supplier'])) {
+
+    $id    = intval($_POST['supplier_id']);
+    $name  = trim($_POST['supplier_name']);
+    $email = trim($_POST['supplier_email']);
+    $phone = trim($_POST['supplier_phone']);
+
+    if (!empty($name)) {
+        $stmt = $conn->prepare("
+            UPDATE suppliers 
+            SET supplier_name=?, supplier_email=?, supplier_phone=? 
+            WHERE supplier_id=?
+        ");
+        $stmt->bind_param("sssi", $name, $email, $phone, $id);
+        $stmt->execute();
+        $stmt->close();
+
+        header("Location: suppliers.php?updated=1");
+        exit;
+    }
+}
+
+
+
+// ======================================
+// DELETE SUPPLIER
+// ======================================
+
+if (isset($_POST['delete_supplier'])) {
+
+    $delete_id = intval($_POST['delete_id']);
+
+    if ($delete_id > 0) {
+        $stmt = $conn->prepare("DELETE FROM suppliers WHERE supplier_id = ?");
+        $stmt->bind_param("i", $delete_id);
+        $stmt->execute();
+        $stmt->close();
+
+        header("Location: suppliers.php?deleted=1");
+        exit;
+    }
+}
+
+
+// ======================================
 // FETCH SUPPLIERS
 // ======================================
+
 $suppliers = $conn->query("
     SELECT supplier_id, supplier_name, supplier_email, supplier_phone, created_at
     FROM suppliers
     ORDER BY created_at ASC
 ");
+
 ?>
 
 <!DOCTYPE html>
@@ -96,7 +145,29 @@ $suppliers = $conn->query("
   </style>
 </head>
 
-<body class="text-sm" x-data="{ userMenu:false, productMenu:false, addModal:false }">
+<body 
+  class="text-sm"
+  x-data="{
+      userMenu:false,
+      productMenu:false,
+      addModal:false,
+      editModal:false,
+      deleteModal:false,
+
+      editData:{ id:'', name:'', email:'', phone:'' },
+      deleteData:{ id:'', name:'' },
+
+      openEdit(id, name, email, phone) {
+        this.editData = { id, name, email, phone };
+        this.editModal = true;
+      },
+
+      openDelete(id, name) {
+        this.deleteData = { id, name };
+        this.deleteModal = true;
+      }
+  }">
+
 <div class="flex min-h-screen">
 
   <!-- Sidebar -->
@@ -106,6 +177,7 @@ $suppliers = $conn->query("
         <img src="logo2.png" alt="Logo" class="w-10 h-10 rounded-full">
         <h2 class="text-lg font-semibold text-[var(--rose)]">SevenDwarfs</h2>
       </div>
+
       <div class="mt-4 flex items-center gap-3">
         <img src="newID.jpg" alt="Admin" class="w-10 h-10 rounded-full">
         <div>
@@ -116,13 +188,17 @@ $suppliers = $conn->query("
     </div>
 
     <nav class="p-4 space-y-1">
-      <a href="dashboard.php" class="block px-4 py-2 rounded hover:bg-gray-100 transition"><i class="fas fa-tachometer-alt mr-2"></i>Dashboard</a>
+      <a href="dashboard.php" class="block px-4 py-2 rounded hover:bg-gray-100 transition">
+        <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
+      </a>
 
       <!-- User Management -->
-      <button @click="userMenu = !userMenu" class="w-full text-left px-4 py-2 flex justify-between items-center hover:bg-gray-100 rounded transition">
+      <button @click="userMenu = !userMenu" 
+              class="w-full text-left px-4 py-2 flex justify-between items-center hover:bg-gray-100 rounded transition">
         <span><i class="fas fa-users-cog mr-2"></i>User Management</span>
         <i class="fas fa-chevron-down" :class="{ 'rotate-180': userMenu }"></i>
       </button>
+
       <ul x-show="userMenu" x-transition class="pl-8 space-y-1 text-sm">
         <li><a href="manage_users.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-user mr-2"></i>Manage Users</a></li>
         <li><a href="manage_roles.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-id-badge mr-2"></i>Manage Roles</a></li>
@@ -130,10 +206,12 @@ $suppliers = $conn->query("
       </ul>
 
       <!-- Product Management -->
-      <button @click="productMenu = !productMenu" class="w-full text-left px-4 py-2 flex justify-between items-center hover:bg-gray-100 rounded transition">
+      <button @click="productMenu = !productMenu" 
+              class="w-full text-left px-4 py-2 flex justify-between items-center hover:bg-gray-100 rounded transition">
         <span><i class="fas fa-box-open mr-2"></i>Product Management</span>
         <i class="fas fa-chevron-down" :class="{ 'rotate-180': productMenu }"></i>
       </button>
+
       <ul x-show="productMenu" x-transition class="pl-8 text-sm space-y-1">
         <li><a href="categories.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-tags mr-2"></i>Category</a></li>
         <li><a href="products.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-box mr-2"></i>Product</a></li>
@@ -147,9 +225,13 @@ $suppliers = $conn->query("
       <a href="suppliers.php" class="block px-4 py-2 active-link"><i class="fas fa-industry mr-2"></i>Suppliers</a>
 
       <a href="system_logs.php" class="block px-4 py-2 hover:bg-gray-100 rounded transition"><i class="fas fa-file-alt mr-2"></i>System Logs</a>
-      <a href="logout.php" class="block px-4 py-2 text-red-600 hover:bg-red-50 rounded transition"><i class="fas fa-sign-out-alt mr-2"></i>Log out</a>
+
+      <a href="logout.php" class="block px-4 py-2 text-red-600 hover:bg-red-50 rounded transition">
+        <i class="fas fa-sign-out-alt mr-2"></i>Log out
+      </a>
     </nav>
   </aside>
+
 
   <!-- Main Content Area -->
   <main class="flex-1 p-8 bg-gray-50 overflow-auto">
@@ -158,6 +240,12 @@ $suppliers = $conn->query("
     <?php if (isset($_GET['success'])): ?>
       <div class="bg-green-100 text-green-700 px-4 py-2 rounded-lg mb-4">
         ✅ Supplier added successfully.
+      </div>
+    <?php endif; ?>
+
+    <?php if (isset($_GET['updated'])): ?>
+      <div class="bg-green-100 text-green-700 px-4 py-2 rounded-lg mb-4">
+        ✏ Supplier updated successfully.
       </div>
     <?php endif; ?>
 
@@ -173,42 +261,133 @@ $suppliers = $conn->query("
       </div>
     <?php endif; ?>
 
+
+    <!-- HEADER -->
     <div class="bg-[var(--rose)] text-white p-5 rounded-t-2xl shadow-sm flex justify-between items-center">
       <h1 class="text-2xl font-semibold">Suppliers Information</h1>
-      <button @click="addModal = true" class="flex items-center gap-2 bg-[var(--rose-hover)] hover:bg-[var(--rose)] text-white px-4 py-2 rounded-lg shadow transition">
+      <button @click="addModal = true" 
+              class="flex items-center gap-2 bg-[var(--rose-hover)] hover:bg-[var(--rose)] text-white px-4 py-2 rounded-lg shadow transition">
         <i class="fas fa-plus"></i> Add Supplier
       </button>
     </div>
 
+
     <!-- ADD SUPPLIER MODAL -->
     <div x-show="addModal" x-cloak @click.self="addModal=false"
          class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+
       <div class="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
         <h2 class="text-xl font-semibold text-[var(--rose-hover)] mb-4">Add Supplier</h2>
 
         <form action="" method="POST" class="space-y-4">
+          <input type="hidden" name="add_supplier" value="1">
+
           <div>
             <label class="block font-medium text-gray-700">Supplier Name</label>
-            <input type="text" name="supplier_name" required class="w-full border p-2 rounded-lg focus:ring-2 focus:ring-[var(--rose)]">
+            <input type="text" name="supplier_name" required
+                   class="w-full border p-2 rounded-lg focus:ring-2 focus:ring-[var(--rose)]">
           </div>
 
           <div>
             <label class="block font-medium text-gray-700">Email</label>
-            <input type="email" name="supplier_email" class="w-full border p-2 rounded-lg focus:ring-2 focus:ring-[var(--rose)]">
+            <input type="email" name="supplier_email"
+                   class="w-full border p-2 rounded-lg focus:ring-2 focus:ring-[var(--rose)]">
           </div>
 
           <div>
             <label class="block font-medium text-gray-700">Phone</label>
-            <input type="text" name="supplier_phone" class="w-full border p-2 rounded-lg focus:ring-2 focus:ring-[var(--rose)]">
+            <input type="text" name="supplier_phone"
+                   class="w-full border p-2 rounded-lg focus:ring-2 focus:ring-[var(--rose)]">
           </div>
 
           <div class="flex justify-end gap-3">
-            <button type="button" @click="addModal=false" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-md">Cancel</button>
-            <button type="submit" class="px-4 py-2 bg-[var(--rose-hover)] hover:bg-[var(--rose)] text-white rounded-md">Save</button>
+            <button type="button" @click="addModal=false" 
+                    class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-md">Cancel</button>
+
+            <button type="submit"
+                    class="px-4 py-2 bg-[var(--rose-hover)] hover:bg-[var(--rose)] text-white rounded-md">Save</button>
           </div>
         </form>
       </div>
     </div>
+
+
+
+    <!-- EDIT SUPPLIER MODAL -->
+    <div x-show="editModal" x-cloak @click.self="editModal=false"
+         class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+
+      <div class="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
+        <h2 class="text-xl font-semibold text-[var(--rose-hover)] mb-4">Edit Supplier</h2>
+
+        <form action="" method="POST" class="space-y-4">
+          <input type="hidden" name="edit_supplier" value="1">
+          <input type="hidden" name="supplier_id" x-model="editData.id">
+
+          <div>
+            <label class="block font-medium text-gray-700">Supplier Name</label>
+            <input type="text" name="supplier_name" x-model="editData.name" required
+                   class="w-full border p-2 rounded-lg focus:ring-2 focus:ring-[var(--rose)]">
+          </div>
+
+          <div>
+            <label class="block font-medium text-gray-700">Email</label>
+            <input type="email" name="supplier_email" x-model="editData.email"
+                   class="w-full border p-2 rounded-lg focus:ring-2 focus:ring-[var(--rose)]">
+          </div>
+
+          <div>
+            <label class="block font-medium text-gray-700">Phone</label>
+            <input type="text" name="supplier_phone" x-model="editData.phone"
+                   class="w-full border p-2 rounded-lg focus:ring-2 focus:ring-[var(--rose)]">
+          </div>
+
+          <div class="flex justify-end gap-3">
+            <button type="button" @click="editModal=false"
+                    class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-md">Cancel</button>
+
+            <button type="submit"
+                    class="px-4 py-2 bg-[var(--rose-hover)] hover:bg-[var(--rose)] text-white rounded-md">Update</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+
+
+    <!-- DELETE CONFIRMATION MODAL -->
+    <div x-show="deleteModal" x-cloak @click.self="deleteModal=false"
+         class="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+
+      <div class="bg-white rounded-xl shadow-lg p-6 w-full max-w-md">
+        <h2 class="text-xl font-semibold text-red-600 mb-4">
+          Confirm Delete
+        </h2>
+
+        <p class="text-gray-700 mb-6">
+          Are you sure you want to delete
+          <span class="font-semibold text-red-600" x-text="deleteData.name"></span>?
+        </p>
+
+        <form method="POST" class="flex justify-end gap-3">
+          <input type="hidden" name="delete_supplier" value="1">
+          <input type="hidden" name="delete_id" x-model="deleteData.id">
+
+          <button type="button"
+                  @click="deleteModal=false"
+                  class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-md">
+            Cancel
+          </button>
+
+          <button type="submit"
+                  class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md">
+            Delete
+          </button>
+        </form>
+      </div>
+    </div>
+
+
 
     <!-- SUPPLIERS TABLE -->
     <section class="bg-white p-6 rounded-b-2xl shadow">
@@ -236,16 +415,32 @@ $suppliers = $conn->query("
                   <td class="px-4 py-2"><?= htmlspecialchars($row['supplier_phone']); ?></td>
 
                   <td class="px-4 py-2 flex gap-2">
-                    <a href="edit_supplier.php?id=<?= $row['supplier_id'] ?>" 
-                       class="text-green-600 hover:text-green-700 border border-green-300 rounded px-2 py-1" title="Edit">
-                      <i class="fas fa-edit"></i>
-                    </a>
 
-                    <a href="delete_supplier.php?id=<?= $row['supplier_id'] ?>" 
-                       onclick="return confirm('Delete this supplier?')" 
-                       class="text-red-600 hover:text-red-700 border border-red-300 rounded px-2 py-1" title="Delete">
+                    <!-- EDIT BUTTON -->
+                    <button
+                      @click="openEdit(
+                        '<?= $row['supplier_id'] ?>',
+                        '<?= htmlspecialchars($row['supplier_name'], ENT_QUOTES) ?>',
+                        '<?= htmlspecialchars($row['supplier_email'], ENT_QUOTES) ?>',
+                        '<?= htmlspecialchars($row['supplier_phone'], ENT_QUOTES) ?>'
+                      )"
+                      class="text-green-600 hover:text-green-700 border border-green-300 rounded px-2 py-1"
+                      title="Edit"
+                    >
+                      <i class="fas fa-edit"></i>
+                    </button>
+
+                    <!-- DELETE BUTTON -->
+                    <button
+                      @click="openDelete(
+                        '<?= $row['supplier_id'] ?>',
+                        '<?= htmlspecialchars($row['supplier_name'], ENT_QUOTES) ?>'
+                      )"
+                      class="text-red-600 hover:text-red-700 border border-red-300 rounded px-2 py-1"
+                      title="Delete"
+                    >
                       <i class="fas fa-trash-alt"></i>
-                    </a>
+                    </button>
                   </td>
                 </tr>
               <?php endwhile; ?>
@@ -260,5 +455,6 @@ $suppliers = $conn->query("
 
   </main>
 </div>
+
 </body>
 </html>

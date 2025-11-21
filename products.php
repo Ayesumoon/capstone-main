@@ -38,7 +38,7 @@ $selectedCategory = $_GET['category'] ?? 'all';
 $searchQuery = $_GET['search'] ?? '';
 $searchTerm = "%$searchQuery%";
 
-// 🔹 Fetch products with optional search and category filter
+// 🔹 Fetch products (Updated to include Supplier)
 $sql = "
     SELECT 
         p.product_id,
@@ -47,10 +47,12 @@ $sql = "
         p.price_id,
         p.image_url,
         c.category_name,
+        s.supplier_name,  -- 1. Added Supplier Name
         GROUP_CONCAT(DISTINCT col.color ORDER BY col.color SEPARATOR ', ') AS colors,
         GROUP_CONCAT(DISTINCT sz.size ORDER BY sz.size SEPARATOR ', ') AS sizes
     FROM products p
     LEFT JOIN categories c ON p.category_id = c.category_id
+    LEFT JOIN suppliers s ON p.supplier_id = s.supplier_id  -- 2. Added Join to Suppliers
     LEFT JOIN stock st ON p.product_id = st.product_id
     LEFT JOIN colors col ON st.color_id = col.color_id
     LEFT JOIN sizes sz ON st.size_id = sz.size_id
@@ -131,7 +133,7 @@ $conn->close();
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet" />
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" />
 
   <style>
     :root {
@@ -181,7 +183,6 @@ $conn->close();
         <i class="fas fa-tachometer-alt mr-2"></i> Dashboard
       </a>
 
-      <!-- User Management -->
       <div>
         <button @click="userMenu = !userMenu" 
           class="w-full text-left px-4 py-2 flex justify-between items-center hover:bg-gray-100 rounded-md transition">
@@ -194,7 +195,6 @@ $conn->close();
         </div>
       </div>
 
-      <!-- Product Management -->
       <div>
         <button @click="productMenu = !productMenu" 
           class="w-full text-left px-4 py-2 flex justify-between items-center hover:bg-gray-100 rounded-md transition">
@@ -210,12 +210,9 @@ $conn->close();
       </div>
 
       <a href="orders.php" class="block px-4 py-2 hover:bg-gray-100 rounded-md transition"><i class="fas fa-shopping-cart mr-2"></i> Orders</a>
-            <a href="cashier_sales_report.php" class="block px-4 py-2 rounded-md hover:bg-gray-100 transitio"><i class="fas fa-chart-line mr-2"></i>Cashier Sales</a>
-
+      <a href="cashier_sales_report.php" class="block px-4 py-2 rounded-md hover:bg-gray-100 transitio"><i class="fas fa-chart-line mr-2"></i>Cashier Sales</a>
       <a href="suppliers.php" class="block px-4 py-2 hover:bg-gray-100 rounded-md transition"><i class="fas fa-industry mr-2"></i> Suppliers</a>
-
-            <a href="system_logs.php" class="block px-4 py-2 hover:bg-gray-100 rounded transition"><i class="fas fa-file-alt mr-2"></i>System Logs</a>
-
+      <a href="system_logs.php" class="block px-4 py-2 hover:bg-gray-100 rounded transition"><i class="fas fa-file-alt mr-2"></i>System Logs</a>
       <a href="logout.php" class="block px-4 py-2 text-red-600 hover:bg-red-50 rounded-md transition"><i class="fas fa-sign-out-alt mr-2"></i> Logout</a>
     </nav>
   </aside>
@@ -229,34 +226,29 @@ $conn->close();
 
     <!-- Content Container -->
     <section class="bg-white p-6 rounded-b-2xl shadow space-y-6">
+      
       <!-- Filters and Add Button -->
       <div class="flex flex-wrap justify-between items-center gap-4">
-        <form method="GET" id="categoryForm" class="flex items-center gap-2">
-          <label class="text-gray-700 font-medium">Category:</label>
-          <select name="category" onchange="document.getElementById('categoryForm').submit()"
-            class="p-2 border rounded-lg focus:ring-2 focus:ring-[var(--rose)]">
-            <option value="all">All</option>
-            <?php foreach ($categories as $cat): ?>
-              <option value="<?= $cat['category_id']; ?>" <?= ($selectedCategory == $cat['category_id']) ? 'selected' : ''; ?>>
-                <?= htmlspecialchars($cat['category_name']); ?>
-              </option>
-            <?php endforeach; ?>
-          </select>
-        </form>
+        <div class="flex gap-4 items-center">
+            <form method="GET" id="categoryForm" class="flex items-center gap-2">
+              <label class="text-gray-700 font-medium">Category:</label>
+              <select name="category" onchange="document.getElementById('categoryForm').submit()"
+                class="p-2 border rounded-lg focus:ring-2 focus:ring-[var(--rose)]">
+                <option value="all">All</option>
+                <?php foreach ($categories as $cat): ?>
+                  <option value="<?= $cat['category_id']; ?>" <?= ($selectedCategory == $cat['category_id']) ? 'selected' : ''; ?>>
+                    <?= htmlspecialchars($cat['category_name']); ?>
+                  </option>
+                <?php endforeach; ?>
+              </select>
+            </form>
 
-       <!-- Live Search Input -->
-<div class="flex items-center gap-2">
-  <input 
-    type="text" 
-    id="searchBox" 
-    placeholder="Search product..." 
-    class="p-2 border rounded-lg w-64 focus:ring-2 focus:ring-[var(--rose)]"
-  >
-
-  <!-- Keep category filter when searching -->
-  <input type="hidden" id="selectedCategory" value="<?= htmlspecialchars($selectedCategory) ?>">
-</div>
-
+            <!-- Live Search Input -->
+            <div class="flex items-center gap-2">
+              <input type="text" id="searchBox" placeholder="Search product..." class="p-2 border rounded-lg w-64 focus:ring-2 focus:ring-[var(--rose)]">
+              <input type="hidden" id="selectedCategory" value="<?= htmlspecialchars($selectedCategory) ?>">
+            </div>
+        </div>
 
         <a href="add_product.php" 
            class="flex items-center gap-2 bg-[var(--rose)] hover:bg-[var(--rose-hover)] text-white text-sm font-medium rounded-lg px-4 py-2 shadow transition">
@@ -270,11 +262,11 @@ $conn->close();
           <thead class="bg-gray-100 text-gray-600 uppercase text-xs font-semibold">
             <tr>
               <th class="px-4 py-3 text-left">Images</th>
-              <th class="px-4 py-3 text-left">Product</th>
-              <th class="px-4 py-3 text-left">Description</th>
+              <th class="px-4 py-3 text-left">Product Info</th>
               <th class="px-4 py-3 text-left">Price</th>
               <th class="px-4 py-3 text-left">Category</th>
-              <th class="px-4 py-3 text-left">Actions</th>
+              <th class="px-4 py-3 text-left">Supplier</th> <!-- Added Supplier Header -->
+              <th class="px-4 py-3 text-center">Actions</th> <!-- Centered Actions -->
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-100 text-gray-700">
@@ -287,14 +279,12 @@ $conn->close();
                       <?php foreach ($product['display_images'] as $img): ?>
                         <img src="<?= $img ?>" 
                              alt="Product Image" 
-                             class="w-14 h-14 rounded-lg border shadow-sm object-cover cursor-pointer hover:scale-105 transition-transform duration-200"
+                             class="w-12 h-12 rounded-lg border shadow-sm object-cover cursor-pointer hover:scale-105 transition-transform duration-200"
                              @click="imageSrc = '<?= $img ?>'; open = true"
                              onerror="this.src='uploads/products/default.png';">
                       <?php endforeach; ?>
-
                       <!-- Modal Preview -->
-                      <div x-show="open" x-transition @click="open = false"
-                           class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+                      <div x-show="open" x-cloak x-transition @click="open = false" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
                         <div class="relative bg-white rounded-xl shadow-lg p-4 max-w-md w-full">
                           <button @click="open = false" class="absolute top-2 right-2 text-gray-500 hover:text-gray-800 text-xl font-bold">&times;</button>
                           <img :src="imageSrc" alt="Preview" class="w-full h-auto rounded-lg object-contain">
@@ -304,26 +294,42 @@ $conn->close();
                   </td>
 
                   <!-- Product Info -->
-                  <td class="px-4 py-3 font-semibold text-gray-800"><?= htmlspecialchars($product['product_name']); ?></td>
                   <td class="px-4 py-3">
-                    <?= htmlspecialchars($product['description']); ?>
-                    <div class="text-xs text-gray-500 mt-1">
-                      <strong>Colors:</strong> <?= $product['colors'] ?: '—'; ?><br>
-                      <strong>Sizes:</strong> <?= $product['sizes'] ?: '—'; ?>
+                    <p class="font-semibold text-gray-800"><?= htmlspecialchars($product['product_name']); ?></p>
+                    <p class="text-xs text-gray-500 truncate w-48"><?= htmlspecialchars($product['description']); ?></p>
+                    <div class="text-xs text-gray-400 mt-1">
+                       <?= $product['colors'] ?: 'No Colors'; ?> | <?= $product['sizes'] ?: 'No Sizes'; ?>
                     </div>
                   </td>
+
+                  <!-- Price -->
                   <td class="px-4 py-3 font-medium text-[var(--rose)]">₱<?= number_format($product['price_id'], 2); ?></td>
-                  <td class="px-4 py-3"><?= htmlspecialchars($product['category_name']); ?></td>
+                  
+                  <!-- Category -->
                   <td class="px-4 py-3">
-                    <div class="flex gap-2">
+                      <span class="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs">
+                          <?= htmlspecialchars($product['category_name']); ?>
+                      </span>
+                  </td>
+
+                  <!-- Supplier (NEW) -->
+                  <td class="px-4 py-3 text-gray-600">
+                    <?= htmlspecialchars($product['supplier_name'] ?? 'N/A'); ?>
+                  </td>
+
+                  <!-- Actions (SYMBOLS) -->
+                  <td class="px-4 py-3">
+                    <div class="flex items-center justify-center gap-2">
                       <a href="edit_product.php?id=<?= $product['product_id']; ?>" 
-                         class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded-lg shadow text-xs font-medium transition">
-                        Edit
+                         class="w-8 h-8 flex items-center justify-center bg-yellow-50 text-yellow-600 hover:bg-yellow-500 hover:text-white rounded-md transition shadow-sm" 
+                         title="Edit">
+                        <i class="fas fa-pen text-xs"></i>
                       </a>
                       <a href="delete_product.php?id=<?= $product['product_id']; ?>" 
                          onclick="return confirm('Are you sure you want to delete this product?')" 
-                         class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-lg shadow text-xs font-medium transition">
-                        Delete
+                         class="w-8 h-8 flex items-center justify-center bg-red-50 text-red-600 hover:bg-red-500 hover:text-white rounded-md transition shadow-sm"
+                         title="Delete">
+                        <i class="fas fa-trash text-xs"></i>
                       </a>
                     </div>
                   </td>
@@ -338,39 +344,8 @@ $conn->close();
     </section>
   </main>
 </div>
+
 <script>
-// Wait until the page loads
-document.addEventListener('DOMContentLoaded', function () {
-    const searchBox = document.getElementById('searchBox');
-    const categorySelect = document.querySelector('select[name="category"]');
-    const tableBody = document.querySelector('table tbody');
-
-    // Debounce function to limit requests
-    function debounce(fn, delay) {
-        let timeout;
-        return function (...args) {
-            clearTimeout(timeout);
-            timeout = setTimeout(() => fn.apply(this, args), delay);
-        };
-    }
-
-    // Function to fetch filtered products
-    const fetchProducts = debounce(() => {
-        const search = searchBox.value.trim();
-        const category = categorySelect.value;
-
-        fetch(`products_ajax.php?search=${encodeURIComponent(search)}&category=${encodeURIComponent(category)}`)
-            .then(res => res.text())
-            .then(html => {
-                tableBody.innerHTML = html;
-            });
-    }, 300);
-
-    // Event listeners
-    searchBox.addEventListener('input', fetchProducts);
-    categorySelect.addEventListener('change', fetchProducts);
-});
-</script><script>
 document.addEventListener('DOMContentLoaded', function () {
     const searchBox = document.getElementById('searchBox');
     const categorySelect = document.querySelector('select[name="category"]');
@@ -392,11 +367,10 @@ document.addEventListener('DOMContentLoaded', function () {
         fetch(`products.php?${params.toString()}`)
             .then(res => res.text())
             .then(html => {
-                // Extract tbody content from returned HTML
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(html, 'text/html');
                 const newTbody = doc.querySelector('table tbody');
-                tableBody.innerHTML = newTbody.innerHTML;
+                if(newTbody) tableBody.innerHTML = newTbody.innerHTML;
             });
     }, 300);
 
@@ -405,7 +379,5 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 
-
 </body>
 </html>
-
