@@ -4,11 +4,14 @@ require 'conn.php';
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
-// ==========================================
-// API: HANDLE AJAX REQUESTS
-// ==========================================
+$admin_id = $_SESSION['admin_id'] ?? null;
 
-// 1. GET ORDER DETAILS (For Refund Search)
+if (!$admin_id && isset($_GET['action']) && $_GET['action'] == 'process_refund') {
+    header('Content-Type: application/json');
+    echo json_encode(['status' => 'error', 'message' => 'Not authenticated']);
+    exit;
+}
+
 if (isset($_GET['action']) && $_GET['action'] == 'get_order_details' && isset($_GET['oid'])) {
     header('Content-Type: application/json');
     $oid = $conn->real_escape_string($_GET['oid']);
@@ -61,26 +64,89 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action']) && $_GET['ac
         exit;
     }
 
+    // Expect original order id to be provided
+    $oid = isset($input['order_id']) ? intval($input['order_id']) : (isset($input['oid']) ? intval($input['oid']) : 0);
+    if (!$oid) {
+        echo json_encode(['status' => 'error', 'message' => 'Original order id missing']);
+        exit;
+    }
+
     $conn->begin_transaction();
     try {
         // Calculate Total Refund Amount
-        $total_refund = 0;
+        $total_refund = 0.0;
         foreach ($input['items'] as $item) {
-            $total_refund += ($item['price'] * $item['refund_qty']);
+            $refund_qty = intval($item['refund_qty']);
+            $price = floatval($item['price']);
+            if ($refund_qty > 0) $total_refund += ($price * $refund_qty);
         }
 
-        // 1. Insert Negative Transaction (Refund Record)
-        $stmt = $conn->prepare("INSERT INTO transactions (order_id, total, order_status_id, date_time, customer_id) VALUES (?, ?, 2, NOW(), NULL)"); 
-        // Note: Assuming status_id 2 = Refunded. total is negative.
-        $neg_total = -1 * abs($total_refund);
-        $oid = $input['order_id'];
-        $stmt->bind_param("id", $oid, $neg_total);
-        $stmt->execute();
-        $stmt->close();
+        if ($total_refund <= 0) {
+            throw new Exception('Refund amount must be greater than zero');
+        }
 
-        // 2. Restock Items
+        // Negative total for refund records
+        $neg_total = -1 * $total_refund;
+
+        // Get original order info (payment method)
+        $origStmt = $conn->prepare("SELECT payment_method_id FROM orders WHERE order_id = ? LIMIT 1");
+        $origStmt->bind_param("i", $oid);
+        $origStmt->execute();
+        $origRes = $origStmt->get_result();
+        $orig = $origRes->fetch_assoc();
+        $origStmt->close();
+
+        $payment_method_id = $orig['payment_method_id'] ?? 1;
+
+        // Insert refund order with negative amount and link to original order
+        $insertOrder = $conn->prepare("INSERT INTO orders (admin_id, total_amount, cash_given, changes, order_status_id, created_at, payment_method_id, refunded_order_id) VALUES (?, ?, 0, 0, 2, NOW(), ?, ?)");
+        if (!$insertOrder) throw new Exception('Prepare failed (insert refund order): ' . $conn->error);
+        $insertOrder->bind_param("idii", $admin_id, $neg_total, $payment_method_id, $oid);
+        $insertOrder->execute();
+        $refund_id = $insertOrder->insert_id;
+        $insertOrder->close();
+
+        // Insert negative order items (mirror of refunded items)
+        $itemStmt = $conn->prepare("INSERT INTO order_items (order_id, product_id, color, size, stock_id, qty, price) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        if (!$itemStmt) throw new Exception('Prepare failed (insert order_items): ' . $conn->error);
+
+        foreach ($input['items'] as $item) {
+            $refund_qty = -1 * intval($item['refund_qty']); // negative qty
+            $p_id = intval($item['product_id']);
+            $color = isset($item['color']) ? $item['color'] : null;
+            $size = isset($item['size']) ? $item['size'] : null;
+            $stock_id = intval($item['stock_id']);
+            $price = floatval($item['price']);
+
+            $itemStmt->bind_param(
+                "iissiid",
+                $refund_id,
+                $p_id,
+                $color,
+                $size,
+                $stock_id,
+                $refund_qty,
+                $price
+            );
+            $itemStmt->execute();
+        }
+        $itemStmt->close();
+
+        // Insert negative transaction record
+        $t = $conn->prepare("INSERT INTO transactions (order_id, customer_id, payment_method_id, total, order_status_id, date_time) VALUES (?, NULL, ?, ?, 2, NOW())");
+        if (!$t) throw new Exception('Prepare failed (insert transaction): ' . $conn->error);
+        $t->bind_param("iid", $refund_id, $payment_method_id, $neg_total);
+        $t->execute();
+        $t->close();
+
+        // Update original order status to refunded
+        $upd = $conn->prepare("UPDATE orders SET order_status_id = 2 WHERE order_id = ?");
+        $upd->bind_param("i", $oid);
+        $upd->execute();
+        $upd->close();
+
+        // 2. Restock Items (add back the refunded qty)
         $updateStock = $conn->prepare("UPDATE stock SET current_qty = current_qty + ? WHERE stock_id = ?");
-        
         foreach ($input['items'] as $item) {
             $qty = intval($item['refund_qty']);
             $stock_id = intval($item['stock_id']);
@@ -93,7 +159,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action']) && $_GET['ac
         $updateStock->close();
 
         $conn->commit();
-        echo json_encode(['status' => 'success', 'message' => 'Refund processed & Stock updated']);
+        echo json_encode(['status' => 'success', 'message' => 'Refund processed & Stock updated', 'refund_id' => $refund_id]);
     } catch (Exception $e) {
         $conn->rollback();
         echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
@@ -101,17 +167,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action']) && $_GET['ac
     exit;
 }
 
-// ==========================================
-// STANDARD PAGE LOGIC
-// ==========================================
-
-// Ensure cashier logged in
+// Ensure cashier logged in for the UI
 if (!isset($_SESSION['admin_id'])) {
     header("Location: login.php");
     exit;
 }
 
-$admin_id = $_SESSION['admin_id'] ?? null;
+// $admin_id already set above from session
 
 // Fetch cashier info
 $cashierRes = $conn->prepare("SELECT first_name FROM adminusers WHERE admin_id = ?");
@@ -213,7 +275,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
             }
 
             // Find specific stock entry
-            $stockRes = $conn->prepare("SELECT stock_id, current_qty FROM stock WHERE product_id = ? AND (color_id = ? OR ? IS NULL) AND (size_id = ? OR ? IS NULL) LIMIT 1");
+$stockRes = $conn->prepare("
+    SELECT stock_id, current_qty 
+    FROM stock 
+    WHERE product_id = ? 
+      AND (color_id = ? OR ? IS NULL) 
+      AND (size_id = ? OR ? IS NULL)
+    LIMIT 1
+");
             $stockRes->bind_param("iiiii", $product_id, $color_id, $color_id, $size_id, $size_id);
             $stockRes->execute();
             $stockData = $stockRes->get_result()->fetch_assoc();
@@ -249,6 +318,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
     }
 }
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
