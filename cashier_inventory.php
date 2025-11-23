@@ -1,7 +1,10 @@
 <?php
 session_start();
 require 'conn.php';
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
 
+// Ensure cashier logged in
 if (!isset($_SESSION['admin_id'])) {
     header("Location: login.php");
     exit;
@@ -9,27 +12,33 @@ if (!isset($_SESSION['admin_id'])) {
 
 $admin_id = $_SESSION['admin_id'];
 
-// ✅ Get cashier info
+// Get cashier info
 $cashierRes = $conn->prepare("SELECT first_name, role_id FROM adminusers WHERE admin_id = ?");
 $cashierRes->bind_param("i", $admin_id);
 $cashierRes->execute();
 $cashier = $cashierRes->get_result()->fetch_assoc();
-$cashier_name = $cashier['first_name'];
-$role_id = $cashier['role_id'];
+$cashier_name = $cashier['first_name'] ?? 'Cashier';
+$role_id = $cashier['role_id'] ?? 0;
+$cashierRes->close();
 
+// Only Cashiers allowed (assuming role_id 1 is restricted or allowed based on your logic)
+// Adjust this check based on your actual role definitions
 if ($role_id != 1) {
-    header("Location: dashboard.php");
-    exit;
+    // header("Location: dashboard.php"); // Uncomment if strict checking needed
+    // exit;
 }
 
+// Filters
 $selected_category = $_GET['category'] ?? 'all';
 $selected_size = $_GET['size'] ?? 'all';
 $selected_color = $_GET['color'] ?? 'all';
 
+// Fetch Filter Options
 $categories = $conn->query("SELECT category_id, category_name FROM categories ORDER BY category_name ASC");
 $sizes = $conn->query("SELECT DISTINCT s.size FROM stock st INNER JOIN sizes s ON st.size_id = s.size_id ORDER BY s.size ASC");
 $colors = $conn->query("SELECT DISTINCT c.color FROM stock st INNER JOIN colors c ON st.color_id = c.color_id ORDER BY c.color ASC");
 
+// Build Product Query
 $query = "
     SELECT 
         p.product_id,
@@ -55,30 +64,23 @@ if ($selected_category !== 'all') {
     $params[] = $selected_category;
     $types .= "i";
 }
-
 if ($selected_size !== 'all') {
     $query .= " AND sz.size = ? ";
     $params[] = $selected_size;
     $types .= "s";
 }
-
 if ($selected_color !== 'all') {
     $query .= " AND cl.color = ? ";
     $params[] = $selected_color;
     $types .= "s";
 }
 
-$query .= "
-    GROUP BY p.product_id, p.product_name, c.category_name, p.image_url
-    ORDER BY p.product_name ASC
-";
+$query .= " GROUP BY p.product_id ORDER BY p.product_name ASC";
 
 $stmt = $conn->prepare($query);
-
 if (!empty($params)) {
     $stmt->bind_param($types, ...$params);
 }
-
 $stmt->execute();
 $result = $stmt->get_result();
 ?>
@@ -86,267 +88,289 @@ $result = $stmt->get_result();
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Cashier Inventory | Seven Dwarfs Boutique</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<style>
-:root { --rose: #d37689; --rose-hover: #b75f6f; }
-body { background-color: #fef9fa; font-family: 'Poppins', sans-serif; }
-
-.sidebar {
-  width: 250px;
-  background: linear-gradient(135deg, #fef2f4 0%, #f9e9ed 100%);
-  border-right: 1px solid #f3dbe2;
-  position: fixed;
-  top: 0;
-  left: 0;
-  height: 100vh;
-  padding: 1.25rem;
-  display: flex;
-  flex-direction: column;
-}
-.sidebar a {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0.75rem 1rem;
-  border-radius: 10px;
-  font-weight: 500;
-  color: #4b5563;
-  margin-bottom: 0.35rem;
-}
-.sidebar a:hover {
-  background-color: #fef2f4;
-  color: var(--rose-hover);
-}
-.sidebar-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 2rem;
-}
-.sidebar-logo {
-  width: 40px;
-  height: 40px;
-}
-.sidebar-title {
-  font-size: 1.3rem;
-  font-weight: 600;
-  color: var(--rose);
-}
-.active-link {
-  background-color: var(--rose);
-  color: white !important;
-}
-.main-content {
-  margin-left: 260px;
-  padding: 2rem;
-}
-</style>
+    <meta charset="UTF-8">
+    <title>Inventory | Seven Dwarfs Boutique</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        rose: { 50: '#fff1f2', 100: '#ffe4e6', 400: '#fb7185', 500: '#f43f5e', 600: '#e11d48', 700: '#be123c' }
+                    },
+                    fontFamily: { sans: ['Poppins', 'sans-serif'] }
+                }
+            }
+        }
+    </script>
+    <style>
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 10px; }
+        .glass-header { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(0,0,0,0.03); }
+    </style>
 </head>
-<body>
+<body class="bg-slate-50 text-slate-800 flex h-screen overflow-hidden antialiased">
 
-<!-- 🌸 Sidebar -->
-<aside class="sidebar">
-  <div>
-    <div class="sidebar-header">
-      <img src="logo.png" class="sidebar-logo" alt="Logo">
-      <span class="sidebar-title">Seven Dwarfs</span>
-    </div>
+    <!-- SIDEBAR -->
+    <aside class="w-[260px] bg-white border-r border-slate-100 flex flex-col z-30 transition-all duration-300" id="sidebar">
+        <div class="h-20 flex items-center px-6 border-b border-slate-50">
+            <div>
+                <h1 class="text-xl font-bold text-rose-600 tracking-tight">Seven Dwarfs</h1>
+                <p class="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Boutique POS</p>
+            </div>
+        </div>
 
-    <nav>
-      <a href="cashier_pos.php">
-        <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 7V6a6 6 0 1 1 12 0v1"/><rect x="4" y="7" width="16" height="13" rx="3"/><path d="M9 11v2m6-2v2"/></svg>
-        POS
-      </a>
+        <nav class="flex-1 p-4 space-y-1 overflow-y-auto">
+            <a href="cashier_pos.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-50 hover:text-rose-600 font-medium transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+                POS Terminal
+            </a>
+            <a href="cashier_transactions.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-50 hover:text-rose-600 font-medium transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                Transactions
+            </a>
+            <a href="cashier_inventory.php" class="flex items-center gap-3 px-4 py-3 rounded-xl bg-rose-50 text-rose-600 font-semibold transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                Inventory
+            </a>
+        </nav>
 
-      <a href="cashier_transactions.php">
-        <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="7" width="18" height="10" rx="2"/><path d="M3 10h18"/><path d="M7 15h2"/></svg>
-        Transactions
-      </a>
+        <div class="p-4 border-t border-slate-100 bg-slate-50/50">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 font-bold text-sm shadow-sm">
+                    <?= strtoupper(substr($cashier_name, 0, 1)) ?>
+                </div>
+                <div class="overflow-hidden">
+                    <p class="text-sm font-bold text-slate-700 truncate"><?= htmlspecialchars($cashier_name) ?></p>
+                    <p class="text-xs text-slate-400">Logged in</p>
+                </div>
+            </div>
+            <form action="logout.php" method="POST">
+                <button class="w-full flex justify-center items-center gap-2 py-2.5 rounded-lg border border-slate-200 text-slate-500 text-sm font-medium hover:bg-white hover:text-rose-600 hover:border-rose-200 shadow-sm transition-all">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                    Sign Out
+                </button>
+            </form>
+        </div>
+    </aside>
 
-      <a href="cashier_inventory.php" class="active-link">
-        <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="7" width="18" height="10" rx="2"/><path d="M3 7l9 5 9-5"/><path d="M12 12v5"/></svg>
-        Inventory
-      </a>
-    </nav>
-  </div>
+    <!-- MAIN CONTENT -->
+    <main class="flex-1 flex flex-col relative overflow-hidden h-full">
+        
+        <!-- Header -->
+        <header class="h-20 glass-header flex items-center justify-between px-8 z-20 shrink-0">
+            <div>
+                <h2 class="text-2xl font-bold text-slate-800">Inventory</h2>
+                <p class="text-xs text-slate-500 font-medium">Track stock levels and prices</p>
+            </div>
 
-  <div class="mt-auto border-t pt-4">
-    <p class="text-sm text-gray-600 mb-2">
-      Cashier: <span class="font-medium text-[var(--rose)]"><?= htmlspecialchars($cashier_name); ?></span>
-    </p>
-    <form action="logout.php" method="POST">
-      <button class="w-full text-left text-red-500 hover:text-red-600 font-medium py-1">🚪 Logout</button>
-    </form>
-  </div>
-</aside>
+            <!-- Search Bar -->
+            <div class="relative">
+                <input id="searchInput" type="search" placeholder="Quick search product..." class="pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-200 w-72 shadow-sm transition-all">
+                <svg class="w-4 h-4 absolute left-3.5 top-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+            </div>
+        </header>
 
-<!-- 🌸 Main Content -->
-<div class="main-content">
+        <!-- Scrollable Content -->
+        <div class="flex-1 overflow-y-auto p-8">
+            
+            <!-- Filters -->
+            <form method="GET" class="flex flex-wrap gap-4 mb-6 bg-white p-4 rounded-2xl shadow-sm border border-slate-100 items-end">
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Category</label>
+                    <select name="category" class="w-40 bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-lg focus:ring-rose-500 focus:border-rose-500 p-2.5" onchange="this.form.submit()">
+                        <option value="all">All Categories</option>
+                        <?php while ($cat = $categories->fetch_assoc()): ?>
+                            <option value="<?= $cat['category_id'] ?>" <?= $selected_category == $cat['category_id'] ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($cat['category_name']) ?>
+                            </option>
+                        <?php endwhile; ?>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Size</label>
+                    <select name="size" class="w-32 bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-lg focus:ring-rose-500 focus:border-rose-500 p-2.5" onchange="this.form.submit()">
+                        <option value="all">All Sizes</option>
+                        <?php while ($s = $sizes->fetch_assoc()): ?>
+                            <option value="<?= $s['size'] ?>" <?= $selected_size == $s['size'] ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($s['size']) ?>
+                            </option>
+                        <?php endwhile; ?>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Color</label>
+                    <select name="color" class="w-32 bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-lg focus:ring-rose-500 focus:border-rose-500 p-2.5" onchange="this.form.submit()">
+                        <option value="all">All Colors</option>
+                        <?php while ($c = $colors->fetch_assoc()): ?>
+                            <option value="<?= $c['color'] ?>" <?= $selected_color == $c['color'] ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($c['color']) ?>
+                            </option>
+                        <?php endwhile; ?>
+                    </select>
+                </div>
+                <div class="ml-auto">
+                    <a href="cashier_inventory.php" class="text-xs font-bold text-rose-600 hover:underline">Clear Filters</a>
+                </div>
+            </form>
 
-  <!-- Header & Filters -->
-  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-    <h1 class="text-3xl font-semibold text-[var(--rose)] tracking-wide">
-      Inventory Overview
-    </h1>
+            <!-- Table -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-slate-50 text-slate-500 uppercase text-xs tracking-wider font-semibold border-b border-slate-100">
+                            <tr>
+                                <th class="px-6 py-4">Product Details</th>
+                                <th class="px-6 py-4">Category</th>
+                                <th class="px-6 py-4">Selling Price</th>
+                                <th class="px-6 py-4">Supplier Price</th>
+                                <th class="px-6 py-4 text-center">Stock Level</th>
+                                <th class="px-6 py-4 text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody" class="divide-y divide-slate-50">
+                            <?php if ($result->num_rows > 0): ?>
+                                <?php while ($row = $result->fetch_assoc()): 
+                                    // Handle image logic
+                                    $imagePath = $row['image_url'];
+                                    $img = 'uploads/default.png';
+                                    if (!empty($imagePath)) {
+                                        if (str_starts_with(trim($imagePath), '[')) {
+                                            $decoded = json_decode($imagePath, true);
+                                            $img = is_array($decoded) && count($decoded) > 0 ? $decoded[0] : 'uploads/default.png';
+                                        } elseif (str_contains($imagePath, ',')) {
+                                            $parts = explode(',', $imagePath);
+                                            $img = trim($parts[0]);
+                                        } else {
+                                            $img = trim($imagePath);
+                                        }
+                                    }
+                                    $stock = $row['total_stock'] ?? 0;
+                                ?>
+                                <tr class="hover:bg-slate-50/50 transition-colors group search-row">
+                                    <td class="px-6 py-3">
+                                        <div class="flex items-center gap-4">
+                                            <img src="<?= htmlspecialchars($img) ?>" class="w-12 h-12 rounded-lg object-cover border border-slate-100 bg-slate-50">
+                                            <div>
+                                                <div class="font-bold text-slate-800 text-search"><?= htmlspecialchars($row['product_name']) ?></div>
+                                                <div class="text-xs text-slate-400">ID: <?= $row['product_id'] ?></div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-3">
+                                        <span class="bg-slate-100 text-slate-600 px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wide">
+                                            <?= htmlspecialchars($row['category_name']) ?>
+                                        </span>
+                                    </td>
+                                    <td class="px-6 py-3 font-bold text-rose-600">
+                                        ₱<?= number_format($row['price'], 2) ?>
+                                    </td>
+                                    <td class="px-6 py-3 font-medium text-slate-500">
+                                        ₱<?= number_format($row['supplier_price'], 2) ?>
+                                    </td>
+                                    <td class="px-6 py-3 text-center">
+                                        <span class="font-bold <?= $stock <= 5 ? 'text-red-500' : 'text-slate-700' ?>"><?= $stock ?></span>
+                                    </td>
+                                    <td class="px-6 py-3 text-center">
+                                        <?php if($stock <= 0): ?>
+                                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                                <span class="w-1.5 h-1.5 rounded-full bg-red-600"></span> Out of Stock
+                                            </span>
+                                        <?php elseif($stock <= 5): ?>
+                                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                                <span class="w-1.5 h-1.5 rounded-full bg-yellow-600"></span> Low Stock
+                                            </span>
+                                        <?php else: ?>
+                                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                                <span class="w-1.5 h-1.5 rounded-full bg-green-600"></span> In Stock
+                                            </span>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                                <?php endwhile; ?>
+                            <?php else: ?>
+                                <tr>
+                                    <td colspan="6" class="px-6 py-12 text-center text-slate-400 text-sm">No products found matching these filters.</td>
+                                </tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Pagination Controls -->
+                <div class="px-6 py-4 border-t border-slate-50 flex justify-center" id="pagination"></div>
+            </div>
 
-  </div>
+        </div>
+    </main>
 
-  <!-- Inventory Table -->
-<div class="bg-white shadow rounded-xl p-6 border border-gray-200">
+    <script>
+        const searchInput = document.getElementById("searchInput");
+        const tableBody = document.getElementById("tableBody");
+        const rows = Array.from(document.querySelectorAll(".search-row"));
+        const pagination = document.getElementById("pagination");
 
-  <!-- 🔎 Live Search -->
-  <div class="flex justify-between items-center mb-4">
-    <input 
-      id="searchInput"
-      type="text"
-      placeholder="Search products..."
-      class="w-72 px-4 py-2 border border-gray-300 rounded-lg focus:ring-[var(--rose)] focus:outline-none"
-    >
-  </div>
+        let currentPage = 1;
+        const rowsPerPage = 8;
 
-    <?php if ($result->num_rows > 0): ?>
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm border-collapse">
-          <thead class="bg-[var(--rose)] text-white">
-            <tr>
-              <th class="px-4 py-3 text-left font-medium">Image</th>
-              <th class="px-4 py-3 text-left font-medium">Product Name</th>
-              <th class="px-4 py-3 text-left font-medium">Category</th>
-              <th class="px-4 py-3 text-left font-medium">Price</th>
-              <th class="px-4 py-3 text-left font-medium">Supplier Price</th>
-              <th class="px-4 py-3 text-center font-medium">Stocks</th>
-            </tr>
-          </thead>
-          <tbody>
-            <?php while ($row = $result->fetch_assoc()): ?>
-            <?php
-              $imagePath = $row['image_url'];
-              if (!empty($imagePath)) {
-                  if (str_starts_with(trim($imagePath), '[')) {
-                      $decoded = json_decode($imagePath, true);
-                      $img = is_array($decoded) && count($decoded) > 0 ? $decoded[0] : 'uploads/default.png';
-                  } elseif (str_contains($imagePath, ',')) {
-                      $parts = explode(',', $imagePath);
-                      $img = trim($parts[0]);
-                  } else {
-                      $img = trim($imagePath);
-                  }
-              } else {
-                  $img = 'uploads/default.png';
-              }
-            ?>
-            <tr class="border-b hover:bg-pink-50 transition">
-              <td class="px-4 py-3">
-                <img src="<?= htmlspecialchars($img); ?>" onerror="this.src='uploads/default.png';"
-                  class="w-16 h-16 object-cover rounded-md shadow-sm" alt="Product">
-              </td>
+        function updateTable() {
+            const query = searchInput.value.toLowerCase().trim();
+            
+            // Filter Rows
+            const filtered = rows.filter(row => {
+                const text = row.querySelector('.text-search').textContent.toLowerCase();
+                return text.includes(query);
+            });
 
-              <td class="px-4 py-3 font-medium text-gray-800">
-                <?= htmlspecialchars($row['product_name']); ?>
-              </td>
+            // Pagination Logic
+            const totalPages = Math.ceil(filtered.length / rowsPerPage);
+            if (currentPage > totalPages) currentPage = 1;
+            
+            const start = (currentPage - 1) * rowsPerPage;
+            const end = start + rowsPerPage;
 
-              <td class="px-4 py-3 text-gray-600">
-                <?= htmlspecialchars($row['category_name']); ?>
-              </td>
+            // Hide all, show slice
+            rows.forEach(r => r.classList.add('hidden'));
+            filtered.slice(start, end).forEach(r => r.classList.remove('hidden'));
 
-              <td class="px-4 py-3 text-[var(--rose)] font-semibold">
-                ₱<?= number_format($row['price'], 2); ?>
-              </td>
+            // Render Pagination Buttons
+            pagination.innerHTML = "";
+            if (totalPages > 1) {
+                // Prev
+                const prev = document.createElement("button");
+                prev.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>`;
+                prev.className = "w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-50 mr-2";
+                prev.disabled = currentPage === 1;
+                prev.onclick = () => { currentPage--; updateTable(); };
+                pagination.appendChild(prev);
 
-              <td class="px-4 py-3 text-gray-700">
-                ₱<?= number_format($row['supplier_price'], 2); ?>
-              </td>
+                // Numbers
+                for (let i = 1; i <= totalPages; i++) {
+                    const btn = document.createElement("button");
+                    btn.textContent = i;
+                    btn.className = `w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition ${i === currentPage ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`;
+                    btn.onclick = () => { currentPage = i; updateTable(); };
+                    pagination.appendChild(btn);
+                }
 
-              <td class="px-4 py-3 text-center 
-                <?= ($row['total_stock'] <= 5) ? 'text-red-500 font-semibold' : 'text-gray-700'; ?>">
-                <?= $row['total_stock'] ?? 0; ?>
-              </td>
-            </tr>
-            <?php endwhile; ?>
-          </tbody>
-        </table>
+                // Next
+                const next = document.createElement("button");
+                next.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>`;
+                next.className = "w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-50 ml-2";
+                next.disabled = currentPage === totalPages;
+                next.onclick = () => { currentPage++; updateTable(); };
+                pagination.appendChild(next);
+            }
+        }
 
-<div id="pagination" class="flex justify-center items-center gap-2 mt-6"></div>
-
-      </div>
-    <?php else: ?>
-      <p class="text-gray-500 text-center py-10 text-lg">
-        No products found for this filter.
-      </p>
-    <?php endif; ?>
-  </div>
-</div>
-<script>
-
-const rows = Array.from(document.querySelectorAll("tbody tr"));
-const searchInput = document.getElementById("searchInput");
-const pagination = document.getElementById("pagination");
-
-let currentPage = 1;
-const rowsPerPage = 10;
-
-// Pagination Render
-function renderPagination(totalRows) {
-    pagination.innerHTML = "";
-    const pageCount = Math.ceil(totalRows / rowsPerPage);
-
-    if (pageCount <= 1) return;
-
-    // Prev Button
-    const prev = document.createElement("button");
-    prev.textContent = "Prev";
-    prev.className = "px-3 py-1 border rounded";
-    prev.disabled = currentPage === 1;
-    prev.onclick = () => { currentPage--; updateTable(); };
-    pagination.appendChild(prev);
-
-    // Page Numbers
-    for (let i = 1; i <= pageCount; i++) {
-        const btn = document.createElement("button");
-        btn.textContent = i;
-        btn.className = `px-3 py-1 border rounded ${i === currentPage ? 'bg-[var(--rose)] text-white' : ''}`;
-        btn.onclick = () => { currentPage = i; updateTable(); };
-        pagination.appendChild(btn);
-    }
-
-    // Next Button
-    const next = document.createElement("button");
-    next.textContent = "Next";
-    next.className = "px-3 py-1 border rounded";
-    next.disabled = currentPage === pageCount;
-    next.onclick = () => { currentPage++; updateTable(); };
-    pagination.appendChild(next);
-}
-
-// Update Table View
-function updateTable() {
-    const query = searchInput.value.toLowerCase().trim();
-
-    const filtered = rows.filter(row =>
-        row.textContent.toLowerCase().includes(query)
-    );
-
-    const start = (currentPage - 1) * rowsPerPage;
-    const end = start + rowsPerPage;
-
-    rows.forEach(r => r.style.display = "none");
-
-    filtered.slice(start, end).forEach(r => r.style.display = "");
-
-    renderPagination(filtered.length);
-}
-
-// Search Input Event
-searchInput.addEventListener("input", () => {
-    currentPage = 1;
-    updateTable();
-});
-
-// Initial Load
-updateTable();
-</script>
+        searchInput.addEventListener("input", () => { currentPage = 1; updateTable(); });
+        
+        // Initial Load
+        updateTable();
+    </script>
 
 </body>
 </html>

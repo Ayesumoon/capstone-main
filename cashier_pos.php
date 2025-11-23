@@ -4,6 +4,107 @@ require 'conn.php';
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
+// ==========================================
+// API: HANDLE AJAX REQUESTS
+// ==========================================
+
+// 1. GET ORDER DETAILS (For Refund Search)
+if (isset($_GET['action']) && $_GET['action'] == 'get_order_details' && isset($_GET['oid'])) {
+    header('Content-Type: application/json');
+    $oid = $conn->real_escape_string($_GET['oid']);
+    
+    $check = $conn->query("SELECT order_id FROM orders WHERE order_id = '$oid' LIMIT 1");
+    if (!$check || $check->num_rows === 0) {
+        echo json_encode(['status' => 'error', 'message' => 'Order ID not found']);
+        exit;
+    }
+
+    $sql = "
+        SELECT 
+            oi.order_id, 
+            oi.order_id, 
+            oi.product_id, 
+            oi.stock_id, 
+            oi.qty, 
+            oi.price, 
+            p.product_name, 
+            COALESCE(s.size, oi.size, 'Free Size') as size_name,
+            COALESCE(c.color, oi.color, 'N/A') as color_name
+        FROM order_items oi
+        JOIN products p ON oi.product_id = p.product_id
+        LEFT JOIN sizes s ON (oi.size = s.size OR oi.size = s.size_id)
+        LEFT JOIN colors c ON (oi.color = c.color OR oi.color = c.color_id)
+        WHERE oi.order_id = '$oid'
+    ";
+
+    $result = $conn->query($sql);
+    if (!$result) {
+        echo json_encode(['status' => 'error', 'message' => 'Database Error']);
+        exit;
+    }
+    
+    $items = [];
+    while ($row = $result->fetch_assoc()) {
+        $items[] = $row;
+    }
+    echo json_encode(['status' => 'success', 'items' => $items]);
+    exit;
+}
+
+// 2. PROCESS REFUND (Save to Database)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action']) && $_GET['action'] == 'process_refund') {
+    header('Content-Type: application/json');
+    $input = json_decode(file_get_contents('php://input'), true);
+
+    if (!isset($input['items']) || empty($input['items'])) {
+        echo json_encode(['status' => 'error', 'message' => 'No items selected']);
+        exit;
+    }
+
+    $conn->begin_transaction();
+    try {
+        // Calculate Total Refund Amount
+        $total_refund = 0;
+        foreach ($input['items'] as $item) {
+            $total_refund += ($item['price'] * $item['refund_qty']);
+        }
+
+        // 1. Insert Negative Transaction (Refund Record)
+        $stmt = $conn->prepare("INSERT INTO transactions (order_id, total, order_status_id, date_time, customer_id) VALUES (?, ?, 2, NOW(), NULL)"); 
+        // Note: Assuming status_id 2 = Refunded. total is negative.
+        $neg_total = -1 * abs($total_refund);
+        $oid = $input['order_id'];
+        $stmt->bind_param("id", $oid, $neg_total);
+        $stmt->execute();
+        $stmt->close();
+
+        // 2. Restock Items
+        $updateStock = $conn->prepare("UPDATE stock SET current_qty = current_qty + ? WHERE stock_id = ?");
+        
+        foreach ($input['items'] as $item) {
+            $qty = intval($item['refund_qty']);
+            $stock_id = intval($item['stock_id']);
+            
+            if($qty > 0 && $stock_id > 0) {
+                $updateStock->bind_param("ii", $qty, $stock_id);
+                $updateStock->execute();
+            }
+        }
+        $updateStock->close();
+
+        $conn->commit();
+        echo json_encode(['status' => 'success', 'message' => 'Refund processed & Stock updated']);
+    } catch (Exception $e) {
+        $conn->rollback();
+        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+    }
+    exit;
+}
+
+// ==========================================
+// STANDARD PAGE LOGIC
+// ==========================================
+
 // Ensure cashier logged in
 if (!isset($_SESSION['admin_id'])) {
     header("Location: login.php");
@@ -23,7 +124,7 @@ $cashierRes->close();
 // Fetch categories
 $categories = $conn->query("SELECT category_id, category_name FROM categories ORDER BY category_name ASC");
 
-// Fetch sizes and colors directly from stock (return names, not IDs)
+// Fetch sizes and colors
 function getSizes($conn, $pid) {
     $sizes = [];
     $pid = intval($pid);
@@ -39,7 +140,7 @@ function getColors($conn, $pid) {
     return $colors;
 }
 
-// Fetch products — include total stock from `stock` table
+// Fetch products
 $products = $conn->query("
     SELECT 
         p.product_id, 
@@ -58,7 +159,7 @@ $products = $conn->query("
 // Fetch payment methods
 $payments = $conn->query("SELECT payment_method_id, payment_method_name FROM payment_methods ORDER BY payment_method_id ASC");
 
-// (checkout logic unchanged) ...
+// Checkout Logic
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
     $cart = json_decode($_POST['cart_data'], true);
     $payment_method_id = intval($_POST['payment_method_id']);
@@ -100,27 +201,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
             $color = $item['color'] ?? null;
             $size = $item['size'] ?? null;
 
-            $color_id = null;
-            $size_id = null;
-
+            // Logic to find IDs if names passed
+            $color_id = null; $size_id = null;
             if (!empty($color)) {
-                $colorStmt = $conn->prepare("SELECT color_id FROM colors WHERE color = ? LIMIT 1");
-                $colorStmt->bind_param("s", $color);
-                $colorStmt->execute();
-                $colorRow = $colorStmt->get_result()->fetch_assoc();
-                $colorStmt->close();
-                if ($colorRow) $color_id = $colorRow['color_id'];
+                $cRes = $conn->query("SELECT color_id FROM colors WHERE color = '$color' LIMIT 1");
+                if($r = $cRes->fetch_assoc()) $color_id = $r['color_id'];
             }
-
             if (!empty($size)) {
-                $sizeStmt = $conn->prepare("SELECT size_id FROM sizes WHERE size = ? LIMIT 1");
-                $sizeStmt->bind_param("s", $size);
-                $sizeStmt->execute();
-                $sizeRow = $sizeStmt->get_result()->fetch_assoc();
-                $sizeStmt->close();
-                if ($sizeRow) $size_id = $sizeRow['size_id'];
+                $sRes = $conn->query("SELECT size_id FROM sizes WHERE size = '$size' LIMIT 1");
+                if($r = $sRes->fetch_assoc()) $size_id = $r['size_id'];
             }
 
+            // Find specific stock entry
             $stockRes = $conn->prepare("SELECT stock_id, current_qty FROM stock WHERE product_id = ? AND (color_id = ? OR ? IS NULL) AND (size_id = ? OR ? IS NULL) LIMIT 1");
             $stockRes->bind_param("iiiii", $product_id, $color_id, $color_id, $size_id, $size_id);
             $stockRes->execute();
@@ -128,29 +220,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
             $stockRes->close();
 
             if (!$stockData || $stockData['current_qty'] < $qty) {
-                throw new Exception("Insufficient stock for product ID: $product_id");
+                throw new Exception("Insufficient stock for product: " . $item['name']);
             }
 
             $stock_id = $stockData['stock_id'];
 
+            // Add Item
             $itemStmt->bind_param("iissiid", $order_id, $product_id, $color, $size, $stock_id, $qty, $price);
             $itemStmt->execute();
 
-            $newQty = $stockData['current_qty'] - $qty;
-            $updateStock = $conn->prepare("UPDATE stock SET current_qty = ? WHERE stock_id = ?");
-            $updateStock->bind_param("ii", $newQty, $stock_id);
-            $updateStock->execute();
-            $updateStock->close();
+            // Deduct Stock
+            $conn->query("UPDATE stock SET current_qty = current_qty - $qty WHERE stock_id = $stock_id");
         }
         $itemStmt->close();
 
+        // Transaction Record
         $t = $conn->prepare("INSERT INTO transactions (order_id, customer_id, payment_method_id, total, order_status_id, date_time) VALUES (?, NULL, ?, ?, 0, NOW())");
         $t->bind_param("iid", $order_id, $payment_method_id, $total);
         $t->execute();
         $t->close();
 
         $conn->commit();
-
         echo "<script>window.location.href='receipt.php?order_id=$order_id';</script>";
         exit;
     } catch (Exception $e) {
@@ -158,569 +248,490 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
         echo "<script>alert('Transaction failed: " . addslashes($e->getMessage()) . "');</script>";
     }
 }
-
-// NOTE: Database dump available at: /mnt/data/dbms (16).sql
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Cashier POS | Seven Dwarfs Boutique</title>
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<script src="https://cdn.tailwindcss.com"></script>
-<style>
-:root{--rose:#d37689;--rose-600:#b75f6f;--card-bg:#fff;--cart-bg:#f9e9ed}
-body{background:#fef9fa;font-family:'Poppins',sans-serif}
-/* Sidebar */
-.sidebar {
-  width: 260px;
-  background: linear-gradient(135deg,#fef2f4 0%,#f9e9ed 100%);
-  border-right: 1px solid #f3dbe2;
-  position: fixed;
-  top: 0;
-  left: 0;
-  height: 100vh;
-  padding: 1.25rem;
-  display: flex;
-  flex-direction: column;
-  z-index: 30;
-  border-top-right-radius: 18px;
-  border-bottom-right-radius: 18px;
-  transition: width 0.2s;
-}
-.sidebar.collapsed {
-  width: 60px;
-  padding: 1.25rem 0.5rem;
-}
-.sidebar.collapsed .sidebar-title,
-.sidebar.collapsed .text-xs,
-.sidebar.collapsed nav a span,
-.sidebar.collapsed .sidebar-footer {
-  display: none !important;
-}
-.sidebar-header{display:flex;align-items:center;gap:12px;margin-bottom:1.2rem}
-/* .sidebar-logo removed: no longer used */
-.sidebar-title{font-size:1.2rem;font-weight:700;color:var(--rose)}
-.sidebar nav{margin-top:8px}
-.sidebar a {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0.6rem 0.8rem;
-  border-radius: 10px;
-  color: #374151;
-  text-decoration: none;
-  font-weight: 600;
-  margin-bottom: 6px;
-  position: relative;
-}
-.sidebar.collapsed a {
-  justify-content: center;
-  padding: 0.6rem 0.2rem;
-}
-.sidebar.collapsed a svg {
-  margin-right: 0;
-}
-.sidebar.collapsed a[title]:hover::after {
-  content: attr(title);
-  position: absolute;
-  left: 60px;
-  top: 50%;
-  transform: translateY(-50%);
-  background: #fff;
-  color: #d37689;
-  border-radius: 6px;
-  padding: 4px 10px;
-  font-size: 0.95rem;
-  box-shadow: 0 2px 8px rgba(211,118,137,0.12);
-  white-space: nowrap;
-  z-index: 100;
-}
-.sidebar a:hover{background:#fff2f5;color:var(--rose-600)}
-.sidebar .active-link{background:linear-gradient(90deg,var(--rose) 65%,#fff);color:#fff}
-.sidebar-footer{margin-top:auto;border-top:1px solid #f3dbe2;padding-top:12px}
-/* Main */
-.main-content {
-  margin-left: 260px;
-  padding: 0;
-  height: 100vh;
-  width: calc(100vw - 260px);
-  display: flex;
-  align-items: stretch;
-  justify-content: stretch;
-  background: #fef9fa;
-}
-.pos-card {
-  background: var(--card-bg);
-  border-radius: 16px;
-  box-shadow: 0 8px 30px rgba(211,118,137,0.06);
-  padding: 24px;
-  display: flex;
-  gap: 24px;
-  align-items: stretch;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  max-width: none;
-}
-.product-section {
-  flex: 1 1 0%;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-#productGrid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 16px;
-  grid-auto-rows: 1fr;
-}
-.product {
-  background: #fff;
-  border-radius: 14px;
-  border: 1px solid #f3dbe2;
-  padding: 8px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  box-shadow: 0 2px 8px rgba(211,118,137,0.06);
-  margin-top: 0;
-  width: 100%;
-  height: 100%;
-  justify-content: space-between;
-  box-sizing: border-box;
-}
-.product.opacity-50{opacity:0.5}
-/* .product img removed: no longer used */
-.product .meta {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
-  margin-top: 0;
-}
-.addToCart{background:var(--rose);color:#fff;padding:8px;border-radius:8px;font-weight:600}
-.addToCart:hover{background:var(--rose-600)}
-/* Cart */
-.cart-section {
-  width: 380px;
-  background: var(--cart-bg);
-  border-radius: 12px;
-  padding: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  position: relative;
-  height: 100%;
-  min-height: 0;
-}
-.cart-table-wrapper{background:#fff;border-radius:8px;padding:8px;overflow:auto;flex:1}
-.cart-item{display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid #f3dbe2}
-.qty-control{display:inline-flex;align-items:center;gap:6px}
-.cart-footer{display:flex;flex-direction:column;gap:8px}
-.checkout-btn{background:var(--rose);color:#fff;padding:12px;border-radius:10px;font-weight:700}
-/* Modal */
-.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:60}
-.modal{background:#fff;padding:18px;border-radius:12px;width:360px}
-.size-btn,.color-btn{padding:6px 10px;border-radius:8px;border:1px solid #e6e6e6;background:#fafafa}
-.size-btn.selected,.color-btn.selected{background:var(--rose);color:#fff;border-color:var(--rose)}
-/* Responsive */
-@media (max-width:1100px){#productGrid{grid-template-columns:repeat(3,1fr)}.cart-section{position:relative;width:100%;height:auto}}@media (max-width:760px){#productGrid{grid-template-columns:repeat(2,1fr)}.main-content{margin-left:20px;padding:12px}.sidebar{display:none}.pos-card{flex-direction:column}.cart-section{order:2}}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cashier POS | Seven Dwarfs Boutique</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        rose: { 50: '#fff1f2', 100: '#ffe4e6', 400: '#fb7185', 500: '#f43f5e', 600: '#e11d48', 700: '#be123c' }
+                    },
+                    fontFamily: { sans: ['Poppins', 'sans-serif'] }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
+        .fade-in { animation: fadeIn 0.3s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        .glass-header { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(0,0,0,0.03); }
+    </style>
 </head>
-<body>
+<body class="bg-slate-50 text-slate-800 h-screen w-screen overflow-hidden flex antialiased">
 
-<!-- Sidebar -->
-<aside class="sidebar" id="sidebar">
-  <button id="sidebarToggle" style="background:#fff;border-radius:8px;padding:6px 10px;border:1px solid #f3dbe2;color:var(--rose);cursor:pointer;position:absolute;top:12px;right:12px;z-index:40;">
-    ☰
-  </button>
-  <div>
-    <div class="sidebar-header">
-      <!-- Logo image removed -->
-      <div>
-        <div class="sidebar-title">Seven Dwarfs</div>
-        <div class="text-xs text-gray-500">Point of Sale</div>
-      </div>
-    </div>
-    <nav>
-      <a href="cashier_pos.php" class="active-link" title="POS">
-        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M6 7V6a6 6 0 1 1 12 0v1"/><rect x="4" y="7" width="16" height="13" rx="3"/><path d="M9 11v2m6-2v2"/></svg>
-        <span>POS</span>
-      </a>
-      <a href="cashier_transactions.php" title="Transactions">
-        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="10" rx="2"/><path d="M3 10h18"/><path d="M7 15h2"/></svg>
-        <span>Transactions</span>
-      </a>
-      <a href="cashier_inventory.php" title="Inventory">
-        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="10" rx="2"/><path d="M3 7l9 5 9-5"/><path d="M12 12v5"/></svg>
-        <span>Inventory</span>
-      </a>
-    </nav>
-  </div>
-  <div class="sidebar-footer">
-    <div class="sidebar-cashier">👤 <span class="ml-2">Cashier: <strong style="color:var(--rose)"><?= htmlspecialchars($cashier_name); ?></strong></span></div>
-    <form action="logout.php" method="POST">
-      <button class="sidebar-logout-btn flex items-center justify-center gap-2 w-full px-4 py-3 rounded-lg border border-pink-200 bg-white text-pink-600 font-bold text-base hover:bg-pink-50 hover:text-pink-700 transition shadow-sm"
-        style="margin-top:10px;">
-        <span class="inline-block bg-pink-100 text-pink-600 rounded-full p-1">
-          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 16l-4-4 4-4"/><path d="M5 12h12"/><path d="M17 16v1a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"/></svg>
-        </span>
-        Logout
-      </button>
-    </form>
-  </div>
-</aside>
-
-<!-- Main Content -->
-<div class="main-content">
-  <div class="pos-card">
-
-    <!-- Products -->
-    <div class="product-section">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <h2 style="font-size:1.05rem;font-weight:700;color:var(--rose)">Products</h2>
-        <div style="display:flex;gap:10px;align-items:center">
-          <select id="categoryFilter" class="border rounded px-3 py-1 text-sm" aria-label="Filter category">
-            <option value="">All Categories</option>
-            <?php while ($cat = $categories->fetch_assoc()): ?>
-              <option value="<?= htmlspecialchars($cat['category_name']) ?>"><?= htmlspecialchars($cat['category_name']); ?></option>
-            <?php endwhile; ?>
-          </select>
-          <input id="productSearch" type="search" placeholder="Search product..." class="border rounded px-3 py-1 text-sm" aria-label="Search products">
-        </div>
-      </div>
-
-      <div id="productGrid">
-        <?php while ($p = $products->fetch_assoc()):
-          $sizes = getSizes($conn, $p['product_id']);
-          if (empty($sizes)) $sizes = ['S','M','L'];
-          $colors = getColors($conn, $p['product_id']);
-          $imagePath = $p['image_url'];
-          $total_stock = isset($p['total_stock']) ? intval($p['total_stock']) : 0;
-          if (!empty($imagePath)) {
-              if (str_starts_with(trim($imagePath), '[')) {
-                  $decoded = json_decode($imagePath, true);
-                  $img = is_array($decoded) && count($decoded) > 0 ? $decoded[0] : 'uploads/default.png';
-              } elseif (str_contains($imagePath, ',')) {
-                  $parts = explode(',', $imagePath);
-                  $img = trim($parts[0]);
-              } else $img = trim($imagePath);
-          } else $img = 'uploads/default.png';
-        ?>
-        <div class="product <?= ($total_stock <= 0 ? 'opacity-50' : '') ?>" tabindex="0" role="group" aria-label="Product <?= htmlspecialchars($p['product_name']) ?>"
-             data-category="<?= htmlspecialchars($p['category_name']) ?>"
-             data-id="<?= $p['product_id'] ?>"
-             data-name="<?= htmlspecialchars($p['product_name']) ?>"
-             data-price="<?= $p['price'] ?>"
-             data-sizes='<?= htmlspecialchars(json_encode($sizes), ENT_QUOTES) ?>'
-             data-colors='<?= htmlspecialchars(json_encode($colors), ENT_QUOTES) ?>'
-             data-stock="<?= $total_stock ?>">
-          <!-- Product image removed -->
-          <div class="meta">
-            <div style="font-weight:700;font-size:1.08rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px;">
-              <?= htmlspecialchars($p['product_name']) ?>
+    <!-- SIDEBAR -->
+    <aside class="w-[260px] bg-white border-r border-slate-100 flex flex-col z-30 transition-all duration-300" id="sidebar">
+        <div class="h-20 flex items-center px-6 border-b border-slate-50">
+            <div>
+                <h1 class="text-xl font-bold text-rose-600 tracking-tight">Seven Dwarfs</h1>
+                <p class="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Boutique POS</p>
             </div>
-            <div class="text-sm text-gray-500" style="margin-bottom:8px;">
-              <?= htmlspecialchars($p['category_name']) ?>
-            </div>
-            <div style="font-weight:700;color:var(--rose);font-size:1.1rem;margin-bottom:10px;">
-              ₱<?= number_format($p['price'],2) ?>
-            </div>
-            <?php if ($total_stock > 0): ?>
-              <button class="addToCart" type="button" style="margin-top:0;padding:10px 22px;font-weight:600;font-size:1rem;border-radius:10px;background:var(--rose);color:#fff;box-shadow:0 2px 6px rgba(211,118,137,0.08);border:none;transition:background 0.2s;">
-                Add
-              </button>
-            <?php else: ?>
-              <button class="addToCart" type="button" disabled style="margin-top:0;padding:10px 22px;font-weight:600;font-size:1rem;border-radius:10px;background:#ccc;color:#fff;cursor:not-allowed;box-shadow:0 2px 6px rgba(211,118,137,0.08);border:none;">
-                Out of Stock
-              </button>
-            <?php endif; ?>
-          </div>
-        </div>
-        <?php endwhile; ?>
-      </div>
-
-      <!-- Product pagination (client) -->
-      <div id="productPagination" style="margin-top:14px;display:flex;gap:6px;justify-content:center"></div>
-
-    </div>
-
-    
-    <!-- Cart -->
-    <aside class="cart-section" aria-label="Cart area">
-      <h3 style="color:var(--rose);font-weight:700">Cart</h3>
-      <div class="cart-table-wrapper" id="cartWrapper">
-        <div id="cartList"></div>
-      </div>
-
-      <div class="cart-footer">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <div id="cartChange" style="color:var(--rose);font-weight:700"></div>
-          <div id="cartTotal" style="font-weight:800">Total: ₱0.00</div>
+            <button id="sidebarToggle" class="ml-auto lg:hidden text-slate-400"><svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" stroke-width="2"/></svg></button>
         </div>
 
-        <form method="POST" onsubmit="prepareCartData()" style="display:flex;flex-direction:column;gap:8px">
-          <input type="hidden" name="cart_data" id="cartData">
-          <input type="hidden" name="total" id="totalField">
+        <nav class="flex-1 p-4 space-y-1 overflow-y-auto">
+            <a href="cashier_pos.php" class="flex items-center gap-3 px-4 py-3 rounded-xl bg-rose-50 text-rose-600 font-semibold transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+                POS Terminal
+            </a>
+            <a href="cashier_transactions.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-50 hover:text-rose-600 font-medium transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                Transactions
+            </a>
+            <a href="cashier_inventory.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-50 hover:text-rose-600 font-medium transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                Inventory
+            </a>
+        </nav>
 
-          <label class="text-sm font-medium">Cash Given (₱)</label>
-          <input type="number" name="cash_given" step="0.01" required oninput="updateChange()" id="cashGiven" class="border rounded px-3 py-2">
-
-          <label class="text-sm font-medium">Payment Method</label>
-          <select name="payment_method_id" id="paymentMethodSelect" class="border rounded px-3 py-2" onchange="toggleGcashRef()">
-            <?php $payments->data_seek(0); while ($pay = $payments->fetch_assoc()): ?>
-              <option value="<?= $pay['payment_method_id'] ?>"><?= htmlspecialchars($pay['payment_method_name']) ?></option>
-            <?php endwhile; ?>
-          </select>
-
-          <div id="gcashRefDiv" style="display:none">
-            <label class="text-sm font-medium">GCash Reference Number</label>
-            <input type="text" name="gcash_ref" id="gcashRefInput" class="border-2 border-[var(--rose)] rounded px-3 py-2" maxlength="50" placeholder="Enter GCash Ref #">
-            <button type="button" id="openReturnModal" style="margin-left:8px;background:var(--rose);color:#fff;padding:8px 14px;border-radius:8px;font-weight:600;">Return</button>
-          </div>
-
-          <button type="submit" name="checkout" class="checkout-btn">Checkout</button>
-        </form>
-      </div>
+        <div class="p-4 border-t border-slate-100 bg-slate-50/50">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 font-bold text-sm shadow-sm">
+                    <?= strtoupper(substr($cashier_name ?? 'C', 0, 1)) ?>
+                </div>
+                <div class="overflow-hidden">
+                    <p class="text-sm font-bold text-slate-700 truncate"><?= htmlspecialchars($cashier_name) ?></p>
+                    <p class="text-xs text-slate-400">Logged in</p>
+                </div>
+            </div>
+            <form action="logout.php" method="POST">
+                <button class="w-full flex justify-center items-center gap-2 py-2.5 rounded-lg border border-slate-200 text-slate-500 text-sm font-medium hover:bg-white hover:text-rose-600 hover:border-rose-200 shadow-sm transition-all">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                    Sign Out
+                </button>
+            </form>
+        </div>
     </aside>
 
-  </div> 
-</div> 
+    <!-- MAIN CONTENT (Products) -->
+    <main class="flex-1 flex flex-col relative overflow-hidden">
+        <!-- Header -->
+        <header class="h-20 glass-header flex items-center justify-between px-6 z-20 absolute top-0 w-full">
+            <h2 class="text-xl font-bold text-slate-800">Menu</h2>
+            <div class="flex gap-3">
+                <!-- Category Filter -->
+                <div class="relative">
+                    <select id="categoryFilter" class="appearance-none bg-white border border-slate-200 text-slate-600 py-2.5 pl-4 pr-10 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-200 text-sm font-medium shadow-sm cursor-pointer hover:border-rose-300 transition-colors">
+                        <option value="">All Categories</option>
+                        <?php while ($cat = $categories->fetch_assoc()): ?>
+                            <option value="<?= htmlspecialchars($cat['category_name']) ?>"><?= htmlspecialchars($cat['category_name']); ?></option>
+                        <?php endwhile; ?>
+                    </select>
+                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-400"><svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></div>
+                </div>
+                <!-- Search -->
+                <div class="relative">
+                    <input id="productSearch" type="search" placeholder="Search products..." class="pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-200 w-64 shadow-sm transition-all">
+                    <svg class="w-4 h-4 absolute left-3.5 top-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                </div>
+            </div>
+        </header>
 
-<!-- Modal -->
-<div id="optionModal" class="modal-backdrop" style="display:none">
-  <div class="modal" role="dialog" aria-modal="true">
-    <button id="closeModalBg" style="float:right;background:none;border:none;font-size:18px">&times;</button>
-    <h4 id="modalProductName" style="font-weight:700;margin-bottom:8px">Select Options</h4>
-    <div id="sizeDiv"><label class="text-sm font-medium">Size</label><div id="sizeOptions" style="display:flex;gap:8px;margin-top:8px"></div></div>
-    <div id="colorDiv" style="margin-top:12px"><label class="text-sm font-medium">Color</label><div id="colorOptions" style="display:flex;gap:8px;margin-top:8px"></div></div>
-    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px"><button id="cancelModal" class="" style="padding:8px 12px;border-radius:8px;border:1px solid #e6e6e6">Cancel</button><button id="confirmAdd" style="background:var(--rose);color:#fff;padding:8px 12px;border-radius:8px">Add</button></div>
-  </div>
-</div>
+        <!-- Grid -->
+        <div class="flex-1 overflow-y-auto p-6 pt-24" id="productContainer">
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-5" id="productGrid">
+                <?php while ($p = $products->fetch_assoc()):
+                    $sizes = getSizes($conn, $p['product_id']);
+                    $colors = getColors($conn, $p['product_id']);
+                    $total_stock = isset($p['total_stock']) ? intval($p['total_stock']) : 0;
+                    if (empty($sizes)) $sizes = ['Free Size']; 
+                ?>
+                <div class="group bg-white border border-slate-100 rounded-2xl p-4 flex flex-col justify-between transition-all duration-200 hover:shadow-lg hover:-translate-y-1 cursor-pointer <?= ($total_stock <= 0 ? 'opacity-60 grayscale' : '') ?>"
+                     role="button"
+                     onclick="<?= ($total_stock > 0 ? "openProductModal(this)" : "") ?>"
+                     data-id="<?= $p['product_id'] ?>"
+                     data-name="<?= htmlspecialchars($p['product_name']) ?>"
+                     data-price="<?= $p['price'] ?>"
+                     data-category="<?= htmlspecialchars($p['category_name']) ?>"
+                     data-sizes='<?= htmlspecialchars(json_encode($sizes), ENT_QUOTES) ?>'
+                     data-colors='<?= htmlspecialchars(json_encode($colors), ENT_QUOTES) ?>'
+                     data-stock="<?= $total_stock ?>">
+                    <div>
+                        <div class="flex justify-between items-start mb-2">
+                            <span class="text-[10px] font-bold tracking-wide text-slate-400 uppercase bg-slate-100 px-2 py-1 rounded-md"><?= htmlspecialchars($p['category_name']) ?></span>
+                        </div>
+                        <h3 class="font-bold text-slate-800 leading-tight mb-1 line-clamp-2 min-h-[2.5rem]"><?= htmlspecialchars($p['product_name']) ?></h3>
+                        <div class="text-lg font-bold text-rose-600">₱<?= number_format($p['price'],2) ?></div>
+                    </div>
+                    <button class="w-full mt-4 py-2 rounded-xl font-semibold text-sm transition-colors <?= ($total_stock > 0 ? 'bg-rose-50 text-rose-600 group-hover:bg-rose-600 group-hover:text-white' : 'bg-slate-100 text-slate-400 cursor-not-allowed') ?>">
+                        <?= $total_stock > 0 ? 'Add to Cart' : 'Out of Stock' ?>
+                    </button>
+                </div>
+                <?php endwhile; ?>
+            </div>
+            <div id="productPagination" class="flex justify-center gap-2 mt-8 pb-4"></div>
+        </div>
+    </main>
 
-<!-- Return Modal -->
-<!-- Return Drawer Modal -->
-<div id="returnModal" class="fixed top-0 right-0 z-[100] h-full w-full max-w-sm bg-white shadow-2xl border-l border-pink-100 transition-transform duration-300 ease-in-out"
-     style="transform:translateX(100%);display:block;pointer-events:none;">
-  <div class="flex flex-col h-full">
-    <div class="flex items-center justify-between px-6 py-4 border-b border-pink-100">
-      <div class="flex items-center gap-2">
-        <span class="inline-block bg-pink-100 text-pink-600 rounded-full p-2">
-          <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12v-2a9 9 0 1 1 9 9h-2"/><path d="M3 12l4-4"/><path d="M3 12l4 4"/></svg>
-        </span>
-        <h4 class="font-bold text-lg text-pink-700">Return Item</h4>
-      </div>
-      <button id="closeReturnModal" class="text-pink-400 hover:text-pink-600 text-2xl font-bold focus:outline-none" style="background:none;border:none;">&times;</button>
+    <!-- CART SIDEBAR -->
+    <aside class="w-[400px] bg-white border-l border-slate-100 flex flex-col shadow-xl z-40">
+        <div class="h-20 glass-header flex items-center px-6">
+            <h3 class="font-bold text-lg text-slate-800 flex items-center gap-2">
+                <span class="bg-rose-100 text-rose-600 p-2 rounded-lg"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg></span>
+                Current Order
+            </h3>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/50" id="cartList">
+            <div id="emptyCartState" class="h-full flex flex-col items-center justify-center text-slate-400">
+                <svg class="w-16 h-16 mb-4 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                <p class="text-sm font-medium">No items added yet</p>
+            </div>
+        </div>
+
+        <div class="p-6 bg-white border-t border-slate-100 shadow-[0_-4px_20px_rgba(0,0,0,0.02)]">
+            <div class="flex justify-between items-end mb-4">
+                <span class="text-sm font-semibold text-slate-500">Total Amount</span>
+                <span id="cartTotal" class="text-3xl font-bold text-slate-800 tracking-tight">₱0.00</span>
+            </div>
+
+            <form method="POST" onsubmit="prepareCartData()" class="space-y-4">
+                <input type="hidden" name="cart_data" id="cartData">
+                <input type="hidden" name="total" id="totalField">
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Payment</label>
+                        <select name="payment_method_id" id="paymentMethodSelect" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-medium focus:ring-2 focus:ring-rose-200 outline-none transition-all">
+                            <?php $payments->data_seek(0); while ($pay = $payments->fetch_assoc()): ?>
+                                <option value="<?= $pay['payment_method_id'] ?>"><?= htmlspecialchars($pay['payment_method_name']) ?></option>
+                            <?php endwhile; ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Cash Given</label>
+                        <input type="number" name="cash_given" id="cashGiven" step="0.01" placeholder="0.00" oninput="updateChange()" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-medium text-right focus:ring-2 focus:ring-rose-200 outline-none transition-all">
+                    </div>
+                </div>
+
+                <div id="gcashRefDiv" class="hidden">
+                    <label class="block text-xs font-bold text-rose-500 uppercase mb-1">GCash Ref No.</label>
+                    <input type="text" name="gcash_ref" placeholder="Enter Reference #" class="w-full border-2 border-rose-100 rounded-xl px-3 py-2 text-sm focus:border-rose-400 outline-none">
+                </div>
+
+                <div id="cartChange" class="min-h-[1.5rem]"></div>
+
+                <div class="flex gap-3 pt-2">
+                    <button type="button" id="openReturnModal" class="p-3.5 rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700 transition-colors" title="Return Item">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/></svg>
+                    </button>
+                    <button type="submit" name="checkout" class="flex-1 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl py-3.5 shadow-lg shadow-rose-200 transition-all transform active:scale-[0.98] flex justify-center items-center gap-2">
+                        Process Payment
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a1 1 0 11-2 0 1 1 0 012 0z"/></svg>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </aside>
+
+    <!-- MODALS -->
+
+    <!-- Product Option Modal -->
+    <div id="optionModal" class="fixed inset-0 z-50 bg-slate-900/30 backdrop-blur-sm hidden flex items-center justify-center opacity-0 transition-opacity duration-300">
+        <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl transform scale-95 transition-transform duration-300 p-6" id="optionModalContent">
+            <div class="flex justify-between items-center mb-5">
+                <h4 class="text-lg font-bold text-slate-800" id="modalProductName">Select Options</h4>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 text-2xl leading-none">&times;</button>
+            </div>
+            <div class="space-y-4">
+                <div id="sizeDiv"><label class="text-xs font-bold text-slate-400 uppercase mb-2 block">Size</label><div id="sizeOptions" class="flex flex-wrap gap-2"></div></div>
+                <div id="colorDiv"><label class="text-xs font-bold text-slate-400 uppercase mb-2 block">Color</label><div id="colorOptions" class="flex flex-wrap gap-2"></div></div>
+            </div>
+            <div class="flex gap-3 mt-8">
+                <button onclick="closeModal()" class="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 transition">Cancel</button>
+                <button id="confirmAdd" class="flex-1 py-2.5 rounded-xl bg-rose-600 text-white font-bold hover:bg-rose-700 shadow-lg shadow-rose-200 transition">Add Item</button>
+            </div>
+        </div>
     </div>
-    <form id="returnForm" class="flex-1 px-6 py-5 space-y-4 overflow-y-auto">
-      <div>
-        <label class="block text-sm font-semibold text-pink-700 mb-1" for="returnOrderId">Order ID</label>
-        <input type="text" id="returnOrderId" class="w-full border border-pink-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-pink-300" required autocomplete="off">
-      </div>
-      <div>
-        <label class="block text-sm font-semibold text-pink-700 mb-1" for="returnProductName">Product Name</label>
-        <input type="text" id="returnProductName" class="w-full border border-pink-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-pink-300" required autocomplete="off">
-      </div>
-      <div class="flex flex-col sm:flex-row gap-4">
-        <div class="flex-1">
-          <label class="block text-sm font-semibold text-pink-700 mb-1" for="returnQty">Quantity</label>
-          <input type="number" id="returnQty" class="w-full border border-pink-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-pink-300" min="1" required>
+
+    <!-- Return Item Slide-over -->
+    <div id="returnModalBackdrop" class="fixed inset-0 z-50 bg-slate-900/20 backdrop-blur-sm hidden transition-opacity duration-300"></div>
+    <div id="returnModal" class="fixed inset-y-0 right-0 z-50 w-[500px] bg-white shadow-2xl transform translate-x-full transition-transform duration-300 flex flex-col">
+        <div class="h-20 flex items-center justify-between px-6 border-b border-slate-100 bg-rose-50/50">
+            <div>
+                <h4 class="text-lg font-bold text-rose-800 flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/></svg>
+                    Process Return
+                </h4>
+                <p class="text-xs text-rose-500">Look up order and select items</p>
+            </div>
+            <button id="closeReturnModal" class="text-slate-400 hover:text-rose-600 transition text-2xl">&times;</button>
         </div>
-        <div class="flex-1">
-          <label class="block text-sm font-semibold text-pink-700 mb-1" for="returnReason">Reason</label>
-          <select id="returnReason" class="w-full border border-pink-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-pink-300" required>
-            <option value="">Select reason</option>
-            <option value="Damaged">Damaged</option>
-            <option value="Wrong Item">Wrong Item</option>
-            <option value="Customer Request">Customer Request</option>
-            <option value="Other">Other</option>
-          </select>
+
+        <div class="flex-1 overflow-y-auto p-6 space-y-6">
+            <!-- Step 1 -->
+            <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Find Order</label>
+                <div class="flex gap-2">
+                    <input type="number" id="searchOrderId" class="flex-1 bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-rose-200 transition" placeholder="Enter Order ID (e.g. 102)">
+                    <button onclick="fetchOrderItems()" class="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-900 transition flex items-center gap-2">Find</button>
+                </div>
+                <p id="orderMsg" class="text-xs mt-2 font-medium hidden"></p>
+            </div>
+
+            <!-- Step 2 -->
+            <div id="returnItemsContainer" class="hidden space-y-4">
+                <div class="flex justify-between items-center">
+                    <h5 class="font-bold text-slate-700">Select Items to Return</h5>
+                    <span class="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded">Tick checkbox to select</span>
+                </div>
+                <form id="refundForm" class="space-y-3">
+                    <input type="hidden" name="order_id" id="finalOrderId">
+                    <div id="itemsList" class="space-y-3"></div>
+                    <div class="pt-4 border-t border-slate-100 space-y-3">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Reason</label>
+                            <select name="return_reason" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-rose-200">
+                                <option value="Damaged">Damaged</option>
+                                <option value="Wrong Size">Wrong Size/Color</option>
+                                <option value="Change of Mind">Change of Mind</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <div>
+                             <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Notes</label>
+                             <textarea name="return_notes" rows="2" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none resize-none"></textarea>
+                        </div>
+                    </div>
+                </form>
+            </div>
         </div>
-      </div>
-      <div>
-        <label class="block text-sm font-semibold text-pink-700 mb-1" for="returnNotes">Additional Notes</label>
-        <textarea id="returnNotes" class="w-full border border-pink-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-pink-300 resize-none" rows="2"></textarea>
-      </div>
-      <div class="flex justify-end gap-3 pt-2">
-        <button type="button" id="cancelReturnModal" class="px-4 py-2 rounded-lg border border-pink-200 text-pink-600 hover:bg-pink-50 font-semibold transition">Cancel</button>
-        <button type="submit" class="px-4 py-2 rounded-lg bg-pink-600 text-white font-bold hover:bg-pink-700 transition">Submit Return</button>
-      </div>
-    </form>
-  </div>
-</div>
 
-<script>
-const productEls = Array.from(document.querySelectorAll('#productGrid .product'));
-const productSearch = document.getElementById('productSearch');
-const categoryFilter = document.getElementById('categoryFilter');
-const productPagination = document.getElementById('productPagination');
-let currentProductPage = 1; const productsPerPage = 12;
+        <div class="p-6 border-t border-slate-100 bg-slate-50">
+            <button type="button" onclick="submitRefund()" id="submitRefundBtn" class="w-full bg-rose-600 text-white font-bold py-3 rounded-xl hover:bg-rose-700 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                Confirm Refund
+            </button>
+        </div>
+    </div>
 
-function applyProductFilters() {
-  const q = productSearch.value.trim().toLowerCase();
-  const cat = categoryFilter.value.trim().toLowerCase();
+    <script>
+        /* --- PRODUCTS & PAGINATION --- */
+        const productCards = Array.from(document.querySelectorAll('.group[data-id]'));
+        const searchInput = document.getElementById('productSearch');
+        const catFilter = document.getElementById('categoryFilter');
+        const paginationEl = document.getElementById('productPagination');
+        let currentPage = 1; const itemsPerPage = 12;
 
-  const filtered = productEls.filter(el => {
-    const name = (el.dataset.name||'').toLowerCase();
-    const id = (el.dataset.id||'').toLowerCase();
-    const category = (el.dataset.category||'').toLowerCase();
-    const matchCat = !cat || category === cat;
-    const matchQ = !q || name.includes(q) || id.includes(q);
-    return matchCat && matchQ;
-  });
+        function renderProducts() {
+            const q = searchInput.value.toLowerCase().trim();
+            const cat = catFilter.value;
+            const filtered = productCards.filter(el => {
+                const name = (el.dataset.name || '').toLowerCase();
+                const category = el.dataset.category || '';
+                return name.includes(q) && (!cat || category === cat);
+            });
+            const totalPages = Math.ceil(filtered.length / itemsPerPage) || 1;
+            if (currentPage > totalPages) currentPage = 1;
+            productCards.forEach(el => el.classList.add('hidden'));
+            filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).forEach((el, index) => {
+                el.classList.remove('hidden');
+                el.style.animation = `fadeIn 0.3s ease-out ${index * 0.05}s forwards`;
+            });
+            paginationEl.innerHTML = '';
+            if(totalPages > 1) {
+                for(let i=1; i<=totalPages; i++) {
+                    const btn = document.createElement('button');
+                    btn.textContent = i;
+                    btn.className = `w-8 h-8 rounded-lg text-sm font-bold transition ${i === currentPage ? 'bg-rose-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`;
+                    btn.onclick = () => { currentPage = i; renderProducts(); };
+                    paginationEl.appendChild(btn);
+                }
+            }
+        }
+        searchInput.addEventListener('input', () => { currentPage = 1; renderProducts(); });
+        catFilter.addEventListener('change', () => { currentPage = 1; renderProducts(); });
+        window.addEventListener('DOMContentLoaded', renderProducts);
 
-  // pagination
-  const pageCount = Math.max(1, Math.ceil(filtered.length / productsPerPage));
-  if (currentProductPage > pageCount) currentProductPage = pageCount;
-  productEls.forEach(e => e.style.display = 'none');
-  const start = (currentProductPage-1)*productsPerPage;
-  filtered.slice(start, start+productsPerPage).forEach(e => e.style.display = 'block');
+        /* --- CART & MODAL --- */
+        let cart = []; let currentProduct = null;
+        const modal = document.getElementById('optionModal');
+        const modalContent = document.getElementById('optionModalContent');
 
-  renderProductPagination(pageCount);
-}
+        window.openProductModal = (card) => {
+            currentProduct = { id: card.dataset.id, name: card.dataset.name, price: parseFloat(card.dataset.price), sizes: JSON.parse(card.dataset.sizes||'[]'), colors: JSON.parse(card.dataset.colors||'[]') };
+            document.getElementById('modalProductName').textContent = currentProduct.name;
+            
+            const sDiv = document.getElementById('sizeOptions'); sDiv.innerHTML='';
+            if(currentProduct.sizes.length){
+                document.getElementById('sizeDiv').style.display='block';
+                currentProduct.sizes.forEach(s=>{
+                    const b=document.createElement('button'); b.textContent=s; b.className='px-4 py-2 border rounded-lg text-sm font-medium hover:border-rose-500';
+                    b.onclick=()=>{Array.from(sDiv.children).forEach(x=>x.className='px-4 py-2 border rounded-lg text-sm font-medium hover:border-rose-500'); b.className='px-4 py-2 border rounded-lg text-sm font-medium bg-rose-600 text-white border-rose-600 selected';};
+                    sDiv.appendChild(b);
+                });
+            } else document.getElementById('sizeDiv').style.display='none';
 
-function renderProductPagination(pageCount){
-  productPagination.innerHTML = '';
-  if (pageCount <= 1) return;
-  const prev = document.createElement('button'); prev.textContent='Prev'; prev.onclick = ()=>{ if(currentProductPage>1){currentProductPage--; applyProductFilters();}}; productPagination.appendChild(prev);
-  for(let i=1;i<=pageCount;i++){ const b=document.createElement('button'); b.textContent=i; if(i===currentProductPage) b.style.background='var(--rose)'; b.onclick=(()=>{ const idx=i; return ()=>{ currentProductPage=idx; applyProductFilters();}; })(); productPagination.appendChild(b);} 
-  const next = document.createElement('button'); next.textContent='Next'; next.onclick = ()=>{ currentProductPage++; applyProductFilters(); }; productPagination.appendChild(next);
-}
+            const cDiv = document.getElementById('colorOptions'); cDiv.innerHTML='';
+            if(currentProduct.colors.length){
+                document.getElementById('colorDiv').style.display='block';
+                currentProduct.colors.forEach(c=>{
+                    const b=document.createElement('button'); b.textContent=c; b.className='px-4 py-2 border rounded-lg text-sm font-medium hover:border-rose-500';
+                    b.onclick=()=>{Array.from(cDiv.children).forEach(x=>x.className='px-4 py-2 border rounded-lg text-sm font-medium hover:border-rose-500'); b.className='px-4 py-2 border rounded-lg text-sm font-medium bg-rose-600 text-white border-rose-600 selected';};
+                    cDiv.appendChild(b);
+                });
+            } else document.getElementById('colorDiv').style.display='none';
 
-productSearch.addEventListener('input', ()=>{ currentProductPage=1; applyProductFilters(); });
-categoryFilter.addEventListener('change', ()=>{ currentProductPage=1; applyProductFilters(); });
-// initial render
-applyProductFilters();
+            modal.classList.remove('hidden'); setTimeout(()=>{modal.classList.remove('opacity-0');modalContent.classList.remove('scale-95');modalContent.classList.add('scale-100');},10);
+        };
+        window.closeModal = ()=>{ modal.classList.add('opacity-0'); modalContent.classList.remove('scale-100'); modalContent.classList.add('scale-95'); setTimeout(()=>modal.classList.add('hidden'),300); };
+        
+        document.getElementById('confirmAdd').onclick = ()=>{
+            const size = document.querySelector('#sizeOptions .selected')?.textContent;
+            const color = document.querySelector('#colorOptions .selected')?.textContent;
+            if(document.getElementById('sizeDiv').style.display!=='none' && !size) return alert("Select size");
+            const exist = cart.find(i=>i.product_id===currentProduct.id && i.size===size && i.color===color);
+            if(exist) exist.quantity++; else cart.push({product_id:currentProduct.id, name:currentProduct.name, price:currentProduct.price, quantity:1, size, color});
+            renderCart(); closeModal();
+        };
 
-const modal = document.getElementById('optionModal');
-const sizeOptions = document.getElementById('sizeOptions');
-const colorOptions = document.getElementById('colorOptions');
-const sizeDiv = document.getElementById('sizeDiv');
-const colorDiv = document.getElementById('colorDiv');
-const modalProductName = document.getElementById('modalProductName');
-let currentProduct = null;
+        function renderCart(){
+            const list=document.getElementById('cartList'); list.innerHTML='';
+            if(!cart.length){ list.innerHTML='<div class="h-full flex flex-col items-center justify-center text-slate-400 text-sm">Empty Cart</div>'; document.getElementById('cartTotal').textContent='₱0.00'; document.getElementById('totalField').value=0; return; }
+            let total=0;
+            cart.forEach((item,i)=>{
+                total+=item.price*item.quantity;
+                list.innerHTML+=`<div class="bg-white p-3 rounded-xl border border-slate-100 flex justify-between items-center fade-in">
+                    <div class="flex-1 min-w-0"><div class="font-bold text-sm truncate">${item.name}</div><div class="text-xs text-slate-500">${item.size||''} ${item.color||''}</div><div class="text-rose-600 font-bold mt-1">₱${(item.price*item.quantity).toFixed(2)}</div></div>
+                    <div class="flex flex-col items-end gap-2"><div class="flex items-center bg-slate-100 rounded-lg"><button onclick="upd(${i},-1)" class="w-6 h-6">-</button><span class="text-xs font-bold w-6 text-center">${item.quantity}</span><button onclick="upd(${i},1)" class="w-6 h-6">+</button></div><button onclick="rm(${i})" class="text-[10px] text-rose-500">Remove</button></div>
+                </div>`;
+            });
+            document.getElementById('cartTotal').textContent='₱'+total.toFixed(2); document.getElementById('totalField').value=total; updateChange();
+        }
+        window.upd=(i,d)=>{ cart[i].quantity+=d; if(cart[i].quantity<1) cart[i].quantity=1; renderCart(); };
+        window.rm=(i)=>{ cart.splice(i,1); renderCart(); };
+        window.prepareCartData=()=>{ document.getElementById('cartData').value=JSON.stringify(cart); };
+        window.updateChange=()=>{
+            const t=parseFloat(document.getElementById('totalField').value)||0, c=parseFloat(document.getElementById('cashGiven').value)||0, d=c-t;
+            document.getElementById('cartChange').innerHTML = c>0 ? (d>=0?`<div class="text-green-600 font-bold text-sm bg-green-50 p-2 rounded">Change: ₱${d.toFixed(2)}</div>`:`<div class="text-red-500 font-bold text-sm bg-red-50 p-2 rounded">Short: ₱${Math.abs(d).toFixed(2)}</div>`) : '';
+        };
+        document.getElementById('paymentMethodSelect').addEventListener('change', function(){ document.getElementById('gcashRefDiv').className = this.options[this.selectedIndex].text.toLowerCase().includes('gcash')?'block fade-in':'hidden'; });
 
-const cart = [];
-const cartList = document.getElementById('cartList');
-const cartTotalEl = document.getElementById('cartTotal');
-const cartChangeEl = document.getElementById('cartChange');
-const cartDataField = document.getElementById('cartData');
-const totalField = document.getElementById('totalField');
+        /* --- REFUND LOGIC --- */
+        const rBackdrop = document.getElementById('returnModalBackdrop');
+        const rModal = document.getElementById('returnModal');
 
-productEls.forEach(card=>{
-  const btn = card.querySelector('.addToCart');
-  btn.addEventListener('click', ()=>{
-    if (btn.disabled) return; // do nothing when out of stock
-    const sizes = JSON.parse(card.dataset.sizes||'[]');
-    const colors = JSON.parse(card.dataset.colors||'[]');
-    currentProduct = { id: card.dataset.id, name: card.dataset.name, price: parseFloat(card.dataset.price) };
-    modalProductName.textContent = currentProduct.name;
-    // sizes
-    sizeOptions.innerHTML = '';
-    if(sizes && sizes.length){ sizeDiv.style.display='block'; sizes.forEach(s=>{ const b=document.createElement('button'); b.className='size-btn'; b.textContent=s; b.onclick=()=>{ sizeOptions.querySelectorAll('button').forEach(x=>x.classList.remove('selected')); b.classList.add('selected'); }; sizeOptions.appendChild(b); }); } else sizeDiv.style.display='none';
-    // colors
-    colorOptions.innerHTML = '';
-    if(colors && colors.length){ colorDiv.style.display='block'; colors.forEach(c=>{ const b=document.createElement('button'); b.className='color-btn'; b.textContent=c; b.onclick=()=>{ colorOptions.querySelectorAll('button').forEach(x=>x.classList.remove('selected')); b.classList.add('selected'); }; colorOptions.appendChild(b); }); } else colorDiv.style.display='none';
+        document.getElementById('openReturnModal').onclick = () => {
+            rBackdrop.classList.remove('hidden'); setTimeout(() => rBackdrop.classList.add('opacity-100'), 10);
+            rModal.classList.remove('translate-x-full');
+            document.getElementById('searchOrderId').value = '';
+            document.getElementById('returnItemsContainer').classList.add('hidden');
+            document.getElementById('itemsList').innerHTML = '';
+            document.getElementById('submitRefundBtn').disabled = true;
+            document.getElementById('orderMsg').classList.add('hidden');
+        };
 
-    modal.style.display='flex';
-  });
-});
+        const closeReturn = () => {
+            rModal.classList.add('translate-x-full'); rBackdrop.classList.remove('opacity-100');
+            setTimeout(() => rBackdrop.classList.add('hidden'), 300);
+        };
+        document.getElementById('closeReturnModal').onclick = closeReturn; rBackdrop.onclick = closeReturn;
 
-document.getElementById('cancelModal').onclick = ()=> modal.style.display='none';
-document.getElementById('closeModalBg').onclick = ()=> modal.style.display='none';
+        async function fetchOrderItems() {
+            const oid = document.getElementById('searchOrderId').value;
+            const msg = document.getElementById('orderMsg');
+            if (!oid) return;
+            msg.textContent = "Searching..."; msg.className = "text-xs mt-2 text-slate-500 block";
+            
+            try {
+                const res = await fetch(`?action=get_order_details&oid=${oid}`);
+                const data = await res.json();
+                if (data.status === 'error') {
+                    msg.textContent = "❌ " + data.message; msg.className = "text-xs mt-2 text-rose-500 font-bold block";
+                    document.getElementById('returnItemsContainer').classList.add('hidden'); return;
+                }
+                msg.textContent = "✅ Order found"; msg.className = "text-xs mt-2 text-green-600 font-bold block";
+                document.getElementById('finalOrderId').value = oid;
+                document.getElementById('returnItemsContainer').classList.remove('hidden');
+                const list = document.getElementById('itemsList'); list.innerHTML = '';
+                
+                data.items.forEach(item => {
+                    const row = document.createElement('div');
+                    row.className = "group flex items-start gap-3 p-3 rounded-xl border border-slate-200 bg-white hover:border-rose-400 cursor-pointer transition";
+                    row.onclick = (e) => { if(e.target.tagName!=='INPUT') { const cb=row.querySelector('.item-cb'); cb.checked=!cb.checked; cb.dispatchEvent(new Event('change')); }};
+                    row.innerHTML = `
+                        <div class="pt-1"><input type="checkbox" class="w-5 h-5 text-rose-600 item-cb" data-stock="${item.stock_id}" data-price="${item.price}"></div>
+                        <div class="flex-1">
+                            <div class="flex justify-between"><h6 class="font-bold text-sm text-slate-800">${item.product_name}</h6><span class="text-xs font-bold bg-slate-100 px-2 py-1 rounded">₱${parseFloat(item.price).toFixed(2)}</span></div>
+                            <div class="flex gap-2 mt-2"><span class="text-[10px] bg-blue-50 text-blue-600 px-2 py-1 rounded border border-blue-100 font-bold uppercase">Size: ${item.size_name}</span><span class="text-[10px] bg-purple-50 text-purple-600 px-2 py-1 rounded border border-purple-100 font-bold uppercase">Color: ${item.color_name}</span></div>
+                            <div class="qty-control hidden mt-3 pt-3 border-t border-dashed border-slate-100 flex items-center gap-2">
+                                <span class="text-xs font-bold text-rose-600">Return Qty:</span>
+                                <input type="number" min="1" max="${item.qty}" value="1" class="w-12 border rounded text-center text-xs font-bold" onclick="event.stopPropagation()">
+                            </div>
+                        </div>`;
+                    list.appendChild(row);
+                });
+                document.querySelectorAll('.item-cb').forEach(cb => cb.addEventListener('change', validateRefund));
+            } catch (err) { console.error(err); msg.textContent = "Error fetching data"; }
+        }
 
-document.getElementById('confirmAdd').onclick = ()=>{
-  const sizeBtn = sizeOptions.querySelector('.selected');
-  const colorBtn = colorOptions.querySelector('.selected');
-  const size = sizeBtn ? sizeBtn.textContent : null;
-  const color = colorBtn ? colorBtn.textContent : null;
-  // if sizeDiv visible but no size chosen
-  if(sizeDiv.style.display !== 'none' && !size){ alert('Please select a size'); return; }
-  // add to cart
-  let found = cart.find(i=>i.product_id===currentProduct.id && (i.size||'')=== (size||'') && (i.color||'')===(color||''));
-  if(found) found.quantity++; else cart.push({ product_id: currentProduct.id, name: currentProduct.name, price: currentProduct.price, quantity:1, size, color });
-  modal.style.display='none'; renderCart();
-};
+        function validateRefund() {
+            let any = false;
+            document.querySelectorAll('.item-cb').forEach(box => {
+                const qtyDiv = box.closest('.group').querySelector('.qty-control');
+                if (box.checked) { any = true; qtyDiv.classList.remove('hidden'); } else qtyDiv.classList.add('hidden');
+            });
+            document.getElementById('submitRefundBtn').disabled = !any;
+        }
 
-function renderCart(){
-  cartList.innerHTML=''; let total=0;
-  cart.forEach((it,idx)=>{
-    const row = document.createElement('div'); row.className='cart-item';
-    const left = document.createElement('div'); left.innerHTML = `<div style="font-weight:700">${it.name}</div><div style="font-size:12px;color:#6b7280">${it.size||''}${it.size&&it.color?', ':' '}${it.color||''}</div>`;
-    const right = document.createElement('div'); right.style.textAlign='right'; right.innerHTML = `<div style="font-weight:700">₱${(it.price).toFixed(2)}</div><div style="margin-top:8px"><span class="qty-control"><button onclick="changeQty(${idx},-1)">-</button> <strong style="margin:0 6px">${it.quantity}</strong> <button onclick="changeQty(${idx},1)">+</button></span></div><div style="margin-top:6px"><button onclick="removeCartItem(${idx})" style="background:#fee2e2;border-radius:6px;padding:6px">Remove</button></div>`;
-    row.appendChild(left); row.appendChild(right); cartList.appendChild(row);
-    total += it.price * it.quantity;
-  });
-  cartTotalEl.textContent = 'Total: ₱' + total.toFixed(2);
-  totalField.value = total.toFixed(2);
-  cartDataField.value = JSON.stringify(cart);
-  updateChange();
-}
+        async function submitRefund() {
+            const items = [];
+            document.querySelectorAll('.item-cb:checked').forEach(box => {
+                const row = box.closest('.group');
+                items.push({
+                    stock_id: box.dataset.stock,
+                    price: box.dataset.price,
+                    refund_qty: row.querySelector('input[type="number"]').value
+                });
+            });
+            if(!items.length) return;
 
-function removeCartItem(i){ cart.splice(i,1); renderCart(); }
-function changeQty(i,delta){ cart[i].quantity += delta; if(cart[i].quantity<1) cart[i].quantity=1; renderCart(); }
-function prepareCartData(){ document.getElementById('cartData').value = JSON.stringify(cart); }
+            try {
+                const res = await fetch('?action=process_refund', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        order_id: document.getElementById('finalOrderId').value,
+                        items: items,
+                        reason: document.querySelector('[name="return_reason"]').value,
+                        notes: document.querySelector('[name="return_notes"]').value
+                    })
+                });
+                const data = await res.json();
+                if(data.status==='success'){ alert("Refund Successful!"); closeReturn(); } 
+                else alert("Error: " + data.message);
+            } catch(e){ alert("System Error"); }
+        }
 
-function updateChange(){ const cash = parseFloat(document.getElementById('cashGiven').value) || 0; const total = parseFloat(totalField.value) || 0; const change = cash - total; cartChangeEl.textContent = cash ? (change>=0? 'Change: ₱'+change.toFixed(2) : 'Insufficient cash') : ''; }
-
-// Payment method toggle
-function toggleGcashRef(){ const s = document.getElementById('paymentMethodSelect'); document.getElementById('gcashRefDiv').style.display = (s.value=='1') ? 'block' : 'none'; }
-document.addEventListener('DOMContentLoaded', toggleGcashRef);
-
-// Sidebar behavior (simple)
-document.getElementById('sidebarToggle').onclick = function() {
-  var sidebar = document.getElementById('sidebar');
-  sidebar.classList.toggle('collapsed');
-  // Optionally, adjust main-content margin if needed
-  var mainContent = document.querySelector('.main-content');
-  if (sidebar.classList.contains('collapsed')) {
-    mainContent.style.marginLeft = '60px';
-    mainContent.style.width = 'calc(100vw - 60px)';
-  } else {
-    mainContent.style.marginLeft = '260px';
-    mainContent.style.width = 'calc(100vw - 260px)';
-  }
-};
-document.getElementById('openReturnModal').onclick = function() {
-  var modal = document.getElementById('returnModal');
-  modal.style.transform = 'translateX(0)';
-  modal.style.pointerEvents = 'auto';
-  modal.style.boxShadow = '0 8px 32px rgba(211,118,137,0.18)';
-};
-document.getElementById('closeReturnModal').onclick = function() {
-  var modal = document.getElementById('returnModal');
-  modal.style.transform = 'translateX(100%)';
-  modal.style.pointerEvents = 'none';
-};
-document.getElementById('cancelReturnModal').onclick = function() {
-  var modal = document.getElementById('returnModal');
-  modal.style.transform = 'translateX(100%)';
-  modal.style.pointerEvents = 'none';
-};
-document.getElementById('returnForm').onsubmit = function(e) {
-  e.preventDefault();
-  // Placeholder: handle return logic here
-  const orderId = document.getElementById('returnOrderId').value;
-  const productName = document.getElementById('returnProductName').value;
-  const qty = document.getElementById('returnQty').value;
-  const reason = document.getElementById('returnReason').value;
-  const notes = document.getElementById('returnNotes').value;
-  alert(
-    'Return submitted!\n' +
-    'Order ID: ' + orderId +
-    '\nProduct: ' + productName +
-    '\nQty: ' + qty +
-    '\nReason: ' + reason +
-    (notes ? '\nNotes: ' + notes : '')
-  );
-  document.getElementById('returnModal').style.display = 'none';
-};
-</script>
+        // Mobile Toggle
+        document.getElementById('sidebarToggle').onclick = () => {
+            const s = document.getElementById('sidebar');
+            s.style.position = s.style.position==='absolute'?'relative':'absolute';
+            s.style.height = '100%'; s.style.zIndex = 50;
+            s.classList.toggle('-translate-x-full');
+        }
+    </script>
 </body>
 </html>
-
-
-
-
