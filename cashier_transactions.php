@@ -378,7 +378,6 @@ $chartStmt->close();
             </div>
 
             <!-- SECTION B: REFUNDED LIST -->
-            <!-- Only shows if the order status contains "Refund" -->
             <?php if($isRefunded): ?>
                 <div class="border-t border-slate-100 pt-3">
                     <div class="font-bold text-red-600 text-[11px] uppercase tracking-wide mb-1.5">

@@ -180,16 +180,15 @@ body {
     margin-bottom: 20px;
   }
   
-  /* Summary Box Styling for Print */
   .summary-box {
     display: flex !important;
     justify-content: space-between;
-    background-color: #fdf2f4 !important; /* Light pink bg for print */
+    background-color: #fdf2f4 !important; 
     border: 1px solid #eccace;
     padding: 15px;
     border-radius: 8px;
     margin-bottom: 20px;
-    -webkit-print-color-adjust: exact; /* Force background color */
+    -webkit-print-color-adjust: exact; 
   }
   
   .summary-item {
