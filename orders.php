@@ -34,7 +34,7 @@ while ($status_row = $status_result->fetch_assoc()) {
 $where  = ["1=1"];
 $params = [];
 $types  = "";
-$report_title = "All Orders Report"; // Default Title
+$report_title = "All Orders Report";
 
 // Status filter
 if (isset($_GET['status']) && $_GET['status'] !== '' && $_GET['status'] !== 'all') {
@@ -65,23 +65,46 @@ switch ($date_filter) {
         break;
 }
 
-// 🔹 Main query
+// 🔹 UPDATED MAIN QUERY
 $sql = "
     SELECT 
-        o.order_id, c.first_name, c.last_name, o.total_amount,
-        os.order_status_name AS order_status, pm.payment_method_name AS payment_method,
-        o.created_at,
-        GROUP_CONCAT(DISTINCT p.product_name ORDER BY p.product_name SEPARATOR ', ') AS products
-    FROM orders o
-    LEFT JOIN customers c ON o.customer_id = c.customer_id
-    LEFT JOIN order_status os ON o.order_status_id = os.order_status_id
-    LEFT JOIN payment_methods pm ON o.payment_method_id = pm.payment_method_id
-    LEFT JOIN order_items oi ON o.order_id = oi.order_id
-    LEFT JOIN stock s ON oi.stock_id = s.stock_id
-    LEFT JOIN products p ON s.product_id = p.product_id
-    WHERE " . implode(" AND ", $where) . "
-    GROUP BY o.order_id
-    ORDER BY o.created_at DESC
+    o.order_id, 
+    o.total_amount,
+    os.order_status_name AS order_status,
+    pm.payment_method_name AS payment_method,
+    o.created_at,
+
+    
+    GROUP_CONCAT(
+        DISTINCT CONCAT(
+            p.product_name, ' (', sz.size, ', ', c2.color, ') x', oi.qty
+        ) ORDER BY oi.id SEPARATOR '<br>'
+    ) AS purchased_items,
+
+  
+    GROUP_CONCAT(
+        DISTINCT CONCAT(
+            '[REFUND] ', p.product_name,
+            ' (', sz.size, ', ', c2.color, ') x',
+            (SELECT COUNT(*) FROM refunds r WHERE r.order_item_id = oi.id),
+            ' — ₱',
+            (SELECT SUM(refund_amount) FROM refunds r WHERE r.order_item_id = oi.id)
+        ) ORDER BY oi.id SEPARATOR '<br>'
+    ) AS refunded_items
+
+FROM orders o
+LEFT JOIN order_status os ON o.order_status_id = os.order_status_id
+LEFT JOIN payment_methods pm ON o.payment_method_id = pm.payment_method_id
+LEFT JOIN order_items oi ON o.order_id = oi.order_id
+LEFT JOIN stock s ON oi.stock_id = s.stock_id
+LEFT JOIN products p ON s.product_id = p.product_id
+LEFT JOIN sizes sz ON s.size_id = sz.size_id
+LEFT JOIN colors c2 ON s.color_id = c2.color_id
+LEFT JOIN refunds rf ON oi.id = rf.order_item_id
+WHERE " . implode(" AND ", $where) . "
+GROUP BY o.order_id
+ORDER BY o.created_at DESC
+
 ";
 
 $stmt = $conn->prepare($sql);
@@ -94,15 +117,14 @@ $orders = $result->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
 $conn->close();
 
-// 🔹 CALCULATE SUMMARIES (PHP Side)
+// 🔹 Calculate summaries
 $total_sales = 0;
 $total_orders = count($orders);
 $payment_counts = [];
 
 foreach ($orders as $order) {
     $total_sales += $order['total_amount'];
-    
-    // Count by Payment Method for summary
+
     $pm = $order['payment_method'] ?? 'N/A';
     if (!isset($payment_counts[$pm])) $payment_counts[$pm] = 0;
     $payment_counts[$pm] += $order['total_amount'];
@@ -269,111 +291,124 @@ body {
       </nav>
     </aside>
 
-  <!-- Main Content -->
-  <main class="flex-1 p-8 bg-gray-50 space-y-6 overflow-auto w-full">
-    
-    <!-- Top Bar -->
-    <div class="bg-[var(--rose)] text-white p-5 rounded-t-2xl shadow-sm flex justify-between items-center no-print">
-      <h1 class="text-2xl font-semibold">Order Management</h1>
-      <button onclick="window.print()" class="print-btn bg-white text-[var(--rose)] px-4 py-2 rounded-md shadow hover:bg-gray-100 font-bold transition">
-        <i class="fas fa-print mr-2"></i> Generate Printable Report
-      </button>
+ <!-- Main Content -->
+<main class="flex-1 p-8 bg-gray-50 space-y-6 overflow-auto w-full">
+
+<!-- Top Bar -->
+<div class="bg-[var(--rose)] text-white p-5 rounded-t-2xl shadow-sm flex justify-between items-center no-print">
+  <h1 class="text-2xl font-semibold">Order Management</h1>
+  <button onclick="window.print()" class="print-btn bg-white text-[var(--rose)] px-4 py-2 rounded-md shadow hover:bg-gray-100 font-bold transition">
+    <i class="fas fa-print mr-2"></i> Generate Printable Report
+  </button>
+</div>
+
+<!-- Filters -->
+<form method="GET" class="bg-white p-5 rounded-b-2xl shadow flex flex-wrap items-center gap-4 filters no-print">
+  <div class="flex items-center gap-2">
+    <label class="font-medium text-gray-700">Filter Status:</label>
+    <select name="status" onchange="this.form.submit()" class="p-2 border rounded focus:ring-[var(--rose)]">
+      <option value="all" <?= ($_GET['status'] ?? 'all') === 'all' ? 'selected' : '' ?>>All Statuses</option>
+      <?= $status_options ?>
+    </select>
+  </div>
+
+  <div class="flex items-center gap-2">
+    <label class="font-medium text-gray-700">Time Period:</label>
+    <select name="date_range" onchange="this.form.submit()" class="p-2 border rounded focus:ring-[var(--rose)]">
+      <option value="all" <?= ($date_filter === 'all') ? 'selected' : '' ?>>All Time</option>
+      <option value="today" <?= ($date_filter === 'today') ? 'selected' : '' ?>>Today</option>
+      <option value="week" <?= ($date_filter === 'week') ? 'selected' : '' ?>>This Week</option>
+      <option value="month" <?= ($date_filter === 'month') ? 'selected' : '' ?>>This Month</option>
+      <option value="year" <?= ($date_filter === 'year') ? 'selected' : '' ?>>This Year</option>
+    </select>
+  </div>
+</form>
+
+<!-- Orders Report -->
+<div class="bg-white p-8 rounded-2xl shadow-sm">
+
+  <!-- Summary Dashboard -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 p-4 bg-pink-50 rounded-lg border border-pink-100">
+    <div class="text-center md:text-left">
+        <p class="text-gray-500 text-xs uppercase">Total Orders</p>
+        <p class="text-2xl font-bold"><?= number_format($total_orders) ?></p>
     </div>
+    <div class="text-center">
+        <p class="text-gray-500 text-xs uppercase">Total Sales</p>
+        <p class="text-2xl font-bold text-[var(--rose)]">₱<?= number_format($total_sales, 2) ?></p>
+    </div>
+    <div class="text-center md:text-right">
+        <p class="text-gray-500 text-xs uppercase">Payment Breakdown</p>
+        <div class="text-xs mt-1">
+            <?php foreach($payment_counts as $method => $amount): ?>
+                <div><?= htmlspecialchars($method) ?>: <span class="font-semibold">₱<?= number_format($amount, 2) ?></span></div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+  </div>
 
-    <!-- Filters -->
-    <form method="GET" class="bg-white p-5 rounded-b-2xl shadow flex flex-wrap items-center gap-4 filters no-print">
-      <div class="flex items-center gap-2">
-        <label class="font-medium text-gray-700">Filter Status:</label>
-        <select name="status" onchange="this.form.submit()" class="p-2 border rounded focus:ring-[var(--rose)]">
-          <option value="all" <?= ($_GET['status'] ?? 'all') === 'all' ? 'selected' : '' ?>>All Statuses</option>
-          <?= $status_options ?>
-        </select>
-      </div>
-      <div class="flex items-center gap-2">
-        <label class="font-medium text-gray-700">Time Period:</label>
-        <select name="date_range" onchange="this.form.submit()" class="p-2 border rounded focus:ring-[var(--rose)]">
-          <option value="all" <?= ($date_filter === 'all') ? 'selected' : '' ?>>All Time</option>
-          <option value="today" <?= ($date_filter === 'today') ? 'selected' : '' ?>>Today</option>
-          <option value="week" <?= ($date_filter === 'week') ? 'selected' : '' ?>>This Week (Weekly Report)</option>
-          <option value="month" <?= ($date_filter === 'month') ? 'selected' : '' ?>>This Month (Monthly Report)</option>
-          <option value="year" <?= ($date_filter === 'year') ? 'selected' : '' ?>>This Year</option>
-        </select>
-      </div>
-    </form>
+  <!-- Orders Table -->
+  <div class="overflow-x-auto">
+    <table class="min-w-full border border-gray-200 text-sm">
+      <thead class="bg-gray-100 text-gray-600 uppercase text-xs">
+        <tr>
+          <th class="px-4 py-3 text-left">Order #</th>
+          <th class="px-4 py-3 text-left">Date</th>
+          <th class="px-4 py-3 text-left w-1/3">Order Details</th>
+          <th class="px-4 py-3 text-left">Status</th>
+          <th class="px-4 py-3 text-right">Total</th>
+        </tr>
+      </thead>
 
-    <!-- 📄 REPORT AREA -->
-    <div class="bg-white p-8 rounded-2xl shadow-sm print:shadow-none print:p-0">
-      
-      <!-- 🖨 PRINT HEADER (Hidden on Screen, Visible on Print) -->
-      <div class="report-header hidden print:flex mb-6">
-        <div class="flex items-center gap-4">
-            <img src="logo2.png" alt="Logo" class="w-16 h-16 object-contain">
-            <div>
-                <h1 class="text-2xl font-bold text-gray-800">Seven Dwarfs Boutique</h1>
-                <p class="text-sm text-gray-500">Sales & Order Report</p>
-            </div>
-        </div>
-        <div class="text-right">
-            <h2 class="text-xl font-bold text-[var(--rose)]"><?= $report_title ?></h2>
-            <p class="text-xs text-gray-500">Generated on: <?= date('M d, Y h:i A') ?></p>
-            <p class="text-xs text-gray-500">By: <?= htmlspecialchars($admin_name) ?></p>
-        </div>
-      </div>
+      <tbody class="divide-y divide-gray-100 text-gray-700">
+      <?php if (!empty($orders)): ?>
+        <?php foreach ($orders as $order): ?>
+        <tr class="hover:bg-gray-50">
 
-      <!-- 📊 SUMMARY DASHBOARD (Visible Screen & Print) -->
-      <div class="summary-box grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 p-4 bg-pink-50 rounded-lg border border-pink-100">
-        <div class="summary-item text-center md:text-left md:pl-4">
-            <p class="text-gray-500 text-xs uppercase tracking-wider font-semibold">Total Orders</p>
-            <p class="text-2xl font-bold text-gray-800"><?= number_format($total_orders) ?></p>
-        </div>
-        <div class="summary-item text-center md:border-l md:border-r border-pink-200">
-            <p class="text-gray-500 text-xs uppercase tracking-wider font-semibold">Total Sales</p>
-            <p class="text-2xl font-bold text-[var(--rose)]">₱<?= number_format($total_sales, 2) ?></p>
-        </div>
-        <div class="summary-item text-center md:text-right md:pr-4">
-            <p class="text-gray-500 text-xs uppercase tracking-wider font-semibold">Payment Breakdown</p>
-            <div class="text-xs text-gray-600 mt-1">
-                <?php foreach($payment_counts as $method => $amount): ?>
-                    <div><?= htmlspecialchars($method) ?>: <span class="font-semibold">₱<?= number_format($amount, 2) ?></span></div>
-                <?php endforeach; ?>
-                <?php if(empty($payment_counts)) echo "No Data"; ?>
-            </div>
-        </div>
-      </div>
+          <td class="px-4 py-2 font-mono font-semibold text-gray-500">
+            #<?= $order['order_id']; ?>
+          </td>
 
-      <!-- Order List Table -->
-      <div class="overflow-x-auto">
-        <table class="min-w-full border border-gray-200 text-sm">
-          <thead class="bg-gray-100 text-gray-600 uppercase text-xs">
-            <tr>
-              <th class="px-4 py-3 text-left">Order #</th>
-              <th class="px-4 py-3 text-left">Date</th>
-              <th class="px-4 py-3 text-left">Customer</th>
-              <th class="px-4 py-3 text-left w-1/3">Items</th>
-              <th class="px-4 py-3 text-left">Status</th>
-              <th class="px-4 py-3 text-right">Total</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-100 text-gray-700">
-            <?php if (!empty($orders)): ?>
-              <?php foreach ($orders as $order): ?>
-              <tr class="hover:bg-gray-50">
-                <td class="px-4 py-2 font-mono font-semibold text-gray-500">#<?= $order['order_id']; ?></td>
-                <td class="px-4 py-2 whitespace-nowrap"><?= date('M d, Y', strtotime($order['created_at'])); ?></td>
-                <td class="px-4 py-2"><?= htmlspecialchars($order['first_name'] . ' ' . $order['last_name']); ?></td>
-                <td class="px-4 py-2 text-xs text-gray-500"><?= htmlspecialchars($order['products']); ?></td>
-                <td class="px-4 py-2">
-                    <span class="px-2 py-1 rounded text-xs font-semibold bg-gray-100 border border-gray-300">
-                        <?= htmlspecialchars($order['order_status']); ?>
-                    </span>
-                </td>
-                <td class="px-4 py-2 text-right font-bold">₱<?= number_format($order['total_amount'], 2); ?></td>
-              </tr>
-              <?php endforeach; ?>
-            <?php else: ?>
-              <tr><td colspan="6" class="text-center py-6 text-gray-500">No orders found for this period.</td></tr>
-            <?php endif; ?>
-          </tbody>
+          <td class="px-4 py-2 whitespace-nowrap">
+            <?= date('M d, Y', strtotime($order['created_at'])); ?>
+          </td>
+
+          <td class="px-4 py-2 text-xs leading-5">
+
+    <!-- Always show purchased items -->
+    <strong class="text-gray-800">Purchased:</strong><br>
+    <?= $order['purchased_items'] ?: '<em>No items recorded</em>' ?>
+
+    <!-- Only show refunded section if refunds exist -->
+    <?php if (!empty($order['refunded_items'])): ?>
+        <br><br>
+        <strong class="text-red-600">Refunded:</strong><br>
+        <span class="text-red-600"><?= $order['refunded_items'] ?></span>
+    <?php endif; ?>
+
+</td>
+
+
+          <td class="px-4 py-2">
+            <span class="px-2 py-1 rounded text-xs font-semibold bg-gray-100 border border-gray-300">
+              <?= htmlspecialchars($order['order_status']); ?>
+            </span>
+          </td>
+
+          <td class="px-4 py-2 text-right font-bold">
+            ₱<?= number_format($order['total_amount'], 2); ?>
+          </td>
+
+        </tr>
+        <?php endforeach; ?>
+      <?php else: ?>
+        <tr>
+            <td colspan="5" class="text-center py-6 text-gray-500">
+                No orders found for this period.
+            </td>
+        </tr>
+      <?php endif; ?>
+      </tbody>
           <!-- Table Footer for Print -->
           <tfoot class="hidden print:table-row-group bg-gray-50 font-bold">
             <tr>

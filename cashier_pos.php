@@ -63,58 +63,117 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_order_details') {
 }
 
 /* ========================================================
-   API: PROCESS REFUND
+   API: PROCESS REFUND (UPGRADED FULL VERSION)
 ======================================================== */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['action'] ?? '') === 'process_refund') {
-    
+
     while (ob_get_level()) ob_end_clean();
     header('Content-Type: application/json');
 
     $input = json_decode(file_get_contents('php://input'), true);
 
     $conn->begin_transaction();
+
     try {
         if (!$admin_id) throw new Exception("Not authenticated");
         if (empty($input['items'])) throw new Exception("No items selected");
 
         $oid = intval($input['order_id']);
-        
-        // FIXED: Removed order_item_id. 
-        // Columns: order_id, product_id, stock_id, refund_amount, refunded_by (5 Columns)
-        $refund_stmt = $conn->prepare("INSERT INTO refunds (order_id, product_id, stock_id, refund_amount, refunded_by) VALUES (?, ?, ?, ?, ?)");
-        $stock_stmt  = $conn->prepare("UPDATE stock SET current_qty = current_qty + ? WHERE stock_id = ?");
+
+        // Prepare statements
+        $refund_stmt = $conn->prepare("
+            INSERT INTO refunds 
+            (order_id, order_item_id, product_id, stock_id, size_id, color_id, refund_amount, refunded_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ");
+
+        $stock_stmt = $conn->prepare("
+            UPDATE stock SET current_qty = current_qty + ? WHERE stock_id = ?
+        ");
+
+        $update_order_total = $conn->prepare("
+            UPDATE orders SET total_amount = total_amount - ? WHERE order_id = ?
+        ");
+
+        $insert_negative_transaction = $conn->prepare("
+            INSERT INTO transactions (order_id, payment_method_id, total, order_status_id, date_time)
+            VALUES (?, NULL, ?, 2, NOW())
+        ");
 
         $total_refund = 0;
 
         foreach ($input['items'] as $item) {
-            $qty = intval($item['refund_qty']);
-            $price = floatval($item['price']);
-            if ($qty <= 0) continue;
 
-            $amount = $qty * $price;
+            $product_id = intval($item['product_id']);
+            $stock_id   = intval($item['stock_id']);
+
+            // get size and color from stock table
+            $sc = $conn->query("SELECT size_id, color_id FROM stock WHERE stock_id = $stock_id")->fetch_assoc();
+            $size_id  = $sc['size_id'] ?? null;
+            $color_id = $sc['color_id'] ?? null;
+
+            $refund_qty = intval($item['refund_qty']);
+            $price      = floatval($item['price']);
+            $amount     = $refund_qty * $price;
+
             $total_refund += $amount;
 
-            // BIND: iiidi (5 Values matching the 5 Columns)
-            $refund_stmt->bind_param("iiidi", $oid, $item['product_id'], $item['stock_id'], $amount, $admin_id);
+            // find order_item_id
+            $oi = $conn->query("
+                SELECT id FROM order_items 
+                WHERE order_id = $oid AND product_id = $product_id AND stock_id = $stock_id LIMIT 1
+            ")->fetch_assoc();
+            $order_item_id = $oi['id'] ?? null;
+
+            // insert refund record
+            $refund_stmt->bind_param(
+                "iiiiiddi",
+                $oid,
+                $order_item_id,
+                $product_id,
+                $stock_id,
+                $size_id,
+                $color_id,
+                $amount,
+                $admin_id
+            );
             $refund_stmt->execute();
 
-            // Restock
-            $stock_stmt->bind_param("ii", $qty, $item['stock_id']);
+            // restock
+            $stock_stmt->bind_param("ii", $refund_qty, $stock_id);
             $stock_stmt->execute();
         }
 
-        // Update Order Status (4 = Refunded)
+        // reduce order total
+        $update_order_total->bind_param("di", $total_refund, $oid);
+        $update_order_total->execute();
+
+        // insert negative transaction
+        $neg = -$total_refund;
+        $insert_negative_transaction->bind_param("id", $oid, $neg);
+        $insert_negative_transaction->execute();
+
+        // update order status to refunded (4)
         $conn->query("UPDATE orders SET order_status_id = 4 WHERE order_id = $oid");
 
         $conn->commit();
-        echo json_encode(['status' => 'success', 'refund_total' => $total_refund]);
+
+        echo json_encode([
+            'status' => 'success',
+            'refund_total' => $total_refund
+        ]);
 
     } catch (Exception $e) {
         $conn->rollback();
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode([
+            'status' => 'error',
+            'message' => $e->getMessage()
+        ]);
     }
+
     exit;
 }
+
 
 /* ========================================================
    PAGE LOGIC
@@ -292,7 +351,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
             <form method="POST" onsubmit="prepareCartData()" class="space-y-4">
                 <input type="hidden" name="cart_data" id="cartData"><input type="hidden" name="total" id="totalField">
                 <div class="grid grid-cols-2 gap-3">
-                    <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Payment</label><select name="payment_method_id" id="paymentMethodSelect" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-medium focus:ring-2 focus:ring-rose-200 outline-none"><?php $payments->data_seek(0); while ($pay = $payments->fetch_assoc()): ?><option value="<?= $pay['payment_method_id'] ?>"><?= htmlspecialchars($pay['payment_method_name']) ?></option><?php endwhile; ?></select></div>
+                    <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Payment</label>
+                    <select name="payment_method_id" id="paymentMethodSelect" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-medium focus:ring-2 focus:ring-rose-200 outline-none">
+                    <?php
+                        $payments->data_seek(0);
+                        while ($pay = $payments->fetch_assoc()):
+                            $name = strtolower($pay['payment_method_name']);
+                            if ($name === 'card' || $name === 'paymaya' || $name === 'paypal') continue;
+                    ?>
+                        <option value="<?= $pay['payment_method_id'] ?>"><?= htmlspecialchars($pay['payment_method_name']) ?></option>
+                    <?php endwhile; ?>
+                    </select>
+                    </div>
                     <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Cash Given</label><input type="number" name="cash_given" id="cashGiven" step="0.01" placeholder="0.00" oninput="updateChange()" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-medium text-right focus:ring-2 focus:ring-rose-200 outline-none"></div>
                 </div>
                 <div id="gcashRefDiv" class="hidden"><label class="block text-xs font-bold text-rose-500 uppercase mb-1">GCash Ref No.</label><input type="text" name="gcash_ref" placeholder="Enter Reference #" class="w-full border-2 border-rose-100 rounded-xl px-3 py-2 text-sm focus:border-rose-400 outline-none"></div>
