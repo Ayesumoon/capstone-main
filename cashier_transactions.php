@@ -40,17 +40,19 @@ switch ($filter) {
 
 // ✅ Fetch Transactions (Filtered by Date)
 $stmt = $conn->prepare("
-    SELECT 
+    SELECT
         o.order_id,
         o.total_amount,
         o.cash_given,
         o.changes,
         o.created_at,
         pm.payment_method_name,
+        os.order_status_name AS status,
         COUNT(oi.product_id) AS total_items
     FROM orders o
     LEFT JOIN order_items oi ON o.order_id = oi.order_id
     LEFT JOIN payment_methods pm ON o.payment_method_id = pm.payment_method_id
+    LEFT JOIN order_status os ON o.order_status_id = os.order_status_id
     WHERE $dateCondition AND o.admin_id = ?
     GROUP BY o.order_id
     ORDER BY o.created_at DESC
@@ -346,6 +348,7 @@ $chartStmt->close();
                                 <th class="px-6 py-4">Total</th>
                                 <th class="px-6 py-4">Received</th>
                                 <th class="px-6 py-4">Payment</th>
+                                <th class="px-6 py-4">Status</th>
                                 <th class="px-6 py-4">Date/Time</th>
                                 <th class="px-6 py-4 text-right">Action</th>
                             </tr>
@@ -362,9 +365,14 @@ $chartStmt->close();
                                         <span class="text-[10px] text-slate-400 block">Change: ₱<?= number_format($row['changes'], 2); ?></span>
                                     </td>
                                     <td class="px-6 py-4">
-                                        <span class="px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wide 
+                                        <span class="px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wide
                                             <?= strtolower($row['payment_method_name']) == 'gcash' ? 'bg-blue-50 text-blue-600 border border-blue-100' : 'bg-green-50 text-green-600 border border-green-100' ?>">
                                             <?= htmlspecialchars($row['payment_method_name']); ?>
+                                        </span>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <span class="px-2 py-1 rounded text-xs font-semibold bg-gray-100 border border-gray-300">
+                                            <?= htmlspecialchars($row['status']); ?>
                                         </span>
                                     </td>
                                     <td class="px-6 py-4 text-slate-500">
