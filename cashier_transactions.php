@@ -53,23 +53,39 @@ $query = "
         COUNT(oi.id) AS total_items,
         GROUP_CONCAT(
             CONCAT(
-                oi.qty, '***', 
-                COALESCE(p.product_name, 'Unknown Product'), '***', 
-                COALESCE(sz.size, oi.size, '-'), '***', 
+                oi.qty, '***',
+                COALESCE(p.product_name, 'Unknown Product'), '***',
+                COALESCE(sz.size, oi.size, '-'), '***',
                 COALESCE(cl.color, oi.color, '-'), '***',
-                -- ✅ ADDED: Price is now the 5th item
-                COALESCE(p.price_id, 0) 
-            ) 
+                COALESCE(p.price_id, 0)
+            )
             SEPARATOR '///'
-        ) as item_details
+        ) as item_details,
+        (
+            SELECT GROUP_CONCAT(
+                CONCAT(
+                    r.refund_id, '***',
+                    r.order_item_id, '***',
+                    r.refund_amount, '***',
+                    COALESCE(pr.product_name, 'Unknown Product'), '***',
+                    COALESCE(sz2.size, '-'), '***',
+                    COALESCE(cl2.color, '-'), '***',
+                    r.refunded_at
+                ) SEPARATOR '///'
+            )
+            FROM refunds r
+            LEFT JOIN order_items oi2 ON r.order_item_id = oi2.id
+            LEFT JOIN products pr ON r.product_id = pr.product_id
+            LEFT JOIN sizes sz2 ON r.size_id = sz2.size_id
+            LEFT JOIN colors cl2 ON r.color_id = cl2.color_id
+            WHERE r.order_id = o.order_id
+        ) as refund_details
     FROM orders o
     LEFT JOIN order_items oi ON o.order_id = oi.order_id
     LEFT JOIN products p ON oi.product_id = p.product_id
     LEFT JOIN payment_methods pm ON o.payment_method_id = pm.payment_method_id
     LEFT JOIN order_status os ON o.order_status_id = os.order_status_id
-    
-    -- JOINING STOCK TABLES
-    LEFT JOIN stock st ON oi.stock_id = st.stock_id 
+    LEFT JOIN stock st ON oi.stock_id = st.stock_id
     LEFT JOIN sizes sz ON st.size_id = sz.size_id
     LEFT JOIN colors cl ON st.color_id = cl.color_id
 
@@ -321,8 +337,9 @@ $chartStmt->close();
                         <tbody class="divide-y divide-slate-50">
                             <?php if ($result->num_rows > 0): ?>
                                 <?php while ($row = $result->fetch_assoc()): 
-                                    $statusName = $row['status'];
-                                    $isRefunded = (stripos($statusName, 'Refund') !== false);
+                                    // Always show status as "Completed" for display
+                                    $statusName = "Completed";
+                                    $isRefunded = false;
                                     
                                     // Parse item details: Qty *** Name *** Size *** Color
                                     $itemStrings = !empty($row['item_details']) ? explode('///', $row['item_details']) : [];
@@ -334,12 +351,12 @@ $chartStmt->close();
 <td class="px-6 py-4 align-top">
     <?php if(empty($itemStrings)): ?>
         <span class="text-xs text-slate-400">No items</span>
-    <?php else: 
+    <?php else:
         // 1. Parse all items into a usable array
         $allItems = [];
         foreach($itemStrings as $str) {
             $parts = explode('***', $str);
-            $qty = isset($parts[0]) ? abs($parts[0]) : 0; 
+            $qty = isset($parts[0]) ? abs($parts[0]) : 0;
             $name = isset($parts[1]) ? $parts[1] : 'Unknown';
             $size = (isset($parts[2]) && $parts[2] !== '-') ? $parts[2] : null;
             $color = (isset($parts[3]) && $parts[3] !== '-') ? $parts[3] : null;
@@ -358,11 +375,29 @@ $chartStmt->close();
                 'total_refund' => $qty * $price
             ];
         }
+
+        // Parse refund details
+        $refundDetails = [];
+        if (!empty($row['refund_details'])) {
+            $refundStrings = explode('///', $row['refund_details']);
+            foreach ($refundStrings as $rstr) {
+                $rparts = explode('***', $rstr);
+                if (count($rparts) >= 7) {
+                    $refundDetails[] = [
+                        'refund_id' => $rparts[0],
+                        'order_item_id' => $rparts[1],
+                        'refund_amount' => $rparts[2],
+                        'product_name' => $rparts[3],
+                        'size' => $rparts[4],
+                        'color' => $rparts[5],
+                        'refunded_at' => $rparts[6]
+                    ];
+                }
+            }
+        }
     ?>
         <div class="flex flex-col gap-4">
-            
             <!-- SECTION A: PURCHASED LIST -->
-            <!-- This always shows what was originally in the cart -->
             <div>
                 <div class="font-bold text-slate-800 text-[11px] uppercase tracking-wide mb-1.5">
                     Purchased:
@@ -370,7 +405,7 @@ $chartStmt->close();
                 <div class="space-y-1">
                     <?php foreach($allItems as $item): ?>
                         <div class="text-sm text-slate-600 leading-tight">
-                            <?= htmlspecialchars($item['name']) ?> 
+                            <?= htmlspecialchars($item['name']) ?>
                             <span class="text-slate-400 font-medium">x<?= $item['qty'] ?></span>
                         </div>
                     <?php endforeach; ?>
@@ -378,26 +413,23 @@ $chartStmt->close();
             </div>
 
             <!-- SECTION B: REFUNDED LIST -->
-            <?php if($isRefunded): ?>
+            <?php if(!empty($refundDetails)): ?>
                 <div class="border-t border-slate-100 pt-3">
                     <div class="font-bold text-red-600 text-[11px] uppercase tracking-wide mb-1.5">
                         Refunded:
                     </div>
                     <div class="space-y-1">
-                        <?php foreach($allItems as $item): ?>
+                        <?php foreach($refundDetails as $r): ?>
                             <div class="text-sm text-red-500 font-medium flex flex-wrap items-center gap-1 leading-tight">
                                 <span class="text-[10px] font-bold border border-red-200 bg-red-50 px-1 rounded">REFUND</span>
-                                <span><?= htmlspecialchars($item['name']) ?></span>
-                                <span class="text-red-400">x<?= $item['qty'] ?></span>
-                                <span class="text-red-600 font-bold whitespace-nowrap">
-                                    — ₱<?= number_format($item['total_refund'], 2) ?>
-                                </span>
+                                <span><?= htmlspecialchars($r['product_name']) ?><?= ($r['size'] !== '-' || $r['color'] !== '-') ? ' (' . ($r['size'] !== '-' ? $r['size'] : '') . (($r['size'] !== '-' && $r['color'] !== '-') ? ', ' : '') . ($r['color'] !== '-' ? ucfirst($r['color']) : '') . ')' : '' ?></span>
+                                <span class="text-red-400">— ₱<?= number_format($r['refund_amount'], 2) ?></span>
+                                <span class="text-red-400 text-[10px] ml-2"><?= date('M d, Y h:i A', strtotime($r['refunded_at'])) ?></span>
                             </div>
                         <?php endforeach; ?>
                     </div>
                 </div>
             <?php endif; ?>
-
         </div>
     <?php endif; ?>
 </td>
@@ -414,8 +446,7 @@ $chartStmt->close();
                                         </span>
                                     </td>
                                     <td class="px-6 py-4 align-top">
-                                        <span class="px-2 py-1 rounded text-xs font-semibold 
-                                            <?= $isRefunded ? 'bg-red-100 text-red-600 border border-red-200' : 'bg-green-100 text-green-600 border border-green-200' ?>">
+                                        <span class="px-2 py-1 rounded text-xs font-semibold bg-green-100 text-green-600 border border-green-200">
                                             <?= htmlspecialchars($statusName); ?>
                                         </span>
                                     </td>

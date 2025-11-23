@@ -203,12 +203,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
     $cash_given = floatval($_POST['cash_given']);
     $total = floatval($_POST['total']);
 
-    if (empty($cart)) echo "<script>alert('Cart empty');</script>";
-    elseif (($cash_given - $total) < 0) echo "<script>alert('Insufficient cash');</script>";
-    else {
+    if (empty($cart)) {
+        echo "<script>alert('Cart empty');</script>";
+    } else {
+        // Get payment method name for logic
+        $pmRes = $conn->query("SELECT payment_method_name FROM payment_methods WHERE payment_method_id = $payment_method_id");
+        $pmRow = $pmRes ? $pmRes->fetch_assoc() : null;
+        $payment_method_name = $pmRow ? strtolower($pmRow['payment_method_name']) : '';
+
+        // If GCash, set cash_given = total, changes = 0, skip cash validation
+        if ($payment_method_name === 'gcash') {
+            $cash_given = $total;
+            $changes = 0;
+        } else {
+            if (($cash_given - $total) < 0) {
+                echo "<script>alert('Insufficient cash');</script>";
+                return;
+            }
+            $changes = $cash_given - $total;
+        }
         $conn->begin_transaction();
         try {
-            $changes = $cash_given - $total;
 
             // 1. INSERT ORDER
             $sql = "INSERT INTO orders (admin_id, total_amount, cash_given, changes, order_status_id, created_at, payment_method_id) VALUES (?, ?, ?, ?, 0, NOW(), ?)";
@@ -345,7 +360,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
         <div class="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/50" id="cartList"><div id="emptyCartState" class="h-full flex flex-col items-center justify-center text-slate-400"><p class="text-sm font-medium">No items added yet</p></div></div>
         <div class="p-6 bg-white border-t border-slate-100 shadow-[0_-4px_20px_rgba(0,0,0,0.02)]">
             <div class="flex justify-between items-end mb-4"><span class="text-sm font-semibold text-slate-500">Total Amount</span><span id="cartTotal" class="text-3xl font-bold text-slate-800 tracking-tight">₱0.00</span></div>
-            <form method="POST" onsubmit="prepareCartData()" class="space-y-4">
+            <form method="POST" onsubmit="return handleCartSubmit()" class="space-y-4">
                 <input type="hidden" name="cart_data" id="cartData"><input type="hidden" name="total" id="totalField">
                 <div class="grid grid-cols-2 gap-3">
 
@@ -353,7 +368,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
 
                     <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Cash Given</label><input type="number" name="cash_given" id="cashGiven" step="0.01" placeholder="0.00" oninput="updateChange()" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-medium text-right focus:ring-2 focus:ring-rose-200 outline-none"></div>
                 </div>
-                <div id="gcashRefDiv" class="hidden"><label class="block text-xs font-bold text-rose-500 uppercase mb-1">GCash Ref No.</label><input type="text" name="gcash_ref" placeholder="Enter Reference #" class="w-full border-2 border-rose-100 rounded-xl px-3 py-2 text-sm focus:border-rose-400 outline-none"></div>
+                <!-- GCash Ref No. field removed as requested -->
                 <div id="cartChange" class="min-h-[1.5rem]"></div>
                 <div class="flex gap-3 pt-2"><button type="button" id="openReturnModal" class="p-3.5 rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700 transition-colors" title="Return Item"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/></svg></button><button type="submit" name="checkout" class="flex-1 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl py-3.5 shadow-lg shadow-rose-200 transition-all transform active:scale-[0.98]">Process Payment</button></div>
             </form>
@@ -388,7 +403,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
         window.rm=(i)=>{cart.splice(i,1);renderCart();}
         window.prepareCartData=()=>{document.getElementById('cartData').value=JSON.stringify(cart);}
         window.updateChange=()=>{const t=parseFloat(document.getElementById('totalField').value)||0,c=parseFloat(document.getElementById('cashGiven').value)||0,d=c-t;document.getElementById('cartChange').innerHTML=c>0?(d>=0?`<div class="text-green-600 font-bold text-sm bg-green-50 p-2 rounded">Change: ₱${d.toFixed(2)}</div>`:`<div class="text-red-500 font-bold text-sm bg-red-50 p-2 rounded">Short: ₱${Math.abs(d).toFixed(2)}</div>`):'';}
-        document.getElementById('paymentMethodSelect').addEventListener('change',function(){document.getElementById('gcashRefDiv').className=this.options[this.selectedIndex].text.toLowerCase().includes('gcash')?'block fade-in':'hidden';});
+        document.getElementById('paymentMethodSelect').addEventListener('change',function(){
+            const isGcash = this.options[this.selectedIndex].text.toLowerCase().includes('gcash');
+            // Hide/show Cash Given and Change fields
+            document.getElementById('cashGiven').parentElement.style.display = isGcash ? 'none' : '';
+            document.getElementById('cartChange').style.display = isGcash ? 'none' : '';
+        });
+        // Initial toggle on page load
+        window.addEventListener('DOMContentLoaded', function() {
+            const select = document.getElementById('paymentMethodSelect');
+            const isGcash = select.options[select.selectedIndex].text.toLowerCase().includes('gcash');
+            document.getElementById('cashGiven').parentElement.style.display = isGcash ? 'none' : '';
+            document.getElementById('cartChange').style.display = isGcash ? 'none' : '';
+        });
 
         const rBackdrop=document.getElementById('returnModalBackdrop');const rModal=document.getElementById('returnModal');
         document.getElementById('openReturnModal').onclick=()=>{rBackdrop.classList.remove('hidden');setTimeout(()=>rBackdrop.classList.add('opacity-100'),10);rModal.classList.remove('translate-x-full');document.getElementById('searchOrderId').value='';document.getElementById('returnItemsContainer').classList.add('hidden');document.getElementById('itemsList').innerHTML='';document.getElementById('submitRefundBtn').disabled=true;document.getElementById('orderMsg').classList.add('hidden');}
@@ -426,6 +453,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
             }catch(e){alert("System Error");}
         }
         document.getElementById('sidebarToggle').onclick=()=>{const s=document.getElementById('sidebar');s.style.position=s.style.position==='absolute'?'relative':'absolute';s.style.height='100%';s.style.zIndex=50;s.classList.toggle('-translate-x-full');}
+    // Fix process payment for GCash: set cashGiven value and required attribute before submit
+    function handleCartSubmit() {
+        prepareCartData();
+        var select = document.getElementById('paymentMethodSelect');
+        var isGcash = select.options[select.selectedIndex].text.toLowerCase().includes('gcash');
+        var cashGiven = document.getElementById('cashGiven');
+        var total = document.getElementById('totalField').value;
+        if (isGcash) {
+            cashGiven.value = total;
+            cashGiven.removeAttribute('required');
+        } else {
+            cashGiven.setAttribute('required', 'required');
+        }
+        return true; // allow form to submit
+    }
     </script>
 </body>
 </html>

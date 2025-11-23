@@ -115,8 +115,8 @@ body {
     <p><strong>Date:</strong> <?= date('M d, Y h:i A', strtotime($order['created_at'])); ?></p>
     <p><strong>Cashier:</strong> <?= htmlspecialchars($cashier_name); ?></p>
     <p><strong>Payment:</strong> <?= htmlspecialchars($order['payment_method_name']); ?></p>
-    <?php if (strtolower($order['payment_method_name']) === 'gcash' && !empty($order['gcash_ref'])): ?>
-      <p><strong>GCash Ref No:</strong> <?= htmlspecialchars($order['gcash_ref']); ?></p>
+    <?php if (strtolower($order['payment_method_name']) === 'gcash'): ?>
+      <p class="text-green-600 font-bold">Paid via GCash</p>
     <?php endif; ?>
   </div>
 
