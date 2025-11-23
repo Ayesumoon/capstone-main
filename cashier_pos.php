@@ -175,9 +175,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['action'] ?? '') === 'proces
 }
 
 
-/* ========================================================
-   PAGE LOGIC
-======================================================== */
+
 
 if (!isset($_SESSION['admin_id'])) { header("Location: login.php"); exit; }
 
@@ -221,7 +219,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
             $stmt->close();
 
             // 2. INSERT ITEMS
-            // Note: We are inserting INTO order_items. Make sure your schema allows inserting without order_item_id (it should be AUTO_INCREMENT usually).
             $itemStmt = $conn->prepare("INSERT INTO order_items (order_id, product_id, color, size, stock_id, qty, price) VALUES (?, ?, ?, ?, ?, ?, ?)");
             
             foreach ($cart as $item) {
@@ -351,28 +348,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
             <form method="POST" onsubmit="prepareCartData()" class="space-y-4">
                 <input type="hidden" name="cart_data" id="cartData"><input type="hidden" name="total" id="totalField">
                 <div class="grid grid-cols-2 gap-3">
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
->>>>>>> e1a9d173cd00cbc519798625c7d1b5c401656382
-                    <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Payment</label>
-                    <select name="payment_method_id" id="paymentMethodSelect" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-medium focus:ring-2 focus:ring-rose-200 outline-none">
-                    <?php
-                        $payments->data_seek(0);
-                        while ($pay = $payments->fetch_assoc()):
-                            $name = strtolower($pay['payment_method_name']);
-                            if ($name === 'card' || $name === 'paymaya' || $name === 'paypal') continue;
-                    ?>
-                        <option value="<?= $pay['payment_method_id'] ?>"><?= htmlspecialchars($pay['payment_method_name']) ?></option>
-                    <?php endwhile; ?>
-                    </select>
-                    </div>
-<<<<<<< HEAD
-=======
-=======
+
                     <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Payment</label><select name="payment_method_id" id="paymentMethodSelect" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-medium focus:ring-2 focus:ring-rose-200 outline-none"><?php $payments->data_seek(0); while ($pay = $payments->fetch_assoc()): ?><option value="<?= $pay['payment_method_id'] ?>"><?= htmlspecialchars($pay['payment_method_name']) ?></option><?php endwhile; ?></select></div>
->>>>>>> 0fc12a9c53394892f61a62e0e0320cf008dad394
->>>>>>> e1a9d173cd00cbc519798625c7d1b5c401656382
+
                     <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Cash Given</label><input type="number" name="cash_given" id="cashGiven" step="0.01" placeholder="0.00" oninput="updateChange()" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-medium text-right focus:ring-2 focus:ring-rose-200 outline-none"></div>
                 </div>
                 <div id="gcashRefDiv" class="hidden"><label class="block text-xs font-bold text-rose-500 uppercase mb-1">GCash Ref No.</label><input type="text" name="gcash_ref" placeholder="Enter Reference #" class="w-full border-2 border-rose-100 rounded-xl px-3 py-2 text-sm focus:border-rose-400 outline-none"></div>

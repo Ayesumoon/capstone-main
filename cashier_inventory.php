@@ -21,10 +21,9 @@ $cashier_name = $cashier['first_name'] ?? 'Cashier';
 $role_id = $cashier['role_id'] ?? 0;
 $cashierRes->close();
 
-// Only Cashiers allowed (assuming role_id 1 is restricted or allowed based on your logic)
-// Adjust this check based on your actual role definitions
+// Only Cashiers allowed check
 if ($role_id != 1) {
-    // header("Location: dashboard.php"); // Uncomment if strict checking needed
+    // header("Location: dashboard.php");
     // exit;
 }
 
@@ -38,7 +37,10 @@ $categories = $conn->query("SELECT category_id, category_name FROM categories OR
 $sizes = $conn->query("SELECT DISTINCT s.size FROM stock st INNER JOIN sizes s ON st.size_id = s.size_id ORDER BY s.size ASC");
 $colors = $conn->query("SELECT DISTINCT c.color FROM stock st INNER JOIN colors c ON st.color_id = c.color_id ORDER BY c.color ASC");
 
-// Build Product Query
+// --- UPDATED QUERY ---
+// 1. Added sz.size and cl.color to SELECT
+// 2. Changed SUM(s.current_qty) to s.current_qty (to show individual variant stock)
+// 3. Removed GROUP BY so rows aren't combined
 $query = "
     SELECT 
         p.product_id,
@@ -47,7 +49,9 @@ $query = "
         p.supplier_price,
         c.category_name,
         p.image_url,
-        SUM(s.current_qty) AS total_stock
+        sz.size,
+        cl.color,
+        s.current_qty AS stock_qty
     FROM products p
     LEFT JOIN categories c ON p.category_id = c.category_id
     LEFT JOIN stock s ON p.product_id = s.product_id
@@ -75,7 +79,8 @@ if ($selected_color !== 'all') {
     $types .= "s";
 }
 
-$query .= " GROUP BY p.product_id ORDER BY p.product_name ASC";
+// Order by Name then Size for better readability
+$query .= " ORDER BY p.product_name ASC, sz.size ASC";
 
 $stmt = $conn->prepare($query);
 if (!empty($params)) {
@@ -164,7 +169,7 @@ $result = $stmt->get_result();
         <header class="h-20 glass-header flex items-center justify-between px-8 z-20 shrink-0">
             <div>
                 <h2 class="text-2xl font-bold text-slate-800">Inventory</h2>
-                <p class="text-xs text-slate-500 font-medium">Track stock levels and prices</p>
+                <p class="text-xs text-slate-500 font-medium">Track stock levels by variant</p>
             </div>
 
             <!-- Search Bar -->
@@ -225,9 +230,13 @@ $result = $stmt->get_result();
                             <tr>
                                 <th class="px-6 py-4">Product Details</th>
                                 <th class="px-6 py-4">Category</th>
+                                <!-- ADDED COLUMNS -->
+                                <th class="px-6 py-4 text-center">Size</th>
+                                <th class="px-6 py-4 text-center">Color</th>
+                                <!-- END ADDED COLUMNS -->
                                 <th class="px-6 py-4">Selling Price</th>
                                 <th class="px-6 py-4">Supplier Price</th>
-                                <th class="px-6 py-4 text-center">Stock Level</th>
+                                <th class="px-6 py-4 text-center">Stock</th>
                                 <th class="px-6 py-4 text-center">Status</th>
                             </tr>
                         </thead>
@@ -248,7 +257,8 @@ $result = $stmt->get_result();
                                             $img = trim($imagePath);
                                         }
                                     }
-                                    $stock = $row['total_stock'] ?? 0;
+                                    // Use new variable name from query
+                                    $stock = $row['stock_qty'] ?? 0;
                                 ?>
                                 <tr class="hover:bg-slate-50/50 transition-colors group search-row">
                                     <td class="px-6 py-3">
@@ -265,6 +275,27 @@ $result = $stmt->get_result();
                                             <?= htmlspecialchars($row['category_name']) ?>
                                         </span>
                                     </td>
+                                    
+                                    <!-- DISPLAY SIZE -->
+                                    <td class="px-6 py-3 text-center">
+                                        <span class="text-slate-700 font-medium border border-slate-200 px-2 py-1 rounded bg-white shadow-sm">
+                                            <?= htmlspecialchars($row['size'] ?? 'N/A') ?>
+                                        </span>
+                                    </td>
+
+                                    <!-- DISPLAY COLOR -->
+                                    <td class="px-6 py-3 text-center">
+                                        <?php if(!empty($row['color'])): ?>
+                                            <div class="flex items-center justify-center gap-2">
+                                                <!-- Attempt to show color swatch if it's a valid css color/hex, plus text -->
+                                                <div class="w-3 h-3 rounded-full border border-slate-300" style="background-color: <?= htmlspecialchars($row['color']) ?>;"></div>
+                                                <span class="text-xs font-medium text-slate-600"><?= htmlspecialchars($row['color']) ?></span>
+                                            </div>
+                                        <?php else: ?>
+                                            <span class="text-slate-400 text-xs">N/A</span>
+                                        <?php endif; ?>
+                                    </td>
+
                                     <td class="px-6 py-3 font-bold text-rose-600">
                                         ₱<?= number_format($row['price'], 2) ?>
                                     </td>
@@ -272,14 +303,14 @@ $result = $stmt->get_result();
                                         ₱<?= number_format($row['supplier_price'], 2) ?>
                                     </td>
                                     <td class="px-6 py-3 text-center">
-                                        <span class="font-bold <?= $stock <= 5 ? 'text-red-500' : 'text-slate-700' ?>"><?= $stock ?></span>
+                                        <span class="font-bold <?= $stock <= 0 ? 'text-red-500' : 'text-slate-700' ?>"><?= $stock ?></span>
                                     </td>
                                     <td class="px-6 py-3 text-center">
                                         <?php if($stock <= 0): ?>
                                             <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
                                                 <span class="w-1.5 h-1.5 rounded-full bg-red-600"></span> Out of Stock
                                             </span>
-                                        <?php elseif($stock <= 5): ?>
+                                        <?php elseif($stock <= 0): ?>
                                             <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                                                 <span class="w-1.5 h-1.5 rounded-full bg-yellow-600"></span> Low Stock
                                             </span>
@@ -293,7 +324,7 @@ $result = $stmt->get_result();
                                 <?php endwhile; ?>
                             <?php else: ?>
                                 <tr>
-                                    <td colspan="6" class="px-6 py-12 text-center text-slate-400 text-sm">No products found matching these filters.</td>
+                                    <td colspan="8" class="px-6 py-12 text-center text-slate-400 text-sm">No products found matching these filters.</td>
                                 </tr>
                             <?php endif; ?>
                         </tbody>
