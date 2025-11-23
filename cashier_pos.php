@@ -292,6 +292,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
             <form method="POST" onsubmit="prepareCartData()" class="space-y-4">
                 <input type="hidden" name="cart_data" id="cartData"><input type="hidden" name="total" id="totalField">
                 <div class="grid grid-cols-2 gap-3">
+<<<<<<< HEAD
                     <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Payment</label>
                     <select name="payment_method_id" id="paymentMethodSelect" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-medium focus:ring-2 focus:ring-rose-200 outline-none">
                     <?php
@@ -304,6 +305,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
                     <?php endwhile; ?>
                     </select>
                     </div>
+=======
+                    <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Payment</label><select name="payment_method_id" id="paymentMethodSelect" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-medium focus:ring-2 focus:ring-rose-200 outline-none"><?php $payments->data_seek(0); while ($pay = $payments->fetch_assoc()): ?><option value="<?= $pay['payment_method_id'] ?>"><?= htmlspecialchars($pay['payment_method_name']) ?></option><?php endwhile; ?></select></div>
+>>>>>>> 0fc12a9c53394892f61a62e0e0320cf008dad394
                     <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Cash Given</label><input type="number" name="cash_given" id="cashGiven" step="0.01" placeholder="0.00" oninput="updateChange()" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-medium text-right focus:ring-2 focus:ring-rose-200 outline-none"></div>
                 </div>
                 <div id="gcashRefDiv" class="hidden"><label class="block text-xs font-bold text-rose-500 uppercase mb-1">GCash Ref No.</label><input type="text" name="gcash_ref" placeholder="Enter Reference #" class="w-full border-2 border-rose-100 rounded-xl px-3 py-2 text-sm focus:border-rose-400 outline-none"></div>
