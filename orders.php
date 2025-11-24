@@ -2,6 +2,10 @@
 session_start();
 require 'conn.php';
 
+// ✅ CONFIG: Fix SQL Modes & Limits for complex GROUP_CONCAT queries
+$conn->query("SET SESSION sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''))");
+$conn->query("SET SESSION group_concat_max_len = 100000");
+
 // 🔹 Verify admin session
 $admin_id   = $_SESSION['admin_id'] ?? null;
 $admin_name = "Admin";
@@ -74,21 +78,26 @@ $sql = "
     pm.payment_method_name AS payment_method,
     o.created_at,
 
-    
+    -- PURCHASED ITEMS
     GROUP_CONCAT(
         DISTINCT CONCAT(
-            p.product_name, ' (', sz.size, ', ', c2.color, ') x', oi.qty
+            p.product_name, ' (', COALESCE(sz.size, '-'), ', ', COALESCE(c2.color, '-'), ') x', oi.qty
         ) ORDER BY oi.id SEPARATOR '<br>'
     ) AS purchased_items,
 
-  
+    -- REFUNDED ITEMS (Calculated Quantity = Total Refund Amount / Unit Price)
     GROUP_CONCAT(
         DISTINCT CONCAT(
-            '[REFUND] ', p.product_name,
-            ' (', sz.size, ', ', c2.color, ') x',
-            (SELECT COUNT(*) FROM refunds r WHERE r.order_item_id = oi.id),
-            ' — ₱',
-            (SELECT SUM(refund_amount) FROM refunds r WHERE r.order_item_id = oi.id)
+            '<span class=\"text-red-600 font-bold\">[REFUND]</span> ', 
+            p.product_name,
+            ' (', COALESCE(sz.size, '-'), ', ', COALESCE(c2.color, '-'), ') ',
+            '<span class=\"bg-red-100 text-red-800 px-1 rounded font-bold\">x',
+            
+            -- CALCULATION: Sum of refunds for this item / Item Price
+            (SELECT FLOOR(SUM(r.refund_amount) / NULLIF(oi.price, 0)) FROM refunds r WHERE r.order_item_id = oi.id),
+            
+            '</span> — ₱',
+            (SELECT FORMAT(SUM(refund_amount), 2) FROM refunds r WHERE r.order_item_id = oi.id)
         ) ORDER BY oi.id SEPARATOR '<br>'
     ) AS refunded_items
 
@@ -104,7 +113,6 @@ LEFT JOIN refunds rf ON oi.id = rf.order_item_id
 WHERE " . implode(" AND ", $where) . "
 GROUP BY o.order_id
 ORDER BY o.created_at DESC
-
 ";
 
 $stmt = $conn->prepare($sql);
@@ -381,8 +389,7 @@ body {
     <!-- Only show refunded section if refunds exist -->
     <?php if (!empty($order['refunded_items'])): ?>
         <br><br>
-        <strong class="text-red-600">Refunded:</strong><br>
-        <span class="text-red-600"><?= $order['refunded_items'] ?></span>
+        <?= $order['refunded_items'] ?>
     <?php endif; ?>
 
 </td>

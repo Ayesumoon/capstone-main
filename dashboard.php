@@ -34,7 +34,7 @@ switch ($filter) {
         $chartGroupBy = "DATE(created_at)";
         break;
     case 'all':
-        // 1=1 is a SQL trick to make the WHERE clause always true (selects everything)
+        // 1=1 selects everything
         $dateCondition = "1=1"; 
         // Group by Year and Month (e.g., 2023-11)
         $chartGroupBy = "DATE_FORMAT(created_at, '%Y-%m')"; 
@@ -46,24 +46,8 @@ switch ($filter) {
         break;
 }
 
-// ALIAS FIX: Create specific condition for JOIN queries
-// If filter is 'all', '1=1' remains '1=1' which is fine.
+// ALIAS FIX: Create specific condition for JOIN queries where orders table is aliased as 'o'
 $dateConditionWithAlias = str_replace("created_at", "o.created_at", $dateCondition); 
-
-
-if ($mostRes && $mostRow = $mostRes->fetch_assoc()) {
-    $rawTime = $mostRow['time_period'];
-    $mostSalesCount = $mostRow['count'];
-    
-    if ($filter == 'today') {
-        $mostSalesDate = date("g A", strtotime("$rawTime:00:00"));
-    } elseif ($filter == 'all') {
-        // Format YYYY-MM to "Nov 2023"
-        $mostSalesDate = date("M Y", strtotime($rawTime . "-01"));
-    } else {
-        $mostSalesDate = date("M j", strtotime($rawTime));
-    }
-}
 
 // 3. Basic Metrics (Orders, Sales, Revenue)
 $newOrders = 0;
@@ -110,13 +94,19 @@ $mostSalesQuery = "
     LIMIT 1
 ";
 $mostRes = $conn->query($mostSalesQuery);
+
 if ($mostRes && $mostRow = $mostRes->fetch_assoc()) {
     $rawTime = $mostRow['time_period'];
     $mostSalesCount = $mostRow['count'];
     
     if ($filter == 'today') {
+        // Example: 13 -> 1 PM
         $mostSalesDate = date("g A", strtotime("$rawTime:00:00"));
+    } elseif ($filter == 'all') {
+        // Example: 2023-11 -> Nov 2023
+        $mostSalesDate = date("M Y", strtotime($rawTime . "-01"));
     } else {
+        // Example: 2023-11-24 -> Nov 24
         $mostSalesDate = date("M j", strtotime($rawTime));
     }
 }
@@ -160,8 +150,6 @@ if ($filter == 'today') {
         $chartValues[] = $rawChartData[$d] ?? 0;
     }
 } elseif ($filter == 'all') {
-    // Loop through the actual data returned from DB
-    // $rawChartData keys are in 'YYYY-MM' format due to the group by
     if (empty($rawChartData)) {
         $chartLabels[] = "No Data";
         $chartValues[] = 0;
@@ -172,6 +160,7 @@ if ($filter == 'today') {
         }
     }
 }
+
 // 7. Chart 2 Data: Top 5 Products (For Bar Graph)
 $top5Labels = [];
 $top5Data = [];
@@ -192,6 +181,7 @@ while($row = $top5Res->fetch_assoc()){
 }
 
 // 8. Recent Orders Data
+// Joined with customer table assuming customer_id exists
 $recentOrdersQuery = "
     SELECT o.order_id, o.total_amount, o.order_status_id, o.created_at, 
            CONCAT(c.first_name, ' ', c.last_name) as customer 
@@ -206,10 +196,12 @@ $recentOrdersRes = $conn->query($recentOrdersQuery);
 $newOrdersNotif = 0;
 $lowStockNotif = 0;
 
+// New Orders (Last 24 hours)
 $notifRes = $conn->query("SELECT COUNT(*) as count FROM orders WHERE created_at >= DATE_SUB(NOW(), INTERVAL 1 DAY)");
 if ($row = $notifRes->fetch_assoc()) $newOrdersNotif = $row['count'];
 
-$stockRes = $conn->query("SELECT COUNT(*) as count FROM products WHERE stocks < 30");
+// Low Stock (Using stock table current_qty < 10)
+$stockRes = $conn->query("SELECT COUNT(*) as count FROM stock WHERE current_qty < 10");
 if ($row = $stockRes->fetch_assoc()) $lowStockNotif = $row['count'];
 
 $totalNotif = $newOrdersNotif + $lowStockNotif;
@@ -487,17 +479,35 @@ $totalNotif = $newOrdersNotif + $lowStockNotif;
                             <td class="px-5 py-3 font-semibold text-gray-700">₱<?= number_format($order['total_amount'], 2) ?></td>
                             <td class="px-5 py-3">
                                 <!-- Basic logic to colorize status -->
-                                <?php 
-                                    $statusStr = strtolower($order['order_status_id'] ?? 'pending'); // Assuming status_id might be text or converting to generic
-                                    // You might need to adjust this check based on your actual DB values (e.g., 1, 2 vs 'completed')
-                                    $bgClass = 'bg-gray-100 text-gray-600';
-                                    if(strpos($statusStr, 'complete') !== false || $statusStr == 1) $bgClass = 'bg-green-100 text-green-700';
-                                    if(strpos($statusStr, 'pend') !== false) $bgClass = 'bg-yellow-100 text-yellow-700';
-                                    if(strpos($statusStr, 'cancel') !== false) $bgClass = 'bg-red-100 text-red-700';
-                                ?>
-                                <span class="px-2 py-1 rounded text-xs font-semibold <?= $bgClass ?>">
-                                    <?= htmlspecialchars(ucfirst($statusStr)) ?>
-                                </span>
+                              <?php 
+                                // 1. GET THE ID
+                                $status_id = $order['order_status_id'];
+                                
+                                $status_name = 'Unknown';
+                                $bgClass = 'bg-gray-100 text-gray-600';
+
+                                switch ($status_id) {
+                                    case 0:
+                                        $status_name = 'Completed';
+                                        $bgClass = 'bg-green-100 text-green-700';
+                                        break;
+                                    case 2:
+                                        $status_name = 'Cancelled';
+                                        $bgClass = 'bg-red-100 text-red-700';
+                                        break;
+                                    case 4:
+                                        $status_name = 'Refunded';
+                                        $bgClass = 'bg-orange-100 text-orange-700';
+                                        break;
+                                    default:
+                                        $status_name = 'Status #' . $status_id;
+                                }
+                            ?>
+
+                            <!-- 3. OUTPUT THE NAME (Apply the class and echo the name) -->
+                            <span class="px-3 py-1 rounded-full text-xs font-bold <?= $bgClass ?>">
+                                <?= htmlspecialchars($status_name) ?>
+                            </span>
                             </td>
                         </tr>
                         <?php endwhile; else: ?>

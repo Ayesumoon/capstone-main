@@ -182,7 +182,6 @@ $total_categories = $result->num_rows;
         <table class="min-w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
           <thead class="bg-gray-100 text-gray-600 uppercase text-xs">
             <tr>
-              <th class="px-4 py-3 text-left">Category ID</th>
               <th class="px-4 py-3 text-left">Category Name</th>
               <th class="px-4 py-3 text-left">Actions</th>
             </tr>
@@ -190,7 +189,6 @@ $total_categories = $result->num_rows;
           <tbody class="divide-y divide-gray-200">
             <?php while ($row = $result->fetch_assoc()): ?>
               <tr class="hover:bg-gray-50 transition">
-                <td class="px-4 py-2"><?= htmlspecialchars($row['category_code']) ?></td>
                 <td class="px-4 py-2"><?= htmlspecialchars($row['category_name']) ?></td>
                 <td class="px-4 py-2 space-x-2">
                   <button 

@@ -65,8 +65,10 @@ $query = "
             SELECT GROUP_CONCAT(
                 CONCAT(
                     r.refund_id, '***',
-                    r.order_item_id, '***',
+                    COALESCE(r.order_item_id, 0), '***',
                     r.refund_amount, '***',
+                    -- CALCULATE QUANTITY: Refund Amount / Price from original order item
+                    FLOOR(r.refund_amount / COALESCE(NULLIF(oi2.price, 0), 1)), '***',
                     COALESCE(pr.product_name, 'Unknown Product'), '***',
                     COALESCE(sz2.size, '-'), '***',
                     COALESCE(cl2.color, '-'), '***',
@@ -382,15 +384,17 @@ $chartStmt->close();
             $refundStrings = explode('///', $row['refund_details']);
             foreach ($refundStrings as $rstr) {
                 $rparts = explode('***', $rstr);
-                if (count($rparts) >= 7) {
+                // We added quantity at index 3 in the SQL query
+                if (count($rparts) >= 8) {
                     $refundDetails[] = [
                         'refund_id' => $rparts[0],
                         'order_item_id' => $rparts[1],
                         'refund_amount' => $rparts[2],
-                        'product_name' => $rparts[3],
-                        'size' => $rparts[4],
-                        'color' => $rparts[5],
-                        'refunded_at' => $rparts[6]
+                        'refund_qty' => $rparts[3], // Extracted Qty
+                        'product_name' => $rparts[4],
+                        'size' => $rparts[5],
+                        'color' => $rparts[6],
+                        'refunded_at' => $rparts[7]
                     ];
                 }
             }
@@ -422,6 +426,10 @@ $chartStmt->close();
                         <?php foreach($refundDetails as $r): ?>
                             <div class="text-sm text-red-500 font-medium flex flex-wrap items-center gap-1 leading-tight">
                                 <span class="text-[10px] font-bold border border-red-200 bg-red-50 px-1 rounded">REFUND</span>
+                                
+                                <!-- Added Quantity Display Here -->
+                                <span class="font-bold text-red-700 bg-red-50 px-1">x<?= $r['refund_qty'] ?></span>
+
                                 <span><?= htmlspecialchars($r['product_name']) ?><?= ($r['size'] !== '-' || $r['color'] !== '-') ? ' (' . ($r['size'] !== '-' ? $r['size'] : '') . (($r['size'] !== '-' && $r['color'] !== '-') ? ', ' : '') . ($r['color'] !== '-' ? ucfirst($r['color']) : '') . ')' : '' ?></span>
                                 <span class="text-red-400">— ₱<?= number_format($r['refund_amount'], 2) ?></span>
                                 <span class="text-red-400 text-[10px] ml-2"><?= date('M d, Y h:i A', strtotime($r['refunded_at'])) ?></span>
