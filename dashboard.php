@@ -34,9 +34,7 @@ switch ($filter) {
         $chartGroupBy = "DATE(created_at)";
         break;
     case 'all':
-        // 1=1 selects everything
         $dateCondition = "1=1"; 
-        // Group by Year and Month (e.g., 2023-11)
         $chartGroupBy = "DATE_FORMAT(created_at, '%Y-%m')"; 
         break;
     case 'today':
@@ -46,13 +44,10 @@ switch ($filter) {
         break;
 }
 
-// ALIAS FIX: Create specific condition for JOIN queries where orders table is aliased as 'o'
 $dateConditionWithAlias = str_replace("created_at", "o.created_at", $dateCondition); 
 
-// 3. Basic Metrics (Orders, Sales, Revenue)
-$newOrders = 0;
-$totalSales = 0;
-$totalRevenue = 0;
+// 3. Basic Metrics
+$newOrders = 0; $totalSales = 0; $totalRevenue = 0;
 
 $ordersQuery = $conn->query("SELECT COUNT(*) AS new_orders FROM orders WHERE $dateCondition");
 if ($row = $ordersQuery->fetch_assoc()) $newOrders = $row['new_orders'];
@@ -63,77 +58,41 @@ if ($row = $salesQuery->fetch_assoc()) $totalSales = $row['total_sales'];
 $revenueQuery = $conn->query("SELECT SUM(total_amount) AS revenue FROM orders WHERE $dateCondition");
 if ($row = $revenueQuery->fetch_assoc()) $totalRevenue = $row['revenue'] ?? 0;
 
-// 4. Top 1 Product (For Dashboard Card)
+// 4. Top 1 Product
 $topProductName = "No Sales Yet";
 $topProductQty = 0;
-$topProductQuery = "
-    SELECT p.product_name, SUM(oi.qty) as total_qty
-    FROM order_items oi
-    JOIN orders o ON oi.order_id = o.order_id
-    JOIN products p ON oi.product_id = p.product_id
-    WHERE $dateConditionWithAlias
-    GROUP BY oi.product_id
-    ORDER BY total_qty DESC
-    LIMIT 1
-";
+$topProductQuery = "SELECT p.product_name, SUM(oi.qty) as total_qty FROM order_items oi JOIN orders o ON oi.order_id = o.order_id JOIN products p ON oi.product_id = p.product_id WHERE $dateConditionWithAlias GROUP BY oi.product_id ORDER BY total_qty DESC LIMIT 1";
 $topRes = $conn->query($topProductQuery);
 if ($topRes && $topRow = $topRes->fetch_assoc()) {
     $topProductName = $topRow['product_name'];
     $topProductQty = $topRow['total_qty'];
 }
 
-// 5. Peak Sales Time (For Display Text)
+// 5. Peak Sales Time
 $mostSalesDate = "N/A";
 $mostSalesCount = 0;
-$mostSalesQuery = "
-    SELECT $chartGroupBy as time_period, COUNT(*) as count
-    FROM orders
-    WHERE $dateCondition
-    GROUP BY $chartGroupBy
-    ORDER BY count DESC
-    LIMIT 1
-";
+$mostSalesQuery = "SELECT $chartGroupBy as time_period, COUNT(*) as count FROM orders WHERE $dateCondition GROUP BY $chartGroupBy ORDER BY count DESC LIMIT 1";
 $mostRes = $conn->query($mostSalesQuery);
-
 if ($mostRes && $mostRow = $mostRes->fetch_assoc()) {
     $rawTime = $mostRow['time_period'];
     $mostSalesCount = $mostRow['count'];
-    
-    if ($filter == 'today') {
-        // Example: 13 -> 1 PM
-        $mostSalesDate = date("g A", strtotime("$rawTime:00:00"));
-    } elseif ($filter == 'all') {
-        // Example: 2023-11 -> Nov 2023
-        $mostSalesDate = date("M Y", strtotime($rawTime . "-01"));
-    } else {
-        // Example: 2023-11-24 -> Nov 24
-        $mostSalesDate = date("M j", strtotime($rawTime));
-    }
+    if ($filter == 'today') { $mostSalesDate = date("g A", strtotime("$rawTime:00:00")); }
+    elseif ($filter == 'all') { $mostSalesDate = date("M Y", strtotime($rawTime . "-01")); }
+    else { $mostSalesDate = date("M j", strtotime($rawTime)); }
 }
 
-// 6. Chart 1 Data: Sales Trend
-$chartDataQuery = $conn->query("
-    SELECT $chartGroupBy AS period, COUNT(*) AS count 
-    FROM orders 
-    WHERE $dateCondition 
-    GROUP BY period 
-    ORDER BY period ASC
-");
+// 6. Chart 1 Data
+$chartDataQuery = $conn->query("SELECT $chartGroupBy AS period, COUNT(*) AS count FROM orders WHERE $dateCondition GROUP BY period ORDER BY period ASC");
 $rawChartData = [];
-while ($row = $chartDataQuery->fetch_assoc()) { 
-    $rawChartData[$row['period']] = $row['count']; 
-}
-$chartLabels = [];
-$chartValues = [];
+while ($row = $chartDataQuery->fetch_assoc()) { $rawChartData[$row['period']] = $row['count']; }
+$chartLabels = []; $chartValues = [];
 
 if ($filter == 'today') {
-    // 00 - 23 Hours
     for ($i = 0; $i <= 23; $i++) {
         $chartLabels[] = date("g A", strtotime("$i:00"));
         $chartValues[] = $rawChartData[$i] ?? 0;
     }
 } elseif ($filter == 'week') {
-    // Mon - Sun
     $start = strtotime('monday this week');
     for ($i = 0; $i < 7; $i++) {
         $d = date('Y-m-d', strtotime("+$i days", $start));
@@ -141,69 +100,33 @@ if ($filter == 'today') {
         $chartValues[] = $rawChartData[$d] ?? 0;
     }
 } elseif ($filter == 'month') {
-    // 1 - 31 Days
-    $daysInMonth = date('t');
-    $ym = date('Y-m');
+    $daysInMonth = date('t'); $ym = date('Y-m');
     for ($i = 1; $i <= $daysInMonth; $i++) {
         $d = sprintf("%s-%02d", $ym, $i);
         $chartLabels[] = $i;
         $chartValues[] = $rawChartData[$d] ?? 0;
     }
 } elseif ($filter == 'all') {
-    if (empty($rawChartData)) {
-        $chartLabels[] = "No Data";
-        $chartValues[] = 0;
-    } else {
-        foreach ($rawChartData as $ym => $count) {
-            $chartLabels[] = date("M Y", strtotime($ym . "-01"));
-            $chartValues[] = $count;
-        }
-    }
+    if (empty($rawChartData)) { $chartLabels[] = "No Data"; $chartValues[] = 0; }
+    else { foreach ($rawChartData as $ym => $count) { $chartLabels[] = date("M Y", strtotime($ym . "-01")); $chartValues[] = $count; } }
 }
 
-// 7. Chart 2 Data: Top 5 Products (For Bar Graph)
-$top5Labels = [];
-$top5Data = [];
-$top5Query = "
-    SELECT p.product_name, SUM(oi.qty) as total_qty 
-    FROM order_items oi 
-    JOIN orders o ON oi.order_id = o.order_id 
-    JOIN products p ON oi.product_id = p.product_id 
-    WHERE $dateConditionWithAlias 
-    GROUP BY oi.product_id 
-    ORDER BY total_qty DESC 
-    LIMIT 5
-";
+// 7. Chart 2 Data
+$top5Labels = []; $top5Data = [];
+$top5Query = "SELECT p.product_name, SUM(oi.qty) as total_qty FROM order_items oi JOIN orders o ON oi.order_id = o.order_id JOIN products p ON oi.product_id = p.product_id WHERE $dateConditionWithAlias GROUP BY oi.product_id ORDER BY total_qty DESC LIMIT 5";
 $top5Res = $conn->query($top5Query);
-while($row = $top5Res->fetch_assoc()){
-    $top5Labels[] = $row['product_name'];
-    $top5Data[] = $row['total_qty'];
-}
+while($row = $top5Res->fetch_assoc()){ $top5Labels[] = $row['product_name']; $top5Data[] = $row['total_qty']; }
 
-// 8. Recent Orders Data
-// Joined with customer table assuming customer_id exists
-$recentOrdersQuery = "
-    SELECT o.order_id, o.total_amount, o.order_status_id, o.created_at, 
-           CONCAT(c.first_name, ' ', c.last_name) as customer 
-    FROM orders o 
-    LEFT JOIN customers c ON o.customer_id = c.customer_id 
-    ORDER BY o.created_at DESC 
-    LIMIT 5
-";
+// 8. Recent Orders
+$recentOrdersQuery = "SELECT o.order_id, o.total_amount, o.order_status_id, o.created_at, CONCAT(c.first_name, ' ', c.last_name) as customer FROM orders o LEFT JOIN customers c ON o.customer_id = c.customer_id ORDER BY o.created_at DESC LIMIT 5";
 $recentOrdersRes = $conn->query($recentOrdersQuery);
 
 // 9. Notifications
-$newOrdersNotif = 0;
-$lowStockNotif = 0;
-
-// New Orders (Last 24 hours)
+$newOrdersNotif = 0; $lowStockNotif = 0;
 $notifRes = $conn->query("SELECT COUNT(*) as count FROM orders WHERE created_at >= DATE_SUB(NOW(), INTERVAL 1 DAY)");
 if ($row = $notifRes->fetch_assoc()) $newOrdersNotif = $row['count'];
-
-// Low Stock (Using stock table current_qty < 10)
 $stockRes = $conn->query("SELECT COUNT(*) as count FROM stock WHERE current_qty < 10");
 if ($row = $stockRes->fetch_assoc()) $lowStockNotif = $row['count'];
-
 $totalNotif = $newOrdersNotif + $lowStockNotif;
 ?>
 <!DOCTYPE html>
@@ -212,53 +135,114 @@ $totalNotif = $newOrdersNotif + $lowStockNotif;
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Dashboard | Seven Dwarfs Boutique</title>
+  
+  <!-- Libraries -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <!-- NProgress (Loading Bar) -->
+  <script src="https://unpkg.com/nprogress@0.2.0/nprogress.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/nprogress@0.2.0/nprogress.css" />
+
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  
   <style>
     :root { --rose: #e59ca8; --rose-hover: #d27b8c; }
     body { font-family: 'Poppins', sans-serif; background-color: #f9fafb; color: #374151; }
     .active { background-color: #fce8eb; color: var(--rose); font-weight: 600; border-radius: 0.5rem; }
+    
+    /* Hide scrollbar for sidebar */
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* 1. View Transitions API (For smooth page morphing) */
+    @view-transition {
+        navigation: auto;
+    }
+
+    /* 2. Fade In Animation (Fallback & Initial Load) */
+    @keyframes fadeInSlide {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in {
+        animation: fadeInSlide 0.4s ease-out;
+    }
+
+    /* 3. NProgress Customization */
+    #nprogress .bar { background: var(--rose) !important; height: 3px !important; }
+    #nprogress .peg { box-shadow: 0 0 10px var(--rose), 0 0 5px var(--rose) !important; }
+    #nprogress .spinner-icon { border-top-color: var(--rose) !important; border-left-color: var(--rose) !important; }
   </style>
 </head>
-<body class="text-sm">
-<div class="flex min-h-screen">
+
+<!-- Added 'animate-fade-in' class to body -->
+<body class="text-sm animate-fade-in">
+
+<!-- 
+    Updated x-data:
+    1. Checks localStorage for 'sidebarOpen'. 
+    2. Uses x-init to save changes to localStorage.
+-->
+<div class="flex min-h-screen" 
+     x-data="{ 
+        sidebarOpen: localStorage.getItem('sidebarOpen') === 'false' ? false : true, 
+        userMenu: false, 
+        productMenu: false 
+     }" 
+     x-init="$watch('sidebarOpen', val => localStorage.setItem('sidebarOpen', val))">
+  
   <!-- Sidebar -->
-  <aside class="w-64 bg-white shadow-md fixed top-0 left-0 h-screen z-30" x-data="{ userMenu: false, productMenu: false }">
-    <div class="p-5 border-b flex items-center space-x-3">
-        <img src="logo2.png" alt="Logo" class="rounded-full w-10 h-10" />
-        <h2 class="text-lg font-bold text-[var(--rose)]">SevenDwarfs</h2>
+  <aside 
+    class="bg-white shadow-md fixed top-0 left-0 h-screen z-30 transition-all duration-300 ease-in-out no-scrollbar overflow-y-auto overflow-x-hidden"
+    :class="sidebarOpen ? 'w-64' : 'w-20'"
+  >
+    <!-- Logo Section -->
+    <div class="p-5 border-b flex items-center h-20 transition-all duration-300" :class="sidebarOpen ? 'space-x-3' : 'justify-center pl-0'">
+        <img src="logo2.png" alt="Logo" class="rounded-full w-10 h-10 flex-shrink-0" />
+        <h2 class="text-lg font-bold text-[var(--rose)] whitespace-nowrap overflow-hidden transition-all duration-300" 
+            x-show="sidebarOpen" x-transition.opacity>SevenDwarfs</h2>
     </div>
-    <div class="p-5 border-b flex items-center space-x-3">
-      <img src="newID.jpg" alt="Admin" class="rounded-full w-10 h-10" />
-      <div>
+
+    <!-- Admin Profile Section -->
+    <div class="p-5 border-b flex items-center h-24 transition-all duration-300" :class="sidebarOpen ? 'space-x-3' : 'justify-center pl-0'">
+      <img src="newID.jpg" alt="Admin" class="rounded-full w-10 h-10 flex-shrink-0" />
+      <div x-show="sidebarOpen" x-transition.opacity class="whitespace-nowrap overflow-hidden">
         <p class="font-semibold text-gray-800"><?= htmlspecialchars($admin_name); ?></p>
         <p class="text-xs text-gray-500"><?= htmlspecialchars($admin_role); ?></p>
       </div>
     </div>
+
+    <!-- Navigation -->
     <nav class="p-4 space-y-1">
-      <a href="dashboard.php" class="block px-4 py-2 active flex items-center space-x-2 transition">
-        <i class="fas fa-tachometer-alt w-5 text-center"></i><span>Dashboard</span>
+      <a href="dashboard.php" class="block px-4 py-3 active flex items-center transition-all duration-300" :class="sidebarOpen ? 'space-x-2' : 'justify-center px-0'">
+        <i class="fas fa-tachometer-alt w-5 text-center text-lg"></i>
+        <span x-show="sidebarOpen" class="whitespace-nowrap">Dashboard</span>
       </a>
 
       <!-- User Management -->
       <div>
-        <button @click="userMenu = !userMenu" class="w-full text-left px-4 py-2 flex justify-between items-center hover:bg-gray-100 rounded-md transition">
-          <span><i class="fas fa-users-cog w-5 text-center mr-2"></i>User Management</span>
-          <i class="fas fa-chevron-down transition-transform duration-200" :class="{ 'rotate-180': userMenu }"></i>
+        <button @click="userMenu = !userMenu" class="w-full text-left px-4 py-3 flex items-center hover:bg-gray-100 rounded-md transition-all duration-300" :class="sidebarOpen ? 'justify-between' : 'justify-center px-0'">
+          <div class="flex items-center" :class="sidebarOpen ? 'space-x-2' : ''">
+            <i class="fas fa-users-cog w-5 text-center text-lg"></i>
+            <span x-show="sidebarOpen" class="whitespace-nowrap">User Management</span>
+          </div>
+          <i x-show="sidebarOpen" class="fas fa-chevron-down transition-transform duration-200" :class="{ 'rotate-180': userMenu }"></i>
         </button>
-        <ul x-show="userMenu" class="pl-8 text-sm text-gray-700 space-y-1 mt-1" style="display: none;">
-          <!-- Added icons here -->
+        <!-- Submenu -->
+        <ul x-show="userMenu" class="text-sm text-gray-700 space-y-1 mt-1 bg-gray-50 rounded-md overflow-hidden transition-all" :class="sidebarOpen ? 'pl-8' : 'pl-0 text-center'">
           <li>
-            <a href="manage_users.php" class="block py-1 hover:text-[var(--rose)] flex items-center">
-              <i class="fas fa-user w-4 mr-2"></i>Users
+            <a href="manage_users.php" class="block py-2 hover:text-[var(--rose)] flex items-center" :class="sidebarOpen ? '' : 'justify-center'" title="Users">
+              <i class="fas fa-user w-4 mr-2" :class="sidebarOpen ? '' : 'mr-0 text-md'"></i>
+              <span x-show="sidebarOpen">Users</span>
             </a>
           </li>
           <li>
-            <a href="manage_roles.php" class="block py-1 hover:text-[var(--rose)] flex items-center">
-              <i class="fas fa-user-tag w-4 mr-2"></i>Roles
+            <a href="manage_roles.php" class="block py-2 hover:text-[var(--rose)] flex items-center" :class="sidebarOpen ? '' : 'justify-center'" title="Roles">
+              <i class="fas fa-user-tag w-4 mr-2" :class="sidebarOpen ? '' : 'mr-0 text-md'"></i>
+              <span x-show="sidebarOpen">Roles</span>
             </a>
           </li>
         </ul>
@@ -266,59 +250,82 @@ $totalNotif = $newOrdersNotif + $lowStockNotif;
 
       <!-- Product Management -->
       <div>
-        <button @click="productMenu = !productMenu" class="w-full text-left px-4 py-2 flex justify-between items-center hover:bg-gray-100 rounded-md transition">
-          <span><i class="fas fa-box-open w-5 text-center mr-2"></i>Product Management</span>
-          <i class="fas fa-chevron-down transition-transform duration-200" :class="{ 'rotate-180': productMenu }"></i>
+        <button @click="productMenu = !productMenu" class="w-full text-left px-4 py-3 flex items-center hover:bg-gray-100 rounded-md transition-all duration-300" :class="sidebarOpen ? 'justify-between' : 'justify-center px-0'">
+          <div class="flex items-center" :class="sidebarOpen ? 'space-x-2' : ''">
+            <i class="fas fa-box-open w-5 text-center text-lg"></i>
+            <span x-show="sidebarOpen" class="whitespace-nowrap">Product Management</span>
+          </div>
+          <i x-show="sidebarOpen" class="fas fa-chevron-down transition-transform duration-200" :class="{ 'rotate-180': productMenu }"></i>
         </button>
-        <ul x-show="productMenu" class="pl-8 text-sm text-gray-700 space-y-1 mt-1" style="display: none;">
-          <!-- Added icons here -->
+        <ul x-show="productMenu" class="text-sm text-gray-700 space-y-1 mt-1 bg-gray-50 rounded-md overflow-hidden" :class="sidebarOpen ? 'pl-8' : 'pl-0 text-center'">
           <li>
-            <a href="categories.php" class="block py-1 hover:text-[var(--rose)] flex items-center">
-              <i class="fas fa-tags w-4 mr-2"></i>Category
+            <a href="categories.php" class="block py-2 hover:text-[var(--rose)] flex items-center" :class="sidebarOpen ? '' : 'justify-center'" title="Category">
+              <i class="fas fa-tags w-4 mr-2" :class="sidebarOpen ? '' : 'mr-0 text-md'"></i>
+              <span x-show="sidebarOpen">Category</span>
             </a>
           </li>
           <li>
-            <a href="products.php" class="block py-1 hover:text-[var(--rose)] flex items-center">
-              <i class="fas fa-box w-4 mr-2"></i>Product
+            <a href="products.php" class="block py-2 hover:text-[var(--rose)] flex items-center" :class="sidebarOpen ? '' : 'justify-center'" title="Product">
+              <i class="fas fa-box w-4 mr-2" :class="sidebarOpen ? '' : 'mr-0 text-md'"></i>
+              <span x-show="sidebarOpen">Product</span>
             </a>
           </li>
           <li>
-            <a href="inventory.php" class="block py-1 hover:text-[var(--rose)] flex items-center">
-              <i class="fas fa-warehouse w-4 mr-2"></i>Inventory
+            <a href="inventory.php" class="block py-2 hover:text-[var(--rose)] flex items-center" :class="sidebarOpen ? '' : 'justify-center'" title="Inventory">
+              <i class="fas fa-warehouse w-4 mr-2" :class="sidebarOpen ? '' : 'mr-0 text-md'"></i>
+              <span x-show="sidebarOpen">Inventory</span>
             </a>
           </li>
           <li>
-            <a href="stock_management.php" class="block py-1 hover:text-[var(--rose)] flex items-center">
-              <i class="fas fa-boxes w-4 mr-2"></i>Stock Management
+            <a href="stock_management.php" class="block py-2 hover:text-[var(--rose)] flex items-center" :class="sidebarOpen ? '' : 'justify-center'" title="Stock">
+              <i class="fas fa-boxes w-4 mr-2" :class="sidebarOpen ? '' : 'mr-0 text-md'"></i>
+              <span x-show="sidebarOpen">Stock In</span>
             </a>
           </li>
         </ul>
       </div>
 
-      <a href="orders.php" class="block px-4 py-2 hover:bg-gray-100 rounded-md transition">
-        <i class="fas fa-shopping-cart w-5 text-center mr-2"></i>Orders
+      <a href="orders.php" class="block px-4 py-3 hover:bg-gray-100 rounded-md transition-all duration-300 flex items-center" :class="sidebarOpen ? 'space-x-2' : 'justify-center px-0'">
+        <i class="fas fa-shopping-cart w-5 text-center text-lg"></i>
+        <span x-show="sidebarOpen" class="whitespace-nowrap">Orders</span>
       </a>
-      <a href="cashier_sales_report.php" class="block px-4 py-2 rounded-md hover:bg-gray-100 transition">
-        <i class="fas fa-chart-line w-5 text-center mr-2"></i>Cashier Sales
+      <a href="cashier_sales_report.php" class="block px-4 py-3 hover:bg-gray-100 rounded-md transition-all duration-300 flex items-center" :class="sidebarOpen ? 'space-x-2' : 'justify-center px-0'">
+        <i class="fas fa-chart-line w-5 text-center text-lg"></i>
+        <span x-show="sidebarOpen" class="whitespace-nowrap">Cashier Sales</span>
       </a>
-      <a href="suppliers.php" class="block px-4 py-2 hover:bg-gray-100 rounded-md transition">
-        <i class="fas fa-industry w-5 text-center mr-2"></i>Suppliers
+      <a href="suppliers.php" class="block px-4 py-3 hover:bg-gray-100 rounded-md transition-all duration-300 flex items-center" :class="sidebarOpen ? 'space-x-2' : 'justify-center px-0'">
+        <i class="fas fa-industry w-5 text-center text-lg"></i>
+        <span x-show="sidebarOpen" class="whitespace-nowrap">Suppliers</span>
       </a>
-      <a href="system_logs.php" class="block px-4 py-2 hover:bg-gray-100 rounded transition">
-        <i class="fas fa-file-alt w-5 text-center mr-2"></i>System Logs
+      <a href="system_logs.php" class="block px-4 py-3 hover:bg-gray-100 rounded-md transition-all duration-300 flex items-center" :class="sidebarOpen ? 'space-x-2' : 'justify-center px-0'">
+        <i class="fas fa-file-alt w-5 text-center text-lg"></i>
+        <span x-show="sidebarOpen" class="whitespace-nowrap">System Logs</span>
       </a>
-      <a href="logout.php" class="block px-4 py-2 text-red-600 hover:bg-red-50 rounded-md transition">
-        <i class="fas fa-sign-out-alt w-5 text-center mr-2"></i>Logout
+      <a href="logout.php" class="block px-4 py-3 text-red-600 hover:bg-red-50 rounded-md transition-all duration-300 flex items-center" :class="sidebarOpen ? 'space-x-2' : 'justify-center px-0'">
+        <i class="fas fa-sign-out-alt w-5 text-center text-lg"></i>
+        <span x-show="sidebarOpen" class="whitespace-nowrap">Logout</span>
       </a>
     </nav>
   </aside>
 
 <!-- Main Content -->
-  <main class="flex-1 flex flex-col ml-64 pt-20 bg-gray-50">
+  <!-- Dynamic Margin: ml-64 when open, ml-20 when closed -->
+  <main class="flex-1 flex flex-col pt-20 bg-gray-50 transition-all duration-300 ease-in-out" 
+        :class="sidebarOpen ? 'ml-64' : 'ml-20'">
     
     <!-- Header -->
-    <header class="bg-[var(--rose)] text-white p-4 flex justify-between items-center shadow-md rounded-bl-2xl fixed top-0 left-64 right-0 z-20">
-      <h1 class="text-xl font-semibold">Dashboard</h1>
+    <!-- Dynamic Left Position: left-64 or left-20 -->
+    <header class="bg-[var(--rose)] text-white p-4 flex justify-between items-center shadow-md rounded-bl-2xl fixed top-0 right-0 z-20 transition-all duration-300 ease-in-out"
+            :class="sidebarOpen ? 'left-64' : 'left-20'">
+      
+      <div class="flex items-center gap-4">
+          <!-- Toggle Button -->
+          <button @click="sidebarOpen = !sidebarOpen" class="text-white hover:bg-white/20 p-2 rounded-full transition focus:outline-none">
+             <i class="fas fa-bars text-xl"></i>
+          </button>
+          <h1 class="text-xl font-semibold">Dashboard</h1>
+      </div>
+
       <div class="flex items-center gap-4">
         <!-- Notification Bell -->
         <div class="relative" x-data="{ open: false }" @click.outside="open = false">
@@ -348,18 +355,17 @@ $totalNotif = $newOrdersNotif + $lowStockNotif;
     <!-- Filter Bar -->
     <section class="px-6 mt-6 flex flex-col sm:flex-row justify-between items-end gap-4">
         <form method="GET" id="filterForm">
-    <label class="text-xs font-bold text-gray-500 uppercase tracking-wider">Time Period</label>
-    <div class="relative">
-        <select name="filter" onchange="document.getElementById('filterForm').submit()" class="appearance-none border border-gray-300 bg-white pl-3 pr-8 py-2 rounded-lg shadow-sm focus:ring-2 focus:ring-[var(--rose)] focus:outline-none cursor-pointer text-sm">
-            <option value="today" <?= $filter === 'today' ? 'selected' : '' ?>>Today</option>
-            <option value="week" <?= $filter === 'week' ? 'selected' : '' ?>>This Week</option>
-            <option value="month" <?= $filter === 'month' ? 'selected' : '' ?>>This Month</option>
-            <!-- NEW OPTION ADDED HERE -->
-            <option value="all" <?= $filter === 'all' ? 'selected' : '' ?>>All Time</option>
-        </select>
-        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500"><i class="fas fa-chevron-down text-xs"></i></div>
-    </div>
-</form>
+            <label class="text-xs font-bold text-gray-500 uppercase tracking-wider">Time Period</label>
+            <div class="relative">
+                <select name="filter" onchange="document.getElementById('filterForm').submit()" class="appearance-none border border-gray-300 bg-white pl-3 pr-8 py-2 rounded-lg shadow-sm focus:ring-2 focus:ring-[var(--rose)] focus:outline-none cursor-pointer text-sm">
+                    <option value="today" <?= $filter === 'today' ? 'selected' : '' ?>>Today</option>
+                    <option value="week" <?= $filter === 'week' ? 'selected' : '' ?>>This Week</option>
+                    <option value="month" <?= $filter === 'month' ? 'selected' : '' ?>>This Month</option>
+                    <option value="all" <?= $filter === 'all' ? 'selected' : '' ?>>All Time</option>
+                </select>
+                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500"><i class="fas fa-chevron-down text-xs"></i></div>
+            </div>
+        </form>
         <div class="text-right">
              <span class="text-xs text-gray-500 block">Date: <?= date('M j, Y') ?></span>
              <?php if($mostSalesCount > 0): ?>
@@ -371,7 +377,7 @@ $totalNotif = $newOrdersNotif + $lowStockNotif;
     <!-- 1. KEY METRICS CARDS -->
     <section class="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
       
-      <!-- Card 1: Revenue (New Feature) -->
+      <!-- Card 1: Revenue -->
       <div class="bg-white p-5 rounded-xl shadow-sm border-l-4 border-green-500 flex items-center justify-between hover:shadow-md transition">
          <div>
             <p class="text-xs text-gray-500 uppercase font-bold">Total Revenue</p>
@@ -398,32 +404,26 @@ $totalNotif = $newOrdersNotif + $lowStockNotif;
          <div class="bg-blue-100 p-3 rounded-full text-blue-600"><i class="fas fa-receipt"></i></div>
       </div>
 
-      <!-- Card 4: Top Product (Clickable) -->
+      <!-- Card 4: Top Product -->
       <a href="#top-products-modal" id="topProductCard" class="bg-gradient-to-r from-amber-500 to-orange-500 p-5 rounded-xl shadow-sm text-white flex flex-col justify-between hover:scale-[1.02] transition cursor-pointer relative overflow-hidden group">
-    <!-- Icon in background -->
-    <div class="absolute right-0 top-0 p-4 opacity-20 transform group-hover:rotate-12 transition">
-        <i class="fas fa-crown text-5xl"></i>
-    </div>
-    
-    <!-- Label -->
-    <p class="text-xs uppercase font-bold text-amber-100 opacity-90">Top Item (<?= ucfirst($filter) ?>)</p>
-    
-    <!-- Content -->
-    <div class="mt-2 relative z-10">
-        <?php if($topProductQty > 0): ?>
-            <p class="text-lg font-bold leading-tight truncate"><?= htmlspecialchars($topProductName) ?></p>
-            <p class="text-sm mt-1 font-medium opacity-90"><?= $topProductQty ?> Sold</p>
-        <?php else: ?>
-            <p class="text-lg font-bold">No Sales</p>
-        <?php endif; ?>
-    </div>
-</a>
+        <div class="absolute right-0 top-0 p-4 opacity-20 transform group-hover:rotate-12 transition">
+            <i class="fas fa-crown text-5xl"></i>
+        </div>
+        <p class="text-xs uppercase font-bold text-amber-100 opacity-90">Top Item (<?= ucfirst($filter) ?>)</p>
+        <div class="mt-2 relative z-10">
+            <?php if($topProductQty > 0): ?>
+                <p class="text-lg font-bold leading-tight truncate"><?= htmlspecialchars($topProductName) ?></p>
+                <p class="text-sm mt-1 font-medium opacity-90"><?= $topProductQty ?> Sold</p>
+            <?php else: ?>
+                <p class="text-lg font-bold">No Sales</p>
+            <?php endif; ?>
+        </div>
+      </a>
     </section>
 
-    <!-- 2. CHARTS SECTION (Sales Trend + Top Products Graph) -->
+    <!-- 2. CHARTS SECTION -->
     <section class="px-6 grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-        
-        <!-- Chart 1: Sales Trend (Line) -->
+        <!-- Chart 1: Sales Trend -->
         <div class="bg-white p-5 rounded-xl shadow-sm lg:col-span-2">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="font-bold text-gray-700">Sales Trends</h3>
@@ -436,18 +436,16 @@ $totalNotif = $newOrdersNotif + $lowStockNotif;
                 <canvas id="ordersChart"></canvas>
             </div>
         </div>
-
-        <!-- Chart 2: Top 5 Products (New Horizontal Bar Chart) -->
+        <!-- Chart 2: Top 5 Products -->
         <div class="bg-white p-5 rounded-xl shadow-sm">
             <h3 class="font-bold text-gray-700 mb-4">Top 5 Products</h3>
             <div class="h-64 w-full">
                 <canvas id="topProductsChart"></canvas>
             </div>
         </div>
-
     </section>
 
-    <!-- 3. RECENT ORDERS TABLE (New Feature) -->
+    <!-- 3. RECENT ORDERS TABLE -->
     <section class="px-6 mb-10">
         <div class="bg-white rounded-xl shadow-sm overflow-hidden">
             <div class="p-5 border-b flex justify-between items-center">
@@ -466,11 +464,17 @@ $totalNotif = $newOrdersNotif + $lowStockNotif;
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100">
-                        <?php 
-                        // Ensure the query pointer is reset or re-queried if needed, 
-                        // but based on top logic, $recentOrdersRes is ready to iterate
-                        if ($recentOrdersRes->num_rows > 0):
+                        <?php if ($recentOrdersRes->num_rows > 0):
                             while($order = $recentOrdersRes->fetch_assoc()): 
+                                $status_id = $order['order_status_id'];
+                                $status_name = 'Unknown';
+                                $bgClass = 'bg-gray-100 text-gray-600';
+                                switch ($status_id) {
+                                    case 0: $status_name = 'Completed'; $bgClass = 'bg-green-100 text-green-700'; break;
+                                    case 2: $status_name = 'Cancelled'; $bgClass = 'bg-red-100 text-red-700'; break;
+                                    case 4: $status_name = 'Refunded'; $bgClass = 'bg-orange-100 text-orange-700'; break;
+                                    default: $status_name = 'Status #' . $status_id;
+                                }
                         ?>
                         <tr class="hover:bg-gray-50 transition">
                             <td class="px-5 py-3 font-medium">#<?= $order['order_id'] ?></td>
@@ -478,36 +482,7 @@ $totalNotif = $newOrdersNotif + $lowStockNotif;
                             <td class="px-5 py-3 text-xs text-gray-500"><?= date('M j, H:i', strtotime($order['created_at'])) ?></td>
                             <td class="px-5 py-3 font-semibold text-gray-700">₱<?= number_format($order['total_amount'], 2) ?></td>
                             <td class="px-5 py-3">
-                                <!-- Basic logic to colorize status -->
-                              <?php 
-                                // 1. GET THE ID
-                                $status_id = $order['order_status_id'];
-                                
-                                $status_name = 'Unknown';
-                                $bgClass = 'bg-gray-100 text-gray-600';
-
-                                switch ($status_id) {
-                                    case 0:
-                                        $status_name = 'Completed';
-                                        $bgClass = 'bg-green-100 text-green-700';
-                                        break;
-                                    case 2:
-                                        $status_name = 'Cancelled';
-                                        $bgClass = 'bg-red-100 text-red-700';
-                                        break;
-                                    case 4:
-                                        $status_name = 'Refunded';
-                                        $bgClass = 'bg-orange-100 text-orange-700';
-                                        break;
-                                    default:
-                                        $status_name = 'Status #' . $status_id;
-                                }
-                            ?>
-
-                            <!-- 3. OUTPUT THE NAME (Apply the class and echo the name) -->
-                            <span class="px-3 py-1 rounded-full text-xs font-bold <?= $bgClass ?>">
-                                <?= htmlspecialchars($status_name) ?>
-                            </span>
+                                <span class="px-3 py-1 rounded-full text-xs font-bold <?= $bgClass ?>"><?= htmlspecialchars($status_name) ?></span>
                             </td>
                         </tr>
                         <?php endwhile; else: ?>
@@ -521,7 +496,7 @@ $totalNotif = $newOrdersNotif + $lowStockNotif;
 
   </main>
 
-  <!-- Modal for Top Products (Detailed List) -->
+  <!-- Modal for Top Products -->
   <div id="top-products-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden backdrop-blur-sm">
     <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg relative animate-[fadeIn_0.3s_ease-out]">
       <button id="closeTopProducts" class="absolute top-3 right-3 text-gray-400 hover:text-red-500 text-2xl">&times;</button>
@@ -536,17 +511,7 @@ $totalNotif = $newOrdersNotif + $lowStockNotif;
             </thead>
             <tbody>
               <?php
-                // Re-run query for list view in modal
-                $topList = $conn->query("
-                  SELECT p.product_name, SUM(oi.qty) as total_qty
-                  FROM order_items oi
-                  JOIN orders o ON oi.order_id = o.order_id
-                  JOIN products p ON oi.product_id = p.product_id
-                  WHERE $dateConditionWithAlias
-                  GROUP BY oi.product_id
-                  ORDER BY total_qty DESC
-                  LIMIT 10
-                ");
+                $topList = $conn->query("SELECT p.product_name, SUM(oi.qty) as total_qty FROM order_items oi JOIN orders o ON oi.order_id = o.order_id JOIN products p ON oi.product_id = p.product_id WHERE $dateConditionWithAlias GROUP BY oi.product_id ORDER BY total_qty DESC LIMIT 10");
                 if ($topList && $topList->num_rows > 0):
                     $rank = 1;
                     while ($row = $topList->fetch_assoc()):
@@ -576,10 +541,10 @@ const dataOrders = <?= json_encode($chartValues) ?>;
 const topProdLabels = <?= json_encode($top5Labels) ?>;
 const topProdData = <?= json_encode($top5Data) ?>;
 
-// --- CHART 1: SALES TREND (Existing) ---
+// --- CHART 1: SALES TREND ---
 const ctx1 = document.getElementById('ordersChart').getContext('2d');
 let trendGradient = ctx1.createLinearGradient(0, 0, 0, 400);
-trendGradient.addColorStop(0, 'rgba(229, 156, 168, 0.5)'); // rose color
+trendGradient.addColorStop(0, 'rgba(229, 156, 168, 0.5)');
 trendGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
 
 let trendChart = new Chart(ctx1, {
@@ -608,13 +573,12 @@ let trendChart = new Chart(ctx1, {
     }
 });
 
-// Toggle Line/Bar for Trend Chart
 document.getElementById('trendChartType').addEventListener('change', function() {
     trendChart.config.type = this.value;
     trendChart.update();
 });
 
-// --- CHART 2: TOP PRODUCTS (New Horizontal Bar) ---
+// --- CHART 2: TOP PRODUCTS ---
 const ctx2 = document.getElementById('topProductsChart').getContext('2d');
 new Chart(ctx2, {
     type: 'bar', 
@@ -623,19 +587,13 @@ new Chart(ctx2, {
         datasets: [{
             label: 'Sold',
             data: topProdData,
-            backgroundColor: [
-                '#e7a753ff', // Gold
-                '#C0C0C0', // Silver
-                '#599ed6ff', // Bronze
-                '#e59ca8', // Rose
-                '#e59ca8'
-            ],
+            backgroundColor: ['#e7a753ff', '#C0C0C0', '#599ed6ff', '#e59ca8', '#e59ca8'],
             borderRadius: 4,
             barThickness: 20
         }]
     },
     options: {
-        indexAxis: 'y', // Makes it horizontal
+        indexAxis: 'y',
         responsive: true,
         maintainAspectRatio: false,
         plugins: { legend: { display: false } },
@@ -656,6 +614,23 @@ if (topProductCard && topProductsModal) {
     closeTopProducts.addEventListener('click', () => topProductsModal.classList.add('hidden'));
     topProductsModal.addEventListener('click', (e) => { if(e.target === topProductsModal) topProductsModal.classList.add('hidden'); });
 }
+
+// --- NPROGRESS LOGIC (LOADING BAR) ---
+document.addEventListener('DOMContentLoaded', () => {
+    // Start bar on link clicks
+    document.querySelectorAll('a').forEach(link => {
+        link.addEventListener('click', (e) => {
+            // Avoid triggers on hash links (#) or new tabs
+            if(link.getAttribute('href').startsWith('#') || link.target === '_blank') return;
+            NProgress.start();
+        });
+    });
+
+    // Finish bar when page is fully loaded
+    window.addEventListener('load', () => NProgress.done());
+    // Failsafe if back button is used
+    window.addEventListener('pageshow', () => NProgress.done());
+});
 </script>
 </body>
 </html>
