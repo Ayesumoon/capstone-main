@@ -2,6 +2,12 @@
 session_start();
 require 'conn.php'; // Database connection
 
+// 🔐 Ensure logged-in admin
+if (!isset($_SESSION['admin_id'])) {
+    header("Location: login.php");
+    exit;
+}
+
 $admin_id   = $_SESSION['admin_id'] ?? null;
 $admin_name = "Admin";
 $admin_role = "Admin";
@@ -122,6 +128,9 @@ while ($row = $result->fetch_assoc()) {
 
 $stmt->close();
 $conn->close();
+
+// Notifications (Mock logic for consistency)
+$newOrdersNotif = 0; $lowStockNotif = 0; $totalNotif = 0;
 ?>
 
 <!DOCTYPE html>
@@ -130,253 +139,369 @@ $conn->close();
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Products | Seven Dwarfs Boutique</title>
+  
+  <!-- Libraries -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+  
+  <!-- NProgress (Loading Bar) -->
+  <script src="https://unpkg.com/nprogress@0.2.0/nprogress.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/nprogress@0.2.0/nprogress.css" />
+
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" />
 
   <style>
-    :root {
-      --rose: #e5a5b2;
-      --rose-hover: #d48b98;
+    :root { --rose: #e59ca8; --rose-hover: #d27b8c; }
+    body { font-family: 'Poppins', sans-serif; background-color: #f9fafb; color: #374151; }
+    [x-cloak] { display: none !important; }
+
+    /* Custom scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-thumb { background: var(--rose); border-radius: 3px; }
+    
+    /* Sidebar specific */
+    .active { background-color: #fce8eb; color: var(--rose); font-weight: 600; border-radius: 0.5rem; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* 1. View Transitions API */
+    @view-transition { navigation: auto; }
+
+    /* 2. Fade In Animation */
+    @keyframes fadeInSlide {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
     }
-    body {
-      font-family: 'Poppins', sans-serif;
-      background-color: #f9fafb;
-      color: #374151;
-    }
-    .active-link {
-      background-color: #fef3f5;
-      color: var(--rose);
-      font-weight: 600;
-      border-radius: 0.5rem;
-    }
-    .sidebar {
-      box-shadow: 2px 0 6px rgba(0,0,0,0.05);
-    }
+    .animate-fade-in { animation: fadeInSlide 0.4s ease-out; }
+
+    /* 3. NProgress Customization */
+    #nprogress .bar { background: var(--rose) !important; height: 3px !important; }
+    #nprogress .peg { box-shadow: 0 0 10px var(--rose), 0 0 5px var(--rose) !important; }
   </style>
 </head>
 
-<body class="font-poppins text-sm">
-<div class="flex min-h-screen">
+<body class="text-sm animate-fade-in">
 
-  <!-- 🧭 Sidebar -->
-  <aside class="w-64 bg-white sidebar" x-data="{ userMenu: false, productMenu: true }">
-    <div class="p-5 border-b">
-      <div class="flex items-center space-x-3">
-        <img src="logo2.png" alt="Logo" class="rounded-full w-10 h-10" />
-        <h2 class="text-lg font-bold text-[var(--rose)]">SevenDwarfs</h2>
-      </div>
+<!-- Global State Wrapper -->
+<div class="flex min-h-screen" 
+     x-data="{ 
+        sidebarOpen: localStorage.getItem('sidebarOpen') === 'false' ? false : true, 
+        userMenu: false, 
+        productMenu: true
+     }" 
+     x-init="$watch('sidebarOpen', val => localStorage.setItem('sidebarOpen', val))">
+
+  <!-- 🌸 Sidebar (Dynamic Width) -->
+  <aside 
+    class="bg-white shadow-md fixed top-0 left-0 h-screen z-30 transition-all duration-300 ease-in-out no-scrollbar overflow-y-auto overflow-x-hidden"
+    :class="sidebarOpen ? 'w-64' : 'w-20'"
+  >
+    <!-- Logo -->
+    <div class="p-5 border-b flex items-center h-20 transition-all duration-300" :class="sidebarOpen ? 'space-x-3' : 'justify-center pl-0'">
+        <img src="logo2.png" alt="Logo" class="rounded-full w-10 h-10 flex-shrink-0" />
+        <h2 class="text-lg font-bold text-[var(--rose)] whitespace-nowrap overflow-hidden transition-all duration-300" 
+            x-show="sidebarOpen" x-transition.opacity>SevenDwarfs</h2>
     </div>
 
-    <div class="p-5 border-b flex items-center space-x-3">
-      <img src="newID.jpg" alt="Admin" class="rounded-full w-10 h-10" />
-      <div>
+    <!-- Admin Profile -->
+    <div class="p-5 border-b flex items-center h-24 transition-all duration-300" :class="sidebarOpen ? 'space-x-3' : 'justify-center pl-0'">
+      <img src="newID.jpg" alt="Admin" class="rounded-full w-10 h-10 flex-shrink-0" />
+      <div x-show="sidebarOpen" x-transition.opacity class="whitespace-nowrap overflow-hidden">
         <p class="font-semibold text-gray-800"><?= htmlspecialchars($admin_name); ?></p>
         <p class="text-xs text-gray-500"><?= htmlspecialchars($admin_role); ?></p>
       </div>
     </div>
 
     <!-- Navigation -->
-    <nav class="p-4 space-y-1" x-data="{ open: true }">
-      <a href="dashboard.php" class="block px-4 py-2 hover:bg-gray-100 rounded-md transition">
-        <i class="fas fa-tachometer-alt mr-2"></i> Dashboard
+    <nav class="p-4 space-y-1">
+      <a href="dashboard.php" class="block px-4 py-3 hover:bg-gray-100 rounded-md transition-all duration-300 flex items-center" :class="sidebarOpen ? 'space-x-2' : 'justify-center px-0'">
+        <i class="fas fa-tachometer-alt w-5 text-center text-lg"></i>
+        <span x-show="sidebarOpen" class="whitespace-nowrap">Dashboard</span>
       </a>
 
+      <!-- User Management -->
       <div>
-        <button @click="userMenu = !userMenu" 
-          class="w-full text-left px-4 py-2 flex justify-between items-center hover:bg-gray-100 rounded-md transition">
-          <span><i class="fas fa-users-cog mr-2"></i> User Management</span>
-          <i class="fas fa-chevron-down transition-transform duration-200" :class="{ 'rotate-180': userMenu }"></i>
+        <button @click="userMenu = !userMenu" class="w-full text-left px-4 py-3 flex items-center hover:bg-gray-100 rounded-md transition-all duration-300" :class="sidebarOpen ? 'justify-between' : 'justify-center px-0'">
+          <div class="flex items-center" :class="sidebarOpen ? 'space-x-2' : ''">
+            <i class="fas fa-users-cog w-5 text-center text-lg"></i>
+            <span x-show="sidebarOpen" class="whitespace-nowrap">User Management</span>
+          </div>
+          <i x-show="sidebarOpen" class="fas fa-chevron-down transition-transform duration-200" :class="{ 'rotate-180': userMenu }"></i>
         </button>
-        <div x-show="userMenu" x-transition class="pl-8 space-y-1 mt-1">
-          <a href="manage_users.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-user mr-2"></i>Users</a>
-          <a href="manage_roles.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-id-badge mr-2"></i>Roles</a>
-        </div>
+        <!-- Submenu -->
+        <ul x-show="userMenu" class="text-sm text-gray-700 space-y-1 mt-1 bg-gray-50 rounded-md overflow-hidden transition-all" :class="sidebarOpen ? 'pl-8' : 'pl-0 text-center'">
+          <li>
+            <a href="manage_users.php" class="block py-2 hover:text-[var(--rose)] flex items-center" :class="sidebarOpen ? '' : 'justify-center'" title="Users">
+              <i class="fas fa-user w-4 mr-2" :class="sidebarOpen ? '' : 'mr-0 text-md'"></i>
+              <span x-show="sidebarOpen">Users</span>
+            </a>
+          </li>
+          <li>
+            <a href="manage_roles.php" class="block py-2 hover:text-[var(--rose)] flex items-center" :class="sidebarOpen ? '' : 'justify-center'" title="Roles">
+              <i class="fas fa-user-tag w-4 mr-2" :class="sidebarOpen ? '' : 'mr-0 text-md'"></i>
+              <span x-show="sidebarOpen">Roles</span>
+            </a>
+          </li>
+        </ul>
       </div>
 
+      <!-- Product Management (Active) -->
       <div>
-        <button @click="productMenu = !productMenu" 
-          class="w-full text-left px-4 py-2 flex justify-between items-center hover:bg-gray-100 rounded-md transition">
-          <span><i class="fas fa-box-open mr-2"></i> Product Management</span>
-          <i class="fas fa-chevron-down transition-transform duration-200" :class="{ 'rotate-180': productMenu }"></i>
+        <button @click="productMenu = !productMenu" class="w-full text-left px-4 py-3 flex items-center hover:bg-gray-100 rounded-md transition-all duration-300" :class="sidebarOpen ? 'justify-between' : 'justify-center px-0'">
+          <div class="flex items-center" :class="sidebarOpen ? 'space-x-2' : ''">
+            <i class="fas fa-box-open w-5 text-center text-lg text-[var(--rose)]"></i>
+            <span x-show="sidebarOpen" class="whitespace-nowrap text-[var(--rose)] font-semibold">Product Management</span>
+          </div>
+          <i x-show="sidebarOpen" class="fas fa-chevron-down transition-transform duration-200" :class="{ 'rotate-180': productMenu }"></i>
         </button>
-        <div x-show="productMenu" x-transition class="pl-8 space-y-1 mt-1">
-          <a href="categories.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-tags mr-2"></i> Category</a>
-          <a href="products.php" class="block py-1 active-link"><i class="fas fa-box mr-2"></i> Products</a>
-          <a href="inventory.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-warehouse mr-2"></i> Inventory</a>
-          <a href="stock_management.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-boxes mr-2"></i> Stock Management</a>
-        </div>
+        <ul x-show="productMenu" class="text-sm text-gray-700 space-y-1 mt-1 bg-gray-50 rounded-md overflow-hidden" :class="sidebarOpen ? 'pl-8' : 'pl-0 text-center'">
+          <li>
+            <a href="categories.php" class="block py-2 hover:text-[var(--rose)] flex items-center" :class="sidebarOpen ? '' : 'justify-center'" title="Category">
+              <i class="fas fa-tags w-4 mr-2" :class="sidebarOpen ? '' : 'mr-0 text-md'"></i>
+              <span x-show="sidebarOpen">Category</span>
+            </a>
+          </li>
+          <li>
+            <a href="products.php" class="block py-2 active flex items-center" :class="sidebarOpen ? '' : 'justify-center'" title="Product">
+              <i class="fas fa-box w-4 mr-2" :class="sidebarOpen ? '' : 'mr-0 text-md'"></i>
+              <span x-show="sidebarOpen">Product</span>
+            </a>
+          </li>
+          <li>
+            <a href="inventory.php" class="block py-2 hover:text-[var(--rose)] flex items-center" :class="sidebarOpen ? '' : 'justify-center'" title="Inventory">
+              <i class="fas fa-warehouse w-4 mr-2" :class="sidebarOpen ? '' : 'mr-0 text-md'"></i>
+              <span x-show="sidebarOpen">Inventory</span>
+            </a>
+          </li>
+          <li>
+            <a href="stock_management.php" class="block py-2 hover:text-[var(--rose)] flex items-center" :class="sidebarOpen ? '' : 'justify-center'" title="Stock">
+              <i class="fas fa-boxes w-4 mr-2" :class="sidebarOpen ? '' : 'mr-0 text-md'"></i>
+              <span x-show="sidebarOpen">Stock In</span>
+            </a>
+          </li>
+        </ul>
       </div>
 
-      <a href="orders.php" class="block px-4 py-2 hover:bg-gray-100 rounded-md transition"><i class="fas fa-shopping-cart mr-2"></i> Orders</a>
-      <a href="cashier_sales_report.php" class="block px-4 py-2 rounded-md hover:bg-gray-100 transitio"><i class="fas fa-chart-line mr-2"></i>Cashier Sales</a>
-      <a href="suppliers.php" class="block px-4 py-2 hover:bg-gray-100 rounded-md transition"><i class="fas fa-industry mr-2"></i> Suppliers</a>
-      <a href="system_logs.php" class="block px-4 py-2 hover:bg-gray-100 rounded transition"><i class="fas fa-file-alt mr-2"></i>System Logs</a>
-      <a href="logout.php" class="block px-4 py-2 text-red-600 hover:bg-red-50 rounded-md transition"><i class="fas fa-sign-out-alt mr-2"></i> Logout</a>
+      <a href="orders.php" class="block px-4 py-3 hover:bg-gray-100 rounded-md transition-all duration-300 flex items-center" :class="sidebarOpen ? 'space-x-2' : 'justify-center px-0'">
+        <i class="fas fa-shopping-cart w-5 text-center text-lg"></i>
+        <span x-show="sidebarOpen" class="whitespace-nowrap">Orders</span>
+      </a>
+      <a href="cashier_sales_report.php" class="block px-4 py-3 hover:bg-gray-100 rounded-md transition-all duration-300 flex items-center" :class="sidebarOpen ? 'space-x-2' : 'justify-center px-0'">
+        <i class="fas fa-chart-line w-5 text-center text-lg"></i>
+        <span x-show="sidebarOpen" class="whitespace-nowrap">Cashier Sales</span>
+      </a>
+      <a href="suppliers.php" class="block px-4 py-3 hover:bg-gray-100 rounded-md transition-all duration-300 flex items-center" :class="sidebarOpen ? 'space-x-2' : 'justify-center px-0'">
+        <i class="fas fa-industry w-5 text-center text-lg"></i>
+        <span x-show="sidebarOpen" class="whitespace-nowrap">Suppliers</span>
+      </a>
+      <a href="system_logs.php" class="block px-4 py-3 hover:bg-gray-100 rounded-md transition-all duration-300 flex items-center" :class="sidebarOpen ? 'space-x-2' : 'justify-center px-0'">
+        <i class="fas fa-file-alt w-5 text-center text-lg"></i>
+        <span x-show="sidebarOpen" class="whitespace-nowrap">System Logs</span>
+      </a>
+      <a href="logout.php" class="block px-4 py-3 text-red-600 hover:bg-red-50 rounded-md transition-all duration-300 flex items-center" :class="sidebarOpen ? 'space-x-2' : 'justify-center px-0'">
+        <i class="fas fa-sign-out-alt w-5 text-center text-lg"></i>
+        <span x-show="sidebarOpen" class="whitespace-nowrap">Logout</span>
+      </a>
     </nav>
   </aside>
 
-  <!-- 🌸 Main Content -->
-  <main class="flex-1 p-8 bg-gray-50">
-    <!-- Header -->
-    <div class="bg-[var(--rose)] text-white p-5 rounded-t-2xl shadow-sm flex justify-between items-center">
-      <h1 class="text-2xl font-semibold">🛍️ Products</h1>
-    </div>
-
-    <!-- Content Container -->
-    <section class="bg-white p-6 rounded-b-2xl shadow space-y-6">
+  <!-- 🌸 Main Content (Dynamic Margin) -->
+  <main class="flex-1 flex flex-col pt-20 bg-gray-50 transition-all duration-300 ease-in-out" 
+        :class="sidebarOpen ? 'ml-64' : 'ml-20'">
+    
+    <!-- Header (Dynamic Position) -->
+    <header class="bg-[var(--rose)] text-white p-4 flex justify-between items-center shadow-md rounded-bl-2xl fixed top-0 right-0 z-20 transition-all duration-300 ease-in-out"
+            :class="sidebarOpen ? 'left-64' : 'left-20'">
       
-      <!-- Filters and Add Button -->
-      <div class="flex flex-wrap justify-between items-center gap-4">
-        <div class="flex gap-4 items-center">
-            <form method="GET" id="categoryForm" class="flex items-center gap-2">
-              <label class="text-gray-700 font-medium">Category:</label>
-              <select name="category" onchange="document.getElementById('categoryForm').submit()"
-                class="p-2 border rounded-lg focus:ring-2 focus:ring-[var(--rose)]">
-                <option value="all">All</option>
-                <?php foreach ($categories as $cat): ?>
-                  <option value="<?= $cat['category_id']; ?>" <?= ($selectedCategory == $cat['category_id']) ? 'selected' : ''; ?>>
-                    <?= htmlspecialchars($cat['category_name']); ?>
-                  </option>
-                <?php endforeach; ?>
-              </select>
-            </form>
+      <div class="flex items-center gap-4">
+          <!-- Toggle Button -->
+          <button @click="sidebarOpen = !sidebarOpen" class="text-white hover:bg-white/20 p-2 rounded-full transition focus:outline-none">
+             <i class="fas fa-bars text-xl"></i>
+          </button>
+          <h1 class="text-xl font-semibold">Products</h1>
+      </div>
 
-            <!-- Live Search Input -->
-            <div class="flex items-center gap-2">
-              <input type="text" id="searchBox" placeholder="Search product..." class="p-2 border rounded-lg w-64 focus:ring-2 focus:ring-[var(--rose)]">
-              <input type="hidden" id="selectedCategory" value="<?= htmlspecialchars($selectedCategory) ?>">
+      <div class="flex items-center gap-4">
+        
+      </div>
+    </header>
+
+    <!-- 📄 Page Content -->
+    <section class="p-6">
+        
+        <!-- The White Card -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-6">
+            
+            <!-- Filters and Add Button -->
+            <div class="flex flex-wrap justify-between items-center gap-4">
+                <div class="flex gap-4 items-center flex-wrap">
+                    <!-- Category Filter -->
+                    <form method="GET" id="categoryForm" class="flex items-center gap-2">
+                      <label class="text-gray-700 font-medium text-xs uppercase tracking-wide">Category:</label>
+                      <select name="category" onchange="document.getElementById('categoryForm').submit()"
+                        class="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--rose)] cursor-pointer bg-white">
+                        <option value="all">All</option>
+                        <?php foreach ($categories as $cat): ?>
+                          <option value="<?= $cat['category_id']; ?>" <?= ($selectedCategory == $cat['category_id']) ? 'selected' : ''; ?>>
+                            <?= htmlspecialchars($cat['category_name']); ?>
+                          </option>
+                        <?php endforeach; ?>
+                      </select>
+                    </form>
+
+                    <!-- Live Search Input -->
+                    <div class="flex items-center relative">
+                      <i class="fas fa-search absolute left-3 text-gray-400"></i>
+                      <input type="text" id="searchBox" placeholder="Search product..." class="pl-10 pr-4 py-2 border rounded-lg w-64 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--rose)]">
+                      <input type="hidden" id="selectedCategory" value="<?= htmlspecialchars($selectedCategory) ?>">
+                    </div>
+                </div>
+
+                <a href="add_product.php" 
+                   class="bg-[var(--rose)] hover:bg-[var(--rose-hover)] text-white text-sm font-medium rounded-lg px-4 py-2 shadow-sm transition flex items-center gap-2">
+                  <i class="fas fa-plus"></i> Add Product
+                </a>
             </div>
-        </div>
 
-        <a href="add_product.php" 
-           class="flex items-center gap-2 bg-[var(--rose)] hover:bg-[var(--rose-hover)] text-white text-sm font-medium rounded-lg px-4 py-2 shadow transition">
-          <i class="fas fa-plus"></i> Add Product
-        </a>
-      </div>
+            <!-- Product Table -->
+            <div class="overflow-x-auto rounded-lg border border-gray-100">
+                <table class="w-full text-left text-sm text-gray-600">
+                    <thead class="bg-gray-50 text-gray-500 uppercase font-bold text-xs">
+                        <tr>
+                            <th class="px-6 py-3">Images</th>
+                            <th class="px-6 py-3">Product Info</th>
+                            <th class="px-6 py-3">Price</th>
+                            <th class="px-6 py-3">Category</th>
+                            <th class="px-6 py-3">Supplier</th>
+                            <th class="px-6 py-3 text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100 text-gray-700">
+                        <?php if (!empty($products)): ?>
+                          <?php foreach ($products as $product): ?>
+                            <tr class="hover:bg-gray-50 transition">
+                              <!-- Images -->
+                              <td class="px-6 py-4">
+                                <div class="flex flex-wrap gap-2" x-data="{ open: false, imageSrc: '' }">
+                                  <?php foreach ($product['display_images'] as $img): ?>
+                                    <img src="<?= $img ?>" 
+                                         alt="Product Image" 
+                                         class="w-12 h-12 rounded-lg border shadow-sm object-cover cursor-pointer hover:scale-105 transition-transform duration-200"
+                                         @click="imageSrc = '<?= $img ?>'; open = true"
+                                         onerror="this.src='uploads/products/default.png';">
+                                  <?php endforeach; ?>
+                                  <!-- Modal Preview -->
+                                  <div x-show="open" x-cloak x-transition @click="open = false" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+                                    <div class="relative bg-white rounded-xl shadow-lg p-2 max-w-md w-full">
+                                      <button @click="open = false" class="absolute top-2 right-2 text-gray-500 hover:text-gray-800 text-2xl font-bold z-10">&times;</button>
+                                      <img :src="imageSrc" alt="Preview" class="w-full h-auto rounded-lg object-contain">
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
 
-      <!-- Product Table -->
-      <div class="overflow-x-auto border border-gray-200 rounded-lg shadow-sm">
-        <table class="min-w-full bg-white text-sm">
-          <thead class="bg-gray-100 text-gray-600 uppercase text-xs font-semibold">
-            <tr>
-              <th class="px-4 py-3 text-left">Images</th>
-              <th class="px-4 py-3 text-left">Product Info</th>
-              <th class="px-4 py-3 text-left">Price</th>
-              <th class="px-4 py-3 text-left">Category</th>
-              <th class="px-4 py-3 text-left">Supplier</th> <!-- Added Supplier Header -->
-              <th class="px-4 py-3 text-center">Actions</th> <!-- Centered Actions -->
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-100 text-gray-700">
-            <?php if (!empty($products)): ?>
-              <?php foreach ($products as $product): ?>
-                <tr class="hover:bg-gray-50 transition">
-                  <!-- Images -->
-                  <td class="px-4 py-3">
-                    <div class="flex flex-wrap gap-2" x-data="{ open: false, imageSrc: '' }">
-                      <?php foreach ($product['display_images'] as $img): ?>
-                        <img src="<?= $img ?>" 
-                             alt="Product Image" 
-                             class="w-12 h-12 rounded-lg border shadow-sm object-cover cursor-pointer hover:scale-105 transition-transform duration-200"
-                             @click="imageSrc = '<?= $img ?>'; open = true"
-                             onerror="this.src='uploads/products/default.png';">
-                      <?php endforeach; ?>
-                      <!-- Modal Preview -->
-                      <div x-show="open" x-cloak x-transition @click="open = false" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-                        <div class="relative bg-white rounded-xl shadow-lg p-4 max-w-md w-full">
-                          <button @click="open = false" class="absolute top-2 right-2 text-gray-500 hover:text-gray-800 text-xl font-bold">&times;</button>
-                          <img :src="imageSrc" alt="Preview" class="w-full h-auto rounded-lg object-contain">
-                        </div>
-                      </div>
-                    </div>
-                  </td>
+                              <!-- Product Info -->
+                              <td class="px-6 py-4">
+                                <p class="font-bold text-gray-800"><?= htmlspecialchars($product['product_name']); ?></p>
+                                <p class="text-xs text-gray-500 truncate w-48 mt-1"><?= htmlspecialchars($product['description']); ?></p>
+                                <div class="text-xs text-gray-400 mt-1 flex flex-col gap-0.5">
+                                   <span>Colors: <?= $product['colors'] ?: 'None'; ?></span>
+                                   <span>Sizes: <?= $product['sizes'] ?: 'None'; ?></span>
+                                </div>
+                              </td>
 
-                  <!-- Product Info -->
-                  <td class="px-4 py-3">
-                    <p class="font-semibold text-gray-800"><?= htmlspecialchars($product['product_name']); ?></p>
-                    <p class="text-xs text-gray-500 truncate w-48"><?= htmlspecialchars($product['description']); ?></p>
-                    <div class="text-xs text-gray-400 mt-1">
-                       <?= $product['colors'] ?: 'No Colors'; ?> | <?= $product['sizes'] ?: 'No Sizes'; ?>
-                    </div>
-                  </td>
+                              <!-- Price -->
+                              <td class="px-6 py-4 font-bold text-[var(--rose)]">₱<?= number_format($product['price_id'], 2); ?></td>
+                              
+                              <!-- Category -->
+                              <td class="px-6 py-4">
+                                  <span class="bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full text-xs font-medium">
+                                      <?= htmlspecialchars($product['category_name']); ?>
+                                  </span>
+                              </td>
 
-                  <!-- Price -->
-                  <td class="px-4 py-3 font-medium text-[var(--rose)]">₱<?= number_format($product['price_id'], 2); ?></td>
-                  
-                  <!-- Category -->
-                  <td class="px-4 py-3">
-                      <span class="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs">
-                          <?= htmlspecialchars($product['category_name']); ?>
-                      </span>
-                  </td>
+                              <!-- Supplier -->
+                              <td class="px-6 py-4 text-gray-600 text-xs">
+                                <?= htmlspecialchars($product['supplier_name'] ?? 'N/A'); ?>
+                              </td>
 
-                  <!-- Supplier (NEW) -->
-                  <td class="px-4 py-3 text-gray-600">
-                    <?= htmlspecialchars($product['supplier_name'] ?? 'N/A'); ?>
-                  </td>
+                              <!-- Actions -->
+                              <td class="px-6 py-4">
+                                <div class="flex items-center justify-center gap-2">
+                                  <a href="edit_product.php?id=<?= $product['product_id']; ?>" 
+                                     class="text-yellow-600 bg-yellow-50 hover:bg-yellow-100 p-2 rounded-lg transition shadow-sm" 
+                                     title="Edit">
+                                    <i class="fas fa-pen text-xs"></i>
+                                  </a>
+                                  <a href="delete_product.php?id=<?= $product['product_id']; ?>" 
+                                     onclick="return confirm('Are you sure you want to delete this product?')" 
+                                     class="text-red-600 bg-red-50 hover:bg-red-100 p-2 rounded-lg transition shadow-sm"
+                                     title="Delete">
+                                    <i class="fas fa-trash text-xs"></i>
+                                  </a>
+                                </div>
+                              </td>
+                            </tr>
+                          <?php endforeach; ?>
+                        <?php else: ?>
+                          <tr><td colspan="6" class="text-center text-gray-500 py-10">No products found.</td></tr>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
 
-                  <!-- Actions (SYMBOLS) -->
-                  <td class="px-4 py-3">
-                    <div class="flex items-center justify-center gap-2">
-                      <a href="edit_product.php?id=<?= $product['product_id']; ?>" 
-                         class="w-8 h-8 flex items-center justify-center bg-yellow-50 text-yellow-600 hover:bg-yellow-500 hover:text-white rounded-md transition shadow-sm" 
-                         title="Edit">
-                        <i class="fas fa-pen text-xs"></i>
-                      </a>
-                      <a href="delete_product.php?id=<?= $product['product_id']; ?>" 
-                         onclick="return confirm('Are you sure you want to delete this product?')" 
-                         class="w-8 h-8 flex items-center justify-center bg-red-50 text-red-600 hover:bg-red-500 hover:text-white rounded-md transition shadow-sm"
-                         title="Delete">
-                        <i class="fas fa-trash text-xs"></i>
-                      </a>
-                    </div>
-                  </td>
-                </tr>
-              <?php endforeach; ?>
-            <?php else: ?>
-              <tr><td colspan="6" class="text-center text-gray-500 py-8">No products available.</td></tr>
-            <?php endif; ?>
-          </tbody>
-        </table>
-      </div>
+        </div> 
     </section>
+
   </main>
 </div>
 
+<!-- Scripts -->
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    const searchBox = document.getElementById('searchBox');
-    const categorySelect = document.querySelector('select[name="category"]');
-    const tableBody = document.querySelector('table tbody');
-
-    function debounce(fn, delay) {
-        let timeout;
-        return function(...args) {
-            clearTimeout(timeout);
-            timeout = setTimeout(() => fn.apply(this, args), delay);
-        };
-    }
-
-    const fetchProducts = debounce(() => {
-        const search = searchBox.value.trim();
-        const category = categorySelect.value;
-        const params = new URLSearchParams({ search, category });
-
-        fetch(`products.php?${params.toString()}`)
-            .then(res => res.text())
-            .then(html => {
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(html, 'text/html');
-                const newTbody = doc.querySelector('table tbody');
-                if(newTbody) tableBody.innerHTML = newTbody.innerHTML;
-            });
-    }, 300);
-
-    searchBox.addEventListener('input', fetchProducts);
-    categorySelect.addEventListener('change', fetchProducts);
+// NProgress Logic
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('a').forEach(link => {
+        link.addEventListener('click', (e) => {
+            if(link.getAttribute('href').startsWith('#') || link.getAttribute('href').startsWith('javascript') || link.target === '_blank') return;
+            NProgress.start();
+        });
+    });
+    window.addEventListener('load', () => NProgress.done());
+    window.addEventListener('pageshow', () => NProgress.done());
 });
+
+// Live Search Logic (Debounced)
+const searchBox = document.getElementById('searchBox');
+const categorySelect = document.querySelector('select[name="category"]');
+const tableBody = document.querySelector('table tbody');
+
+function debounce(fn, delay) {
+    let timeout;
+    return function(...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => fn.apply(this, args), delay);
+    };
+}
+
+const fetchProducts = debounce(() => {
+    const search = searchBox.value.trim();
+    const category = categorySelect.value;
+    const params = new URLSearchParams({ search, category });
+
+    // Use fetch to get the updated HTML content without reloading
+    fetch(`products.php?${params.toString()}`)
+        .then(res => res.text())
+        .then(html => {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const newTbody = doc.querySelector('table tbody');
+            if(newTbody) tableBody.innerHTML = newTbody.innerHTML;
+        });
+}, 300);
+
+searchBox.addEventListener('input', fetchProducts);
+categorySelect.addEventListener('change', fetchProducts);
 </script>
 
 </body>
