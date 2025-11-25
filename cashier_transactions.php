@@ -1,7 +1,7 @@
 <?php
 session_start();
 require 'conn.php';
-ini_set('display_errors', 1);
+ini_set('display_errors', 0); // Suppress display for production feel
 error_reporting(E_ALL);
 
 // 1. ✅ CONFIG: Fix SQL Modes & Limits
@@ -39,7 +39,6 @@ switch ($filter) {
         $dateCondition = "DATE(o.created_at) = CURDATE()";
         $label = "Today";
 }
-
 
 $query = "
     SELECT
@@ -164,7 +163,7 @@ $chartStmt->close();
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cashier POS | Seven Dwarfs Boutique</title>
+<title>Cashier Transactions | Seven Dwarfs Boutique</title>
 
 <!-- Tailwind CSS & Alpine.js -->
 <script src="https://cdn.tailwindcss.com"></script>
@@ -175,69 +174,89 @@ $chartStmt->close();
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet"/>
 
 <style>
-:root { --rose: #e59ca8; --rose-hover: #d27b8c; }
-body { font-family: 'Poppins', sans-serif; background-color: #f9fafb; color: #374151; }
-.active { background-color: #fce8eb; color: var(--rose); font-weight: 600; border-radius: 0.5rem; }
-.no-scrollbar::-webkit-scrollbar { display: none; }
-.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    :root { --rose: #e59ca8; --rose-hover: #d27b8c; }
+    body { font-family: 'Poppins', sans-serif; background-color: #f9fafb; color: #374151; }
+    
+    /* Scrollbar */
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    .custom-scroll::-webkit-scrollbar { width: 6px; }
+    .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+    .custom-scroll::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
 
-/* Sidebar transition */
-#sidebar { transition: width 0.3s ease; }
-#sidebarToggle svg { transition: transform 0.3s ease; }
+    /* Animations */
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .fade-in-up { animation: fadeInUp 0.5s ease-out forwards; }
+    
+    /* Transitions */
+    #sidebar { transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+    .sidebar-text { transition: opacity 0.2s ease-in-out, transform 0.2s ease; white-space: nowrap; }
+    .w-20 .sidebar-text { opacity: 0; transform: translateX(-10px); pointer-events: none; }
+
+    /* Glass Header */
+    .glass-header {
+        background: rgba(255, 255, 255, 0.85);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-bottom: 1px solid rgba(226, 232, 240, 0.6);
+    }
 </style>
 </head>
 
 <body class="flex h-screen overflow-hidden" x-data="{ sidebarOpen: true }">
 
 <!-- SIDEBAR -->
-<aside id="sidebar" :class="sidebarOpen ? 'w-64' : 'w-20'" class="bg-white border-r border-slate-100 flex flex-col h-full no-scrollbar overflow-y-auto shadow-md">
-    <div class="flex items-center justify-between h-20 px-4 border-b border-slate-100">
-        <div class="flex items-center gap-2">
-            <h1 class="text-xl font-bold text-rose-600 tracking-tight" x-show="sidebarOpen">Seven Dwarfs
-            <p class="text-[10px] font-semibold text-slate-400 uppercase tracking-widest" x-show="sidebarOpen">Boutique POS</p>
+<aside id="sidebar" :class="sidebarOpen ? 'w-64' : 'w-20'" class="bg-white border-r border-slate-100 flex flex-col h-full z-30 shadow-sm relative shrink-0">
+    <div class="flex items-center justify-between h-20 px-0 pl-6 border-b border-slate-100">
+        <div class="flex items-center gap-2 overflow-hidden">
+            <div class="shrink-0 text-xl font-bold text-rose-600 tracking-tight">SD</div>
+            <div class="sidebar-text" :class="!sidebarOpen && 'opacity-0'">
+                <h1 class="text-xl font-bold text-rose-600 tracking-tight">Seven Dwarfs</h1>
+                <p class="text-[10px] font-semibold text-slate-300 uppercase tracking-widest">Boutique POS</p>
+            </div>
         </div>
-        <button @click="sidebarOpen = !sidebarOpen" class="text-slate-400 focus:outline-none">
-            <svg x-show="sidebarOpen" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-            <svg x-show="!sidebarOpen" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
-            </svg>
-        </button>
     </div>
-    <nav class="flex-1 p-4 space-y-1">
-        <a href="cashier_pos.php" class=  "flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-50 hover:text-rose-600 font-medium transition-colors">
-            <i class="fas fa-cash-register"></i>
-            <span x-show="sidebarOpen">POS Terminal</span>
+    
+    <!-- Floating Toggle -->
+    <button @click="sidebarOpen = !sidebarOpen" class="absolute -right-3 top-24 bg-white border border-slate-200 rounded-full p-1 shadow-md text-slate-400 hover:text-rose-600 transition-colors z-50">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 transition-transform duration-300" :class="!sidebarOpen ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+    </button>
+
+    <nav class="flex-1 p-3 space-y-1 overflow-y-auto no-scrollbar">
+        <a href="cashier_pos.php" class="flex items-center gap-3 px-3 py-3 rounded-xl text-slate-500 hover:bg-slate-50 hover:text-rose-600 font-medium transition-all group overflow-hidden">
+            <i class="fas fa-cash-register w-6 text-center text-lg group-hover:scale-110 transition-transform"></i>
+            <span class="sidebar-text">POS Terminal</span>
         </a>
-        <a href="cashier_transactions.php" class="flex items-center gap-3 px-4 py-3 rounded-xl bg-rose-50 text-rose-600 font-semibold transition-colors">
-       
-            <i class="fas fa-receipt"></i>
-            <span x-show="sidebarOpen">Transactions</span>
+        <a href="cashier_transactions.php" class="flex items-center gap-3 px-3 py-3 rounded-xl bg-rose-50 text-rose-600 font-semibold transition-all group overflow-hidden relative">
+            <i class="fas fa-receipt w-6 text-center text-lg"></i>
+            <span class="sidebar-text">Transactions</span>
         </a>
-        <a href="cashier_inventory.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-50 hover:text-rose-600 font-medium transition-colors">
-            <i class="fas fa-boxes"></i>
-            <span x-show="sidebarOpen">Inventory</span>
+        <a href="cashier_inventory.php" class="flex items-center gap-3 px-3 py-3 rounded-xl text-slate-500 hover:bg-slate-50 hover:text-rose-600 font-medium transition-all group overflow-hidden">
+            <i class="fas fa-boxes w-6 text-center text-lg group-hover:scale-110 transition-transform"></i>
+            <span class="sidebar-text">Inventory</span>
         </a>
     </nav>
-    <div class="p-4 border-t border-slate-100 bg-slate-50/50 flex items-center gap-2">
-        <div class="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 font-bold text-sm shadow-sm"><?= strtoupper(substr($cashier_name,0,1)) ?></div>
-        <div x-show="sidebarOpen">
+    <div class="p-4 border-t border-slate-100 bg-slate-50/50 flex items-center gap-3 overflow-hidden">
+        <div class="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 font-bold text-sm shadow-sm shrink-0"><?= strtoupper(substr($cashier_name,0,1)) ?></div>
+        <div class="sidebar-text overflow-hidden">
             <p class="text-sm font-bold text-slate-700 truncate"><?= htmlspecialchars($cashier_name) ?></p>
-            <p class="text-xs text-slate-400">Logged in</p>
+            <form action="logout.php" method="POST">
+                <button class="text-xs text-rose-500 font-medium hover:underline">Sign Out</button>
+            </form>
         </div>
-        <form action="logout.php" method="POST" class="ml-auto" x-show="sidebarOpen">
-            <button class="px-2 py-1 bg-rose-100 text-rose-600 rounded text-xs font-semibold hover:bg-rose-200">Sign Out</button>
-        </form>
     </div>
 </aside>
+
     <!-- MAIN CONTENT -->
-    <main class="flex-1 flex flex-col relative overflow-hidden h-full">
+    <main class="flex-1 flex flex-col relative overflow-hidden h-full bg-[#f9fafb]">
         <!-- Header -->
         <header class="h-20 glass-header flex items-center justify-between px-8 z-20 shrink-0">
             <div>
-                <h2 class="text-2xl font-bold text-slate-800">Transactions</h2>
-                <p class="text-xs text-slate-500 font-medium">Overview for <span class="text-rose-600 font-bold"><?= $label ?></span></p>
+                <h2 class="text-2xl font-bold text-slate-800 tracking-tight">Transactions</h2>
+                <p class="text-xs text-slate-500 font-medium">Overview for <span class="text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded ml-1"><?= $label ?></span></p>
             </div>
             <form method="GET" class="flex items-center bg-white rounded-xl border border-slate-200 p-1 shadow-sm">
                 <button type="submit" name="filter" value="today" class="px-4 py-1.5 rounded-lg text-sm font-medium transition-all <?= $filter=='today'?'bg-rose-100 text-rose-700 shadow-sm':'text-slate-500 hover:bg-slate-50' ?>">Today</button>
@@ -247,228 +266,231 @@ body { font-family: 'Poppins', sans-serif; background-color: #f9fafb; color: #37
         </header>
 
         <!-- Scrollable Content -->
-        <div class="flex-1 overflow-y-auto p-8">
-            <!-- Stats -->
+        <div class="flex-1 overflow-y-auto p-8 custom-scroll">
+            
+            <!-- Stats Cards -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
+                <!-- Revenue -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between fade-in-up" style="animation-delay: 0s;">
                     <div>
-                        <p class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Total Revenue</p>
+                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Revenue</p>
                         <h3 class="text-3xl font-bold text-rose-600 mt-1">₱<?= number_format($totalSales, 2) ?></h3>
                     </div>
-                    <div class="w-12 h-12 bg-rose-50 rounded-full flex items-center justify-center text-rose-500">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <div class="w-12 h-12 bg-rose-50 rounded-full flex items-center justify-center text-rose-500 shadow-sm">
+                        <i class="fas fa-coins text-lg"></i>
                     </div>
                 </div>
-                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
+                <!-- Count -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between fade-in-up" style="animation-delay: 0.1s;">
                     <div>
-                        <p class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Transactions</p>
+                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Transactions</p>
                         <h3 class="text-3xl font-bold text-slate-800 mt-1"><?= number_format($transactionCount) ?></h3>
                     </div>
-                    <div class="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center text-blue-500">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                    <div class="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center text-blue-500 shadow-sm">
+                        <i class="fas fa-receipt text-lg"></i>
                     </div>
                 </div>
-                <div class="bg-gradient-to-br from-rose-500 to-pink-600 p-6 rounded-2xl shadow-lg text-white flex items-center justify-between relative overflow-hidden">
-                    <div class="relative z-10">
-                        <p class="text-xs font-bold text-rose-100 uppercase tracking-wider">Overall Top Item</p>
-                        <h3 class="text-xl font-bold mt-1 truncate w-40"><?= !empty($trendingItems) ? htmlspecialchars($trendingItems[0]['product_name']) : 'N/A' ?></h3>
-                        <p class="text-sm mt-1 text-rose-100"><?= !empty($trendingItems) ? $trendingItems[0]['total_sold'] . ' sold (All Time)' : '-' ?></p>
+                <!-- Top Item -->
+                <div class="bg-gradient-to-br from-rose-500 to-pink-600 p-6 rounded-2xl shadow-lg shadow-rose-200 text-white flex items-center justify-between relative overflow-hidden fade-in-up" style="animation-delay: 0.2s;">
+                    <div class="absolute -right-6 -bottom-6 text-white/10 text-9xl">
+                        <i class="fas fa-crown"></i>
                     </div>
-                    <div class="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm relative z-10">
-                        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/></svg>
+                    <div class="relative z-10">
+                        <p class="text-xs font-bold text-rose-100 uppercase tracking-wider">Overall Best Seller</p>
+                        <h3 class="text-xl font-bold mt-1 truncate w-40"><?= !empty($trendingItems) ? htmlspecialchars($trendingItems[0]['product_name']) : 'N/A' ?></h3>
+                        <p class="text-sm mt-1 text-rose-100 font-medium"><?= !empty($trendingItems) ? $trendingItems[0]['total_sold'] . ' units sold' : '-' ?></p>
+                    </div>
+                    <div class="w-14 h-14 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm relative z-10">
+                        <i class="fas fa-star text-xl"></i>
                     </div>
                 </div>
             </div>
 
             <!-- Charts & List -->
-            <div class="flex flex-col lg:flex-row gap-6 mb-8 min-h-[350px]">
+            <div class="flex flex-col lg:flex-row gap-6 mb-8 min-h-[380px] fade-in-up" style="animation-delay: 0.3s;">
+                <!-- Chart -->
                 <div class="flex-1 bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col">
-                    <div class="flex justify-between items-center mb-4">
+                    <div class="flex justify-between items-center mb-6">
                         <h3 class="font-bold text-lg text-slate-800">Sales Analytics</h3>
-                        <span class="text-xs font-medium text-slate-400 bg-slate-100 px-2 py-1 rounded"><?= $label ?></span>
+                        <span class="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-full"><i class="far fa-calendar-alt mr-1"></i> <?= $label ?></span>
                     </div>
-                    <div class="flex-1 relative w-full"><canvas id="salesChart"></canvas></div>
+                    <div class="flex-1 relative w-full h-64 lg:h-auto"><canvas id="salesChart"></canvas></div>
                 </div>
-                <div class="w-full lg:w-[350px] bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col">
+                
+                <!-- Best Sellers -->
+                <div class="w-full lg:w-[380px] bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col">
                     <div class="flex justify-between items-end mb-4">
-                        <h3 class="font-bold text-lg text-slate-800">Best Sellers</h3>
-                        <span class="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded">All Time</span>
+                        <h3 class="font-bold text-lg text-slate-800">Top 5 Products</h3>
                     </div>
                     <?php if (count($trendingItems) > 0): $top = $trendingItems[0]; $rest = array_slice($trendingItems, 1); ?>
-                        <div class="bg-rose-50 rounded-xl p-4 flex gap-4 items-center mb-4 border border-rose-100 relative overflow-hidden group">
-                            <div class="absolute top-0 left-0 bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-br-lg z-10">#1</div>
+                        <div class="bg-gradient-to-r from-rose-50 to-white rounded-xl p-4 flex gap-4 items-center mb-4 border border-rose-100 relative overflow-hidden group transition-all hover:shadow-md cursor-default">
+                            <div class="absolute top-0 left-0 bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-br-lg z-10 shadow-sm">#1 Top Seller</div>
                             <img src="<?= htmlspecialchars($top['final_image']) ?>" class="w-16 h-16 rounded-lg object-cover bg-white shadow-sm group-hover:scale-105 transition-transform duration-300">
-                            <div class="min-w-0">
+                            <div class="min-w-0 flex-1">
                                 <h4 class="font-bold text-slate-800 text-sm truncate"><?= htmlspecialchars($top['product_name']) ?></h4>
-                                <div class="text-xs text-rose-600 font-bold mt-0.5"><?= $top['total_sold'] ?> units sold</div>
+                                <div class="flex items-center gap-2 mt-1">
+                                    <span class="text-xs font-bold text-rose-600 bg-white px-2 py-0.5 rounded shadow-sm border border-rose-100"><?= $top['total_sold'] ?> sold</span>
+                                    <span class="text-[10px] text-slate-400">All Time</span>
+                                </div>
                             </div>
                         </div>
-                        <div class="flex-1 overflow-y-auto space-y-3 pr-1">
+                        <div class="flex-1 overflow-y-auto space-y-2 pr-1 custom-scroll">
                             <?php foreach ($rest as $index => $item): ?>
-                            <div class="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg transition-colors">
-                                <div class="font-bold text-slate-300 text-sm w-4 text-center"><?= $index + 2 ?></div>
-                                <img src="<?= htmlspecialchars($item['final_image']) ?>" class="w-10 h-10 rounded-md object-cover bg-slate-100">
+                            <div class="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg transition-colors group">
+                                <div class="font-bold text-slate-300 text-sm w-5 text-center group-hover:text-rose-400 transition-colors"><?= $index + 2 ?></div>
+                                <img src="<?= htmlspecialchars($item['final_image']) ?>" class="w-10 h-10 rounded-md object-cover bg-slate-100 border border-slate-100">
                                 <div class="flex-1 min-w-0">
                                     <h5 class="text-xs font-bold text-slate-700 truncate"><?= htmlspecialchars($item['product_name']) ?></h5>
                                     <p class="text-[10px] text-slate-500"><?= $item['total_sold'] ?> sold</p>
                                 </div>
-                                <div class="text-xs font-semibold text-slate-400">₱<?= number_format($item['price'], 0) ?></div>
+                                <div class="text-xs font-semibold text-slate-500">₱<?= number_format($item['price'], 0) ?></div>
                             </div>
                             <?php endforeach; ?>
                         </div>
                     <?php else: ?>
-                        <div class="flex-1 flex flex-col items-center justify-center text-slate-400"><p class="text-sm">No sales yet</p></div>
+                        <div class="flex-1 flex flex-col items-center justify-center text-slate-400"><i class="fas fa-box-open text-3xl mb-2 opacity-30"></i><p class="text-sm">No sales recorded yet</p></div>
                     <?php endif; ?>
                 </div>
             </div>
 
             <!-- TABLE -->
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-                <div class="px-6 py-4 border-b border-slate-50 bg-slate-50/50">
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden fade-in-up" style="animation-delay: 0.4s;">
+                <div class="px-6 py-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
                     <h3 class="font-bold text-slate-800">Transaction History</h3>
                 </div>
-                <div class="overflow-x-auto">
+                <div class="overflow-x-auto custom-scroll">
                     <table class="w-full text-sm text-left">
                         <thead class="bg-slate-50 text-slate-500 uppercase text-xs tracking-wider font-semibold border-b border-slate-100">
                             <tr>
                                 <th class="px-6 py-4">Order ID</th>
-                                <th class="px-6 py-4">Order Details</th>
+                                <th class="px-6 py-4 w-[35%]">Items</th>
                                 <th class="px-6 py-4">Total</th>
-                                <th class="px-6 py-4">Received</th>
                                 <th class="px-6 py-4">Payment</th>
                                 <th class="px-6 py-4">Status</th>
-                                <th class="px-6 py-4">Date/Time</th>
+                                <th class="px-6 py-4">Date</th>
                                 <th class="px-6 py-4 text-right">Action</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-50">
                             <?php if ($result->num_rows > 0): ?>
                                 <?php while ($row = $result->fetch_assoc()): 
-                                    // Always show status as "Completed" for display
                                     $statusName = "Completed";
-                                    $isRefunded = false;
-                                    
-                                    // Parse item details: Qty *** Name *** Size *** Color
                                     $itemStrings = !empty($row['item_details']) ? explode('///', $row['item_details']) : [];
                                 ?>
-                                <tr class="hover:bg-rose-50/30 transition-colors group">
-                                    <td class="px-6 py-4 font-medium text-rose-600 align-top">#<?= $row['order_id']; ?></td>
+                                <tr class="hover:bg-slate-50 transition-colors group">
+                                    <td class="px-6 py-4 font-bold text-rose-600 align-top">
+                                        #<?= $row['order_id']; ?>
+                                    </td>
                                     
-                                    <!-- ORDER DETAILS COLUMN -->
-<td class="px-6 py-4 align-top">
-    <?php if(empty($itemStrings)): ?>
-        <span class="text-xs text-slate-400">No items</span>
-    <?php else:
-        // 1. Parse all items into a usable array
-        $allItems = [];
-        foreach($itemStrings as $str) {
-            $parts = explode('***', $str);
-            $qty = isset($parts[0]) ? abs($parts[0]) : 0;
-            $name = isset($parts[1]) ? $parts[1] : 'Unknown';
-            $size = (isset($parts[2]) && $parts[2] !== '-') ? $parts[2] : null;
-            $color = (isset($parts[3]) && $parts[3] !== '-') ? $parts[3] : null;
-            $price = (isset($parts[4])) ? $parts[4] : 0;
+                                    <!-- LOGIC FOR ITEMS -->
+                                    <td class="px-6 py-4 align-top">
+                                        <?php if(empty($itemStrings)): ?>
+                                            <span class="text-xs text-slate-400 italic">No items data</span>
+                                        <?php else:
+                                            // Process Purchased Items
+                                            $allItems = [];
+                                            foreach($itemStrings as $str) {
+                                                $parts = explode('***', $str);
+                                                $qty = isset($parts[0]) ? abs($parts[0]) : 0;
+                                                $name = isset($parts[1]) ? $parts[1] : 'Unknown';
+                                                $size = (isset($parts[2]) && $parts[2] !== '-') ? $parts[2] : null;
+                                                $color = (isset($parts[3]) && $parts[3] !== '-') ? $parts[3] : null;
+                                                $price = (isset($parts[4])) ? $parts[4] : 0;
+                                                
+                                                $specs = [];
+                                                if ($size) $specs[] = $size;
+                                                if ($color) $specs[] = ucfirst($color);
+                                                $specString = !empty($specs) ? ' <span class="text-slate-400 text-[10px] font-normal">(' . implode(', ', $specs) . ')</span>' : '';
+                                                
+                                                $allItems[] = ['qty' => $qty, 'name' => $name, 'specString' => $specString, 'price' => $price];
+                                            }
 
-            // Format Name like: "Product Name (Size, Color)"
-            $specs = [];
-            if ($size) $specs[] = $size;
-            if ($color) $specs[] = ucfirst($color);
-            $specString = !empty($specs) ? ' (' . implode(', ', $specs) . ')' : '';
-            
-            $allItems[] = [
-                'qty' => $qty,
-                'name' => $name . $specString,
-                'price' => $price,
-                'total_refund' => $qty * $price
-            ];
-        }
+                                            // Process Refunds
+                                            $refundDetails = [];
+                                            if (!empty($row['refund_details'])) {
+                                                $refundStrings = explode('///', $row['refund_details']);
+                                                foreach ($refundStrings as $rstr) {
+                                                    $rparts = explode('***', $rstr);
+                                                    if (count($rparts) >= 7) {
+                                                        $refundDetails[] = [
+                                                            'amount' => $rparts[2],
+                                                            'name' => $rparts[3],
+                                                            'size' => $rparts[4],
+                                                            'color' => $rparts[5],
+                                                            'date' => $rparts[6]
+                                                        ];
+                                                    }
+                                                }
+                                            }
+                                        ?>
+                                            <div class="flex flex-col gap-3">
+                                                <!-- PURCHASED -->
+                                                <div class="space-y-1">
+                                                    <?php foreach($allItems as $item): ?>
+                                                        <div class="text-sm text-slate-700 font-medium leading-tight">
+                                                            <span class="text-slate-400 text-xs mr-1"><?= $item['qty'] ?>x</span>
+                                                            <?= htmlspecialchars($item['name']) ?><?= $item['specString'] ?>
+                                                        </div>
+                                                    <?php endforeach; ?>
+                                                </div>
 
-        // Parse refund details
-        $refundDetails = [];
-        if (!empty($row['refund_details'])) {
-            $refundStrings = explode('///', $row['refund_details']);
-            foreach ($refundStrings as $rstr) {
-                $rparts = explode('***', $rstr);
-                if (count($rparts) >= 7) {
-                    $refundDetails[] = [
-                        'refund_id' => $rparts[0],
-                        'order_item_id' => $rparts[1],
-                        'refund_amount' => $rparts[2],
-                        'product_name' => $rparts[3],
-                        'size' => $rparts[4],
-                        'color' => $rparts[5],
-                        'refunded_at' => $rparts[6]
-                    ];
-                }
-            }
-        }
-    ?>
-        <div class="flex flex-col gap-4">
-            <!-- SECTION A: PURCHASED LIST -->
-            <div>
-                <div class="font-bold text-slate-800 text-[11px] uppercase tracking-wide mb-1.5">
-                    Purchased:
-                </div>
-                <div class="space-y-1">
-                    <?php foreach($allItems as $item): ?>
-                        <div class="text-sm text-slate-600 leading-tight">
-                            <?= htmlspecialchars($item['name']) ?>
-                            <span class="text-slate-400 font-medium">x<?= $item['qty'] ?></span>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-
-            <!-- SECTION B: REFUNDED LIST -->
-            <?php if(!empty($refundDetails)): ?>
-                <div class="border-t border-slate-100 pt-3">
-                    <div class="font-bold text-red-600 text-[11px] uppercase tracking-wide mb-1.5">
-                        Refunded:
-                    </div>
-                    <div class="space-y-1">
-                        <?php foreach($refundDetails as $r): ?>
-                            <div class="text-sm text-red-500 font-medium flex flex-wrap items-center gap-1 leading-tight">
-                                <span class="text-[10px] font-bold border border-red-200 bg-red-50 px-1 rounded">REFUND</span>
-                                <span><?= htmlspecialchars($r['product_name']) ?><?= ($r['size'] !== '-' || $r['color'] !== '-') ? ' (' . ($r['size'] !== '-' ? $r['size'] : '') . (($r['size'] !== '-' && $r['color'] !== '-') ? ', ' : '') . ($r['color'] !== '-' ? ucfirst($r['color']) : '') . ')' : '' ?></span>
-                                <span class="text-red-400">— ₱<?= number_format($r['refund_amount'], 2) ?></span>
-                                <span class="text-red-400 text-[10px] ml-2"><?= date('M d, Y h:i A', strtotime($r['refunded_at'])) ?></span>
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
-                </div>
-            <?php endif; ?>
-        </div>
-    <?php endif; ?>
-</td>
+                                                <!-- REFUNDED -->
+                                                <?php if(!empty($refundDetails)): ?>
+                                                    <div class="border-t border-dashed border-rose-200 pt-2 mt-1">
+                                                        <div class="flex items-center gap-1 mb-1">
+                                                            <i class="fas fa-undo text-[10px] text-rose-500"></i>
+                                                            <span class="text-[10px] font-bold text-rose-600 uppercase tracking-wide">Returned Items</span>
+                                                        </div>
+                                                        <div class="space-y-1">
+                                                            <?php foreach($refundDetails as $r): ?>
+                                                                <div class="text-xs text-rose-500 bg-rose-50 px-2 py-1 rounded w-fit flex gap-2 items-center">
+                                                                    <span><?= htmlspecialchars($r['name']) ?></span>
+                                                                    <span class="font-bold">-₱<?= number_format($r['amount'], 2) ?></span>
+                                                                </div>
+                                                            <?php endforeach; ?>
+                                                        </div>
+                                                    </div>
+                                                <?php endif; ?>
+                                            </div>
+                                        <?php endif; ?>
+                                    </td>
                                     
-                                    <td class="px-6 py-4 font-bold text-slate-800 align-top">₱<?= number_format($row['total_amount'], 2); ?></td>
-                                    <td class="px-6 py-4 text-slate-500 align-top">
-                                        ₱<?= number_format($row['cash_given'], 2); ?>
-                                        <span class="text-[10px] text-slate-400 block">Change: ₱<?= number_format($row['changes'], 2); ?></span>
+                                    <td class="px-6 py-4 align-top">
+                                        <div class="font-bold text-slate-800">₱<?= number_format($row['total_amount'], 2); ?></div>
+                                        <?php if($row['cash_given'] > 0): ?>
+                                        <div class="text-[10px] text-slate-400 mt-0.5">Cash: ₱<?= number_format($row['cash_given'], 2) ?></div>
+                                        <div class="text-[10px] text-slate-400">Change: ₱<?= number_format($row['changes'], 2) ?></div>
+                                        <?php endif; ?>
                                     </td>
                                     <td class="px-6 py-4 align-top">
-                                        <span class="px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wide
+                                        <span class="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide
                                             <?= strtolower($row['payment_method_name']) == 'gcash' ? 'bg-blue-50 text-blue-600 border border-blue-100' : 'bg-green-50 text-green-600 border border-green-100' ?>">
                                             <?= htmlspecialchars($row['payment_method_name']); ?>
                                         </span>
                                     </td>
                                     <td class="px-6 py-4 align-top">
-                                        <span class="px-2 py-1 rounded text-xs font-semibold bg-green-100 text-green-600 border border-green-200">
+                                        <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200 flex w-fit items-center gap-1">
+                                            <div class="w-1.5 h-1.5 rounded-full bg-slate-400"></div>
                                             <?= htmlspecialchars($statusName); ?>
                                         </span>
                                     </td>
-                                    <td class="px-6 py-4 text-slate-500 align-top">
-                                        <?= date('M d, Y', strtotime($row['created_at'])); ?>
-                                        <span class="text-slate-400 text-xs block"><?= date('h:i A', strtotime($row['created_at'])); ?></span>
+                                    <td class="px-6 py-4 text-slate-500 align-top text-xs">
+                                        <div class="font-medium text-slate-700"><?= date('M d, Y', strtotime($row['created_at'])); ?></div>
+                                        <div class="text-[10px] text-slate-400"><?= date('h:i A', strtotime($row['created_at'])); ?></div>
                                     </td>
                                     <td class="px-6 py-4 text-right align-top">
-                                        <a href="receipt.php?order_id=<?= $row['order_id']; ?>" class="text-slate-400 hover:text-rose-600 transition font-medium text-xs group-hover:underline">View Receipt</a>
+                                        <a href="receipt.php?order_id=<?= $row['order_id']; ?>" target="_blank" class="inline-flex items-center gap-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 px-2 py-1 rounded transition text-xs font-bold border border-transparent hover:border-rose-100">
+                                            <i class="fas fa-print"></i> Receipt
+                                        </a>
                                     </td>
                                 </tr>
                                 <?php endwhile; ?>
                             <?php else: ?>
                                 <tr>
-                                    <td colspan="8" class="px-6 py-12 text-center text-slate-400 text-sm">No transactions found for this period.</td>
+                                    <td colspan="7" class="px-6 py-20 text-center text-slate-400">
+                                        <i class="fas fa-inbox text-4xl mb-3 text-slate-200"></i>
+                                        <p class="text-sm font-medium">No transactions found for this period.</p>
+                                    </td>
                                 </tr>
                             <?php endif; ?>
                         </tbody>
@@ -477,19 +499,63 @@ body { font-family: 'Poppins', sans-serif; background-color: #f9fafb; color: #37
             </div>
         </div>
     </main>
+
+    <!-- Chart Config -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
     const ctx = document.getElementById('salesChart').getContext('2d');
-    const gradient = ctx.createLinearGradient(0, 0, 0, 400);
-    gradient.addColorStop(0, 'rgba(225, 29, 72, 0.2)');
+    const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+    gradient.addColorStop(0, 'rgba(225, 29, 72, 0.15)');
     gradient.addColorStop(1, 'rgba(225, 29, 72, 0)');
+    
     new Chart(ctx, {
         type: 'line',
         data: {
             labels: <?= json_encode($chartLabels); ?>,
-            datasets: [{ label: 'Sales (₱)', data: <?= json_encode($chartTotals); ?>, backgroundColor: gradient, borderColor: '#e11d48', borderWidth: 2, pointBackgroundColor: '#fff', pointBorderColor: '#e11d48', pointRadius: 4, pointHoverRadius: 6, fill: true, tension: 0.4 }]
+            datasets: [{ 
+                label: 'Sales', 
+                data: <?= json_encode($chartTotals); ?>, 
+                backgroundColor: gradient, 
+                borderColor: '#e11d48', 
+                borderWidth: 2, 
+                pointBackgroundColor: '#fff', 
+                pointBorderColor: '#e11d48', 
+                pointBorderWidth: 2,
+                pointRadius: 4, 
+                pointHoverRadius: 6, 
+                fill: true, 
+                tension: 0.35 
+            }]
         },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1f2937', padding: 12, cornerRadius: 8, displayColors: false, callbacks: { label: function(context) { return 'Sales: ₱' + context.parsed.y.toLocaleString(undefined, {minimumFractionDigits: 2}); } } } }, scales: { x: { grid: { display: false }, ticks: { color: '#9ca3af', font: { size: 11 } } }, y: { grid: { color: '#f3f4f6', borderDash: [5, 5] }, ticks: { color: '#9ca3af', font: { size: 11 }, callback: function(value) { return '₱' + value; } }, beginAtZero: true } } }
+        options: { 
+            responsive: true, 
+            maintainAspectRatio: false, 
+            plugins: { 
+                legend: { display: false }, 
+                tooltip: { 
+                    backgroundColor: '#1e293b', 
+                    titleFont: { family: 'Poppins', size: 13 },
+                    bodyFont: { family: 'Poppins', size: 13, weight: 'bold' },
+                    padding: 12, 
+                    cornerRadius: 8, 
+                    displayColors: false, 
+                    callbacks: { 
+                        label: function(context) { return '₱' + context.parsed.y.toLocaleString(undefined, {minimumFractionDigits: 2}); } 
+                    } 
+                } 
+            }, 
+            scales: { 
+                x: { 
+                    grid: { display: false }, 
+                    ticks: { color: '#94a3b8', font: { family: 'Poppins', size: 11 } } 
+                }, 
+                y: { 
+                    grid: { color: '#f1f5f9', borderDash: [5, 5] }, 
+                    ticks: { color: '#94a3b8', font: { family: 'Poppins', size: 11 }, callback: function(value) { return '₱' + value; } }, 
+                    beginAtZero: true 
+                } 
+            } 
+        }
     });
     </script>
 </body>

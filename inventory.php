@@ -37,7 +37,8 @@ while ($row = $resultSizes->fetch_assoc()) $sizes[] = $row;
 $selectedCategory = $_GET['category'] ?? 'all';
 $selectedColor    = $_GET['color'] ?? 'all';
 $selectedSize     = $_GET['size'] ?? 'all';
-$searchQuery      = $_GET['search'] ?? ''; // New Search Filter
+$selectedStock    = $_GET['stock_status'] ?? 'all'; // <--- NEW STOCK FILTER
+$searchQuery      = $_GET['search'] ?? ''; 
 
 // 🔹 Build Query
 $sqlProducts = "
@@ -78,6 +79,14 @@ if ($selectedSize !== 'all') {
     $params[] = $selectedSize;
     $types   .= "s";
 }
+
+// 🔍 Stock Status Logic (NEW)
+if ($selectedStock === 'in_stock') {
+    $where[] = "st.current_qty > 0";
+} elseif ($selectedStock === 'out_of_stock') {
+    $where[] = "st.current_qty <= 0";
+}
+
 // 🔍 Add Search Logic
 if (!empty($searchQuery)) {
     $where[] = "p.product_name LIKE ?";
@@ -118,7 +127,7 @@ if (isset($_GET['ajax'])) {
                 $status_label = "Out of Stock";
                 $status_class = "bg-red-100 text-red-700 border-red-200";
             } elseif ($stock < 0) { 
-                $status_label = "Low Stock";
+                $status_label = "Low Stock"; // Assuming logic: usually < 0 is error or backorder
                 $status_class = "bg-yellow-100 text-yellow-700 border-yellow-200";
             } else {
                 $status_label = "In Stock";
@@ -154,9 +163,6 @@ if (isset($_GET['ajax'])) {
 
 $stmt->close();
 $conn->close();
-
-// Notifications (Mock logic for consistency)
-$newOrdersNotif = 0; $lowStockNotif = 0; $totalNotif = 0;
 ?>
 
 <!DOCTYPE html>
@@ -403,6 +409,18 @@ $newOrdersNotif = 0; $lowStockNotif = 0; $totalNotif = 0;
                         <?php } ?>
                         </select>
                     </div>
+
+                    <!-- Stock Status Dropdown (NEW) -->
+                    <div>
+                        <label for="stock_status" class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Status</label>
+                        <select id="stock_status" onchange="fetchInventory()" 
+                        class="px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)] text-sm min-w-[120px] cursor-pointer bg-gray-50">
+                            <option value="all" <?php echo ($selectedStock == 'all') ? 'selected' : ''; ?>>All</option>
+                            <option value="in_stock" <?php echo ($selectedStock == 'in_stock') ? 'selected' : ''; ?>>In Stock</option>
+                            <option value="out_of_stock" <?php echo ($selectedStock == 'out_of_stock') ? 'selected' : ''; ?>>Out of Stock</option>
+                        </select>
+                    </div>
+
                 </div>
 
                 <!-- 🔍 Search Bar -->
@@ -501,6 +519,7 @@ function fetchInventory() {
     const category = document.getElementById('category').value;
     const color    = document.getElementById('color').value;
     const size     = document.getElementById('size').value;
+    const stock    = document.getElementById('stock_status').value; // <--- NEW JS LOGIC
     const search   = document.getElementById('search').value;
 
     const params = new URLSearchParams({
@@ -508,6 +527,7 @@ function fetchInventory() {
         category: category,
         color: color,
         size: size,
+        stock_status: stock, // <--- NEW PARAMETER
         search: search
     });
 
