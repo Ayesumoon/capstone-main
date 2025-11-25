@@ -149,9 +149,28 @@ body {
   <hr>
 
   <table class="totals">
-    <tr><td>Total</td><td class="text-right">₱<?= number_format($order['total_amount'], 2); ?></td></tr>
-    <tr><td>Cash</td><td class="text-right">₱<?= number_format($order['cash_given'], 2); ?></td></tr>
-    <tr><td>Change</td><td class="text-right">₱<?= number_format($order['changes'], 2); ?></td></tr>
+    <tr>
+      <td>Subtotal</td>
+      <td class="text-right">₱<?= number_format($total, 2); ?></td>
+    </tr>
+    <?php if (!empty($order['discount_amount']) && $order['discount_amount'] > 0): ?>
+    <tr>
+      <td>Discount</td>
+      <td class="text-right text-green-600">-₱<?= number_format($order['discount_amount'], 2); ?></td>
+    </tr>
+    <?php endif; ?>
+    <tr>
+      <td><strong>Total</strong></td>
+      <td class="text-right"><strong>₱<?= number_format($order['total_amount'], 2); ?></strong></td>
+    </tr>
+    <tr>
+      <td>Cash</td>
+      <td class="text-right">₱<?= number_format($order['cash_given'], 2); ?></td>
+    </tr>
+    <tr>
+      <td>Change</td>
+      <td class="text-right">₱<?= number_format($order['changes'], 2); ?></td>
+    </tr>
   </table>
 
   <hr>
@@ -172,3 +191,4 @@ body {
 </script>
 </body>
 </html>
+
