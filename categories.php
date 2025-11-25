@@ -308,35 +308,6 @@ $newOrdersNotif = 0; $lowStockNotif = 0; $totalNotif = 0;
                                             <i class="fas fa-edit"></i>
                                         </button>
 
-<<<<<<< HEAD
-      <!-- Category Table -->
-      <div class="overflow-x-auto">
-        <table class="min-w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
-          <thead class="bg-gray-100 text-gray-600 uppercase text-xs">
-            <tr>
-              <th class="px-4 py-3 text-left">Category ID</th>
-              <th class="px-4 py-3 text-left">Category Name</th>
-              <th class="px-4 py-3 text-left">Actions</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-200">
-            <?php while ($row = $result->fetch_assoc()): ?>
-              <tr class="hover:bg-gray-50 transition">
-                <td class="px-4 py-2"><?= htmlspecialchars($row['category_code']) ?></td>
-                <td class="px-4 py-2"><?= htmlspecialchars($row['category_name']) ?></td>
-                <td class="px-4 py-2 space-x-2">
-                  <button 
-    @click="showEditModal = true; selectedCategory = { 
-        id: '<?= $row['category_id'] ?>', 
-        code: '<?= $row['category_code'] ?>', 
-        name: '<?= htmlspecialchars($row['category_name']) ?>' 
-    }"
-    class="text-blue-600 hover:text-blue-800 p-2"
-    title="Edit"
->
-    <i class="fas fa-edit"></i>
-</button>
-=======
                                         <!-- Delete -->
                                         <button 
                                             @click="showDeleteModal = true; selectedCategory = { 
@@ -359,7 +330,6 @@ $newOrdersNotif = 0; $lowStockNotif = 0; $totalNotif = 0;
                     </tbody>
                 </table>
             </div>
->>>>>>> 0069ccb3f21ea424352bdef8bfc7e90923f0acdb
 
         </div> 
     </section>

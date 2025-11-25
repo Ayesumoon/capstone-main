@@ -34,10 +34,6 @@ switch ($filter) {
         $chartGroupBy = "DATE(created_at)";
         break;
     case 'all':
-<<<<<<< HEAD
-        // 1=1 is a SQL trick to make the WHERE clause always true (selects everything)
-=======
->>>>>>> 0069ccb3f21ea424352bdef8bfc7e90923f0acdb
         $dateCondition = "1=1"; 
         $chartGroupBy = "DATE_FORMAT(created_at, '%Y-%m')"; 
         break;
@@ -48,36 +44,10 @@ switch ($filter) {
         break;
 }
 
-<<<<<<< HEAD
-// ALIAS FIX: Create specific condition for JOIN queries
-// If filter is 'all', '1=1' remains '1=1' which is fine.
-$dateConditionWithAlias = str_replace("created_at", "o.created_at", $dateCondition); 
-
-
-if ($mostRes && $mostRow = $mostRes->fetch_assoc()) {
-    $rawTime = $mostRow['time_period'];
-    $mostSalesCount = $mostRow['count'];
-    
-    if ($filter == 'today') {
-        $mostSalesDate = date("g A", strtotime("$rawTime:00:00"));
-    } elseif ($filter == 'all') {
-        // Format YYYY-MM to "Nov 2023"
-        $mostSalesDate = date("M Y", strtotime($rawTime . "-01"));
-    } else {
-        $mostSalesDate = date("M j", strtotime($rawTime));
-    }
-}
-
-// 3. Basic Metrics (Orders, Sales, Revenue)
-$newOrders = 0;
-$totalSales = 0;
-$totalRevenue = 0;
-=======
 $dateConditionWithAlias = str_replace("created_at", "o.created_at", $dateCondition); 
 
 // 3. Basic Metrics
 $newOrders = 0; $totalSales = 0; $totalRevenue = 0;
->>>>>>> 0069ccb3f21ea424352bdef8bfc7e90923f0acdb
 
 $ordersQuery = $conn->query("SELECT COUNT(*) AS new_orders FROM orders WHERE $dateCondition");
 if ($row = $ordersQuery->fetch_assoc()) $newOrders = $row['new_orders'];
@@ -106,18 +76,9 @@ $mostRes = $conn->query($mostSalesQuery);
 if ($mostRes && $mostRow = $mostRes->fetch_assoc()) {
     $rawTime = $mostRow['time_period'];
     $mostSalesCount = $mostRow['count'];
-<<<<<<< HEAD
-    
-    if ($filter == 'today') {
-        $mostSalesDate = date("g A", strtotime("$rawTime:00:00"));
-    } else {
-        $mostSalesDate = date("M j", strtotime($rawTime));
-    }
-=======
     if ($filter == 'today') { $mostSalesDate = date("g A", strtotime("$rawTime:00:00")); }
     elseif ($filter == 'all') { $mostSalesDate = date("M Y", strtotime($rawTime . "-01")); }
     else { $mostSalesDate = date("M j", strtotime($rawTime)); }
->>>>>>> 0069ccb3f21ea424352bdef8bfc7e90923f0acdb
 }
 
 // 6. Chart 1 Data
@@ -146,33 +107,6 @@ if ($filter == 'today') {
         $chartValues[] = $rawChartData[$d] ?? 0;
     }
 } elseif ($filter == 'all') {
-<<<<<<< HEAD
-    // Loop through the actual data returned from DB
-    // $rawChartData keys are in 'YYYY-MM' format due to the group by
-    if (empty($rawChartData)) {
-        $chartLabels[] = "No Data";
-        $chartValues[] = 0;
-    } else {
-        foreach ($rawChartData as $ym => $count) {
-            $chartLabels[] = date("M Y", strtotime($ym . "-01"));
-            $chartValues[] = $count;
-        }
-    }
-}
-// 7. Chart 2 Data: Top 5 Products (For Bar Graph)
-$top5Labels = [];
-$top5Data = [];
-$top5Query = "
-    SELECT p.product_name, SUM(oi.qty) as total_qty 
-    FROM order_items oi 
-    JOIN orders o ON oi.order_id = o.order_id 
-    JOIN products p ON oi.product_id = p.product_id 
-    WHERE $dateConditionWithAlias 
-    GROUP BY oi.product_id 
-    ORDER BY total_qty DESC 
-    LIMIT 5
-";
-=======
     if (empty($rawChartData)) { $chartLabels[] = "No Data"; $chartValues[] = 0; }
     else { foreach ($rawChartData as $ym => $count) { $chartLabels[] = date("M Y", strtotime($ym . "-01")); $chartValues[] = $count; } }
 }
@@ -180,31 +114,9 @@ $top5Query = "
 // 7. Chart 2 Data
 $top5Labels = []; $top5Data = [];
 $top5Query = "SELECT p.product_name, SUM(oi.qty) as total_qty FROM order_items oi JOIN orders o ON oi.order_id = o.order_id JOIN products p ON oi.product_id = p.product_id WHERE $dateConditionWithAlias GROUP BY oi.product_id ORDER BY total_qty DESC LIMIT 5";
->>>>>>> 0069ccb3f21ea424352bdef8bfc7e90923f0acdb
 $top5Res = $conn->query($top5Query);
 while($row = $top5Res->fetch_assoc()){ $top5Labels[] = $row['product_name']; $top5Data[] = $row['total_qty']; }
 
-<<<<<<< HEAD
-// 8. Recent Orders Data
-$recentOrdersQuery = "
-    SELECT o.order_id, o.total_amount, o.order_status_id, o.created_at, 
-           CONCAT(c.first_name, ' ', c.last_name) as customer 
-    FROM orders o 
-    LEFT JOIN customers c ON o.customer_id = c.customer_id 
-    ORDER BY o.created_at DESC 
-    LIMIT 5
-";
-$recentOrdersRes = $conn->query($recentOrdersQuery);
-
-// 9. Notifications
-$newOrdersNotif = 0;
-$lowStockNotif = 0;
-
-$notifRes = $conn->query("SELECT COUNT(*) as count FROM orders WHERE created_at >= DATE_SUB(NOW(), INTERVAL 1 DAY)");
-if ($row = $notifRes->fetch_assoc()) $newOrdersNotif = $row['count'];
-
-$stockRes = $conn->query("SELECT COUNT(*) as count FROM products WHERE stocks < 30");
-=======
 // 8. Recent Orders
 $recentOrdersQuery = "SELECT o.order_id, o.total_amount, o.order_status_id, o.created_at, CONCAT(c.first_name, ' ', c.last_name) as customer FROM orders o LEFT JOIN customers c ON o.customer_id = c.customer_id ORDER BY o.created_at DESC LIMIT 5";
 $recentOrdersRes = $conn->query($recentOrdersQuery);
@@ -214,7 +126,6 @@ $newOrdersNotif = 0; $lowStockNotif = 0;
 $notifRes = $conn->query("SELECT COUNT(*) as count FROM orders WHERE created_at >= DATE_SUB(NOW(), INTERVAL 1 DAY)");
 if ($row = $notifRes->fetch_assoc()) $newOrdersNotif = $row['count'];
 $stockRes = $conn->query("SELECT COUNT(*) as count FROM stock WHERE current_qty < 10");
->>>>>>> 0069ccb3f21ea424352bdef8bfc7e90923f0acdb
 if ($row = $stockRes->fetch_assoc()) $lowStockNotif = $row['count'];
 $totalNotif = $newOrdersNotif + $lowStockNotif;
 ?>
@@ -571,22 +482,7 @@ $totalNotif = $newOrdersNotif + $lowStockNotif;
                             <td class="px-5 py-3 text-xs text-gray-500"><?= date('M j, H:i', strtotime($order['created_at'])) ?></td>
                             <td class="px-5 py-3 font-semibold text-gray-700">₱<?= number_format($order['total_amount'], 2) ?></td>
                             <td class="px-5 py-3">
-<<<<<<< HEAD
-                                <!-- Basic logic to colorize status -->
-                                <?php 
-                                    $statusStr = strtolower($order['order_status_id'] ?? 'pending'); // Assuming status_id might be text or converting to generic
-                                    // You might need to adjust this check based on your actual DB values (e.g., 1, 2 vs 'completed')
-                                    $bgClass = 'bg-gray-100 text-gray-600';
-                                    if(strpos($statusStr, 'complete') !== false || $statusStr == 1) $bgClass = 'bg-green-100 text-green-700';
-                                    if(strpos($statusStr, 'pend') !== false) $bgClass = 'bg-yellow-100 text-yellow-700';
-                                    if(strpos($statusStr, 'cancel') !== false) $bgClass = 'bg-red-100 text-red-700';
-                                ?>
-                                <span class="px-2 py-1 rounded text-xs font-semibold <?= $bgClass ?>">
-                                    <?= htmlspecialchars(ucfirst($statusStr)) ?>
-                                </span>
-=======
                                 <span class="px-3 py-1 rounded-full text-xs font-bold <?= $bgClass ?>"><?= htmlspecialchars($status_name) ?></span>
->>>>>>> 0069ccb3f21ea424352bdef8bfc7e90923f0acdb
                             </td>
                         </tr>
                         <?php endwhile; else: ?>

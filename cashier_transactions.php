@@ -159,71 +159,78 @@ while ($row = $chartDataRes->fetch_assoc()) {
 }
 $chartStmt->close();
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Transactions | Seven Dwarfs Boutique</title>
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: { rose: { 50: '#fff1f2', 100: '#ffe4e6', 400: '#fb7185', 500: '#f43f5e', 600: '#e11d48', 700: '#be123c' } },
-                    fontFamily: { sans: ['Poppins', 'sans-serif'] }
-                }
-            }
-        }
-    </script>
-    <style>
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 10px; }
-        .glass-header { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(0,0,0,0.03); }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cashier POS | Seven Dwarfs Boutique</title>
+
+<!-- Tailwind CSS & Alpine.js -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+
+<!-- Fonts & Icons -->
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet"/>
+
+<style>
+:root { --rose: #e59ca8; --rose-hover: #d27b8c; }
+body { font-family: 'Poppins', sans-serif; background-color: #f9fafb; color: #374151; }
+.active { background-color: #fce8eb; color: var(--rose); font-weight: 600; border-radius: 0.5rem; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Sidebar transition */
+#sidebar { transition: width 0.3s ease; }
+#sidebarToggle svg { transition: transform 0.3s ease; }
+</style>
 </head>
-<body class="bg-slate-50 text-slate-800 flex h-screen overflow-hidden antialiased">
 
-    <!-- SIDEBAR -->
-    <aside class="w-[260px] bg-white border-r border-slate-100 flex flex-col z-30 transition-all duration-300" id="sidebar">
-        <div class="h-20 flex items-center px-6 border-b border-slate-50">
-            <div>
-                <h1 class="text-xl font-bold text-rose-600 tracking-tight">Seven Dwarfs</h1>
-                <p class="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Boutique POS</p>
-            </div>
-        </div>
-        <nav class="flex-1 p-4 space-y-1 overflow-y-auto">
-            <a href="cashier_pos.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-50 hover:text-rose-600 font-medium transition-colors">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg> POS Terminal
-            </a>
-            <a href="cashier_transactions.php" class="flex items-center gap-3 px-4 py-3 rounded-xl bg-rose-50 text-rose-600 font-semibold transition-colors">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg> Transactions
-            </a>
-            <a href="cashier_inventory.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-50 hover:text-rose-600 font-medium transition-colors">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg> Inventory
-            </a>
-        </nav>
-        <div class="p-4 border-t border-slate-100 bg-slate-50/50">
-            <div class="flex items-center gap-3 mb-4">
-                <div class="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 font-bold text-sm shadow-sm">
-                    <?= strtoupper(substr($cashier_name, 0, 1)) ?>
-                </div>
-                <div class="overflow-hidden">
-                    <p class="text-sm font-bold text-slate-700 truncate"><?= htmlspecialchars($cashier_name) ?></p>
-                    <p class="text-xs text-slate-400">Logged in</p>
-                </div>
-            </div>
-            <form action="logout.php" method="POST">
-                <button class="w-full flex justify-center items-center gap-2 py-2.5 rounded-lg border border-slate-200 text-slate-500 text-sm font-medium hover:bg-white hover:text-rose-600 hover:border-rose-200 shadow-sm transition-all">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg> Sign Out
-                </button>
-            </form>
-        </div>
-    </aside>
+<body class="flex h-screen overflow-hidden" x-data="{ sidebarOpen: true }">
 
+<!-- SIDEBAR -->
+<aside id="sidebar" :class="sidebarOpen ? 'w-64' : 'w-20'" class="bg-white border-r border-slate-100 flex flex-col h-full no-scrollbar overflow-y-auto shadow-md">
+    <div class="flex items-center justify-between h-20 px-4 border-b border-slate-100">
+        <div class="flex items-center gap-2">
+            <h1 class="text-xl font-bold text-rose-600 tracking-tight" x-show="sidebarOpen">Seven Dwarfs
+            <p class="text-[10px] font-semibold text-slate-400 uppercase tracking-widest" x-show="sidebarOpen">Boutique POS</p>
+        </div>
+        <button @click="sidebarOpen = !sidebarOpen" class="text-slate-400 focus:outline-none">
+            <svg x-show="sidebarOpen" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            <svg x-show="!sidebarOpen" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+            </svg>
+        </button>
+    </div>
+    <nav class="flex-1 p-4 space-y-1">
+        <a href="cashier_pos.php" class=  "flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-50 hover:text-rose-600 font-medium transition-colors">
+            <i class="fas fa-cash-register"></i>
+            <span x-show="sidebarOpen">POS Terminal</span>
+        </a>
+        <a href="cashier_transactions.php" class="flex items-center gap-3 px-4 py-3 rounded-xl bg-rose-50 text-rose-600 font-semibold transition-colors">
+       
+            <i class="fas fa-receipt"></i>
+            <span x-show="sidebarOpen">Transactions</span>
+        </a>
+        <a href="cashier_inventory.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-50 hover:text-rose-600 font-medium transition-colors">
+            <i class="fas fa-boxes"></i>
+            <span x-show="sidebarOpen">Inventory</span>
+        </a>
+    </nav>
+    <div class="p-4 border-t border-slate-100 bg-slate-50/50 flex items-center gap-2">
+        <div class="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 font-bold text-sm shadow-sm"><?= strtoupper(substr($cashier_name,0,1)) ?></div>
+        <div x-show="sidebarOpen">
+            <p class="text-sm font-bold text-slate-700 truncate"><?= htmlspecialchars($cashier_name) ?></p>
+            <p class="text-xs text-slate-400">Logged in</p>
+        </div>
+        <form action="logout.php" method="POST" class="ml-auto" x-show="sidebarOpen">
+            <button class="px-2 py-1 bg-rose-100 text-rose-600 rounded text-xs font-semibold hover:bg-rose-200">Sign Out</button>
+        </form>
+    </div>
+</aside>
     <!-- MAIN CONTENT -->
     <main class="flex-1 flex flex-col relative overflow-hidden h-full">
         <!-- Header -->

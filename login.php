@@ -1,3 +1,4 @@
+
 <?php
 session_start();
 require 'conn.php'; // Database connection
@@ -103,8 +104,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["login"]) && isset($_PO
 $conn->close();
 ?>
 
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -114,18 +113,19 @@ $conn->close();
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Load Google Font: Poppins -->
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/login.css">
   <style>
     body {
       font-family: 'Poppins', sans-serif;
     }
   </style>
 </head>
-<body class="bg-gradient-to-r from-pink-100 to-pink-200 min-h-screen flex items-center justify-center">
-  <div class="bg-white/80 shadow-2xl border border-pink-200 rounded-2xl p-10 w-full max-w-md backdrop-blur-lg transition-transform duration-300 transform hover:scale-105">
+<body class="min-h-screen flex items-center justify-center bg-gradient-to-br from-pink-200 via-white to-pink-400">
+  <div class="glassmorphism-container w-full max-w-md p-8 rounded-3xl shadow-2xl border border-pink-200 backdrop-blur-lg transition-transform duration-300 hover:scale-105">
       <!-- Logo -->
       <div class="flex flex-col items-center mb-6">
-        <img src="logo2.png" alt="Seven Dwarfs Logo" class="h-20 w-auto shadow-lg rounded-full border-4 border-pink-200 mb-2" />
-        <h2 class="text-3xl font-extrabold text-center text-pink-600 mt-2 tracking-wide drop-shadow">Seven Dwarfs</h2>
+        <img src="New logo.jpg" alt="Seven Dwarfs Logo" class="h-32 w-32 shadow-lg rounded-full border-4 border-pink-200 mb-2" />
+        <h2 class="text-4xl font-extrabold text-center text-pink-600 mt-2 tracking-wide drop-shadow">Seven Dwarfs</h2>
       </div>
       <h3 class="text-xl font-semibold text-center text-gray-700 mb-6">Admin Login</h3>
       <?php if (!empty($error)) echo "<p class='text-red-500 text-center mb-4'>$error</p>"; ?>

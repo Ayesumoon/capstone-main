@@ -2,9 +2,6 @@
 session_start();
 require 'conn.php';
 
-<<<<<<< HEAD
-// 🔹 Verify admin session
-=======
 // ✅ CONFIG: Fix SQL Modes & Limits
 $conn->query("SET SESSION sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''))");
 $conn->query("SET SESSION group_concat_max_len = 100000");
@@ -15,7 +12,6 @@ if (!isset($_SESSION['admin_id'])) {
     exit;
 }
 
->>>>>>> 0069ccb3f21ea424352bdef8bfc7e90923f0acdb
 $admin_id   = $_SESSION['admin_id'] ?? null;
 $admin_name = "Admin";
 $admin_role = "Admin";
@@ -86,27 +82,11 @@ $sql = "
     os.order_status_name AS order_status,
     pm.payment_method_name AS payment_method,
     o.created_at,
-<<<<<<< HEAD
-
-    
-=======
->>>>>>> 0069ccb3f21ea424352bdef8bfc7e90923f0acdb
     GROUP_CONCAT(
         DISTINCT CONCAT(
-            p.product_name, ' (', sz.size, ', ', c2.color, ') x', oi.qty
+            p.product_name, ' (', COALESCE(sz.size, '-'), ', ', COALESCE(c2.color, '-'), ') x', oi.qty
         ) ORDER BY oi.id SEPARATOR '<br>'
     ) AS purchased_items,
-<<<<<<< HEAD
-
-  
-    GROUP_CONCAT(
-        DISTINCT CONCAT(
-            '[REFUND] ', p.product_name,
-            ' (', sz.size, ', ', c2.color, ') x',
-            (SELECT COUNT(*) FROM refunds r WHERE r.order_item_id = oi.id),
-            ' — ₱',
-            (SELECT SUM(refund_amount) FROM refunds r WHERE r.order_item_id = oi.id)
-=======
     GROUP_CONCAT(
         DISTINCT CONCAT(
             '<span class=\"text-red-600 font-bold\">[REFUND]</span> ', 
@@ -116,7 +96,6 @@ $sql = "
             (SELECT FLOOR(SUM(r.refund_amount) / NULLIF(oi.price, 0)) FROM refunds r WHERE r.order_item_id = oi.id),
             '</span> — ₱',
             (SELECT FORMAT(SUM(refund_amount), 2) FROM refunds r WHERE r.order_item_id = oi.id)
->>>>>>> 0069ccb3f21ea424352bdef8bfc7e90923f0acdb
         ) ORDER BY oi.id SEPARATOR '<br>'
     ) AS refunded_items
 FROM orders o
@@ -131,7 +110,6 @@ LEFT JOIN refunds rf ON oi.id = rf.order_item_id
 WHERE " . implode(" AND ", $where) . "
 GROUP BY o.order_id
 ORDER BY o.created_at DESC
-
 ";
 
 $stmt = $conn->prepare($sql);
@@ -255,173 +233,12 @@ foreach ($orders as $order) {
             <i class="fas fa-users-cog w-5 text-center text-lg"></i>
             <span x-show="sidebarOpen" class="whitespace-nowrap">User Management</span>
           </div>
-<<<<<<< HEAD
-        </div>
-
-        <!-- Product Management -->
-        <div>
-          <button @click="productMenu = !productMenu"
-            class="w-full text-left px-4 py-2 flex justify-between items-center hover:bg-gray-100 rounded-md transition">
-            <span><i class="fas fa-box-open mr-2"></i> Product Management</span>
-            <i class="fas fa-chevron-down transition-transform duration-200"
-              :class="{ 'rotate-180': productMenu }"></i>
-          </button>
-          <div x-show="productMenu" x-transition class="pl-8 space-y-1 mt-1">
-            <a href="categories.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-tags mr-2"></i> Category</a>
-            <a href="products.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-box mr-2"></i> Product</a>
-            <a href="inventory.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-warehouse mr-2"></i> Inventory</a>
-            <a href="stock_management.php" class="block py-1 hover:text-[var(--rose)]"><i class="fas fa-boxes mr-2"></i> Stock Management</a>
-          </div>
-        </div>
-
-        <a href="orders.php" class="block py-1 bg-pink-50 text-[var(--rose)] font-medium rounded-md">
-          <i class="fas fa-shopping-cart mr-2"></i> Orders</a>
-                <a href="cashier_sales_report.php" class="block px-4 py-2 rounded-md hover:bg-gray-100 transitio"><i class="fas fa-chart-line mr-2"></i>Cashier Sales</a>
-
-        <a href="suppliers.php" class="block px-4 py-2 hover:bg-gray-100 rounded-md transition">
-          <i class="fas fa-industry mr-2"></i> Suppliers</a>
-
-      <a href="system_logs.php" class="block px-4 py-2 hover:bg-gray-100 rounded transition"><i class="fas fa-file-alt mr-2"></i>System Logs</a>
-
-        <a href="logout.php" class="block px-4 py-2 text-red-600 hover:bg-red-50 rounded-md transition">
-          <i class="fas fa-sign-out-alt mr-2"></i> Logout</a>
-      </nav>
-    </aside>
-
- <!-- Main Content -->
-<main class="flex-1 p-8 bg-gray-50 space-y-6 overflow-auto w-full">
-
-<!-- Top Bar -->
-<div class="bg-[var(--rose)] text-white p-5 rounded-t-2xl shadow-sm flex justify-between items-center no-print">
-  <h1 class="text-2xl font-semibold">Order Management</h1>
-  <button onclick="window.print()" class="print-btn bg-white text-[var(--rose)] px-4 py-2 rounded-md shadow hover:bg-gray-100 font-bold transition">
-    <i class="fas fa-print mr-2"></i> Generate Printable Report
-  </button>
-</div>
-
-<!-- Filters -->
-<form method="GET" class="bg-white p-5 rounded-b-2xl shadow flex flex-wrap items-center gap-4 filters no-print">
-  <div class="flex items-center gap-2">
-    <label class="font-medium text-gray-700">Filter Status:</label>
-    <select name="status" onchange="this.form.submit()" class="p-2 border rounded focus:ring-[var(--rose)]">
-      <option value="all" <?= ($_GET['status'] ?? 'all') === 'all' ? 'selected' : '' ?>>All Statuses</option>
-      <?= $status_options ?>
-    </select>
-  </div>
-
-  <div class="flex items-center gap-2">
-    <label class="font-medium text-gray-700">Time Period:</label>
-    <select name="date_range" onchange="this.form.submit()" class="p-2 border rounded focus:ring-[var(--rose)]">
-      <option value="all" <?= ($date_filter === 'all') ? 'selected' : '' ?>>All Time</option>
-      <option value="today" <?= ($date_filter === 'today') ? 'selected' : '' ?>>Today</option>
-      <option value="week" <?= ($date_filter === 'week') ? 'selected' : '' ?>>This Week</option>
-      <option value="month" <?= ($date_filter === 'month') ? 'selected' : '' ?>>This Month</option>
-      <option value="year" <?= ($date_filter === 'year') ? 'selected' : '' ?>>This Year</option>
-    </select>
-  </div>
-</form>
-
-<!-- Orders Report -->
-<div class="bg-white p-8 rounded-2xl shadow-sm">
-
-  <!-- Summary Dashboard -->
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 p-4 bg-pink-50 rounded-lg border border-pink-100">
-    <div class="text-center md:text-left">
-        <p class="text-gray-500 text-xs uppercase">Total Orders</p>
-        <p class="text-2xl font-bold"><?= number_format($total_orders) ?></p>
-    </div>
-    <div class="text-center">
-        <p class="text-gray-500 text-xs uppercase">Total Sales</p>
-        <p class="text-2xl font-bold text-[var(--rose)]">₱<?= number_format($total_sales, 2) ?></p>
-    </div>
-    <div class="text-center md:text-right">
-        <p class="text-gray-500 text-xs uppercase">Payment Breakdown</p>
-        <div class="text-xs mt-1">
-            <?php foreach($payment_counts as $method => $amount): ?>
-                <div><?= htmlspecialchars($method) ?>: <span class="font-semibold">₱<?= number_format($amount, 2) ?></span></div>
-            <?php endforeach; ?>
-        </div>
-    </div>
-  </div>
-
-  <!-- Orders Table -->
-  <div class="overflow-x-auto">
-    <table class="min-w-full border border-gray-200 text-sm">
-      <thead class="bg-gray-100 text-gray-600 uppercase text-xs">
-        <tr>
-          <th class="px-4 py-3 text-left">Order #</th>
-          <th class="px-4 py-3 text-left">Date</th>
-          <th class="px-4 py-3 text-left w-1/3">Order Details</th>
-          <th class="px-4 py-3 text-left">Status</th>
-          <th class="px-4 py-3 text-right">Total</th>
-        </tr>
-      </thead>
-
-      <tbody class="divide-y divide-gray-100 text-gray-700">
-      <?php if (!empty($orders)): ?>
-        <?php foreach ($orders as $order): ?>
-        <tr class="hover:bg-gray-50">
-
-          <td class="px-4 py-2 font-mono font-semibold text-gray-500">
-            #<?= $order['order_id']; ?>
-          </td>
-
-          <td class="px-4 py-2 whitespace-nowrap">
-            <?= date('M d, Y', strtotime($order['created_at'])); ?>
-          </td>
-
-          <td class="px-4 py-2 text-xs leading-5">
-
-    <!-- Always show purchased items -->
-    <strong class="text-gray-800">Purchased:</strong><br>
-    <?= $order['purchased_items'] ?: '<em>No items recorded</em>' ?>
-
-    <!-- Only show refunded section if refunds exist -->
-    <?php if (!empty($order['refunded_items'])): ?>
-        <br><br>
-        <strong class="text-red-600">Refunded:</strong><br>
-        <span class="text-red-600"><?= $order['refunded_items'] ?></span>
-    <?php endif; ?>
-
-</td>
-
-
-          <td class="px-4 py-2">
-            <span class="px-2 py-1 rounded text-xs font-semibold bg-green-100 text-green-600 border border-green-200">
-              Completed
-            </span>
-          </td>
-
-          <td class="px-4 py-2 text-right font-bold">
-            ₱<?= number_format($order['total_amount'], 2); ?>
-          </td>
-
-        </tr>
-        <?php endforeach; ?>
-      <?php else: ?>
-        <tr>
-            <td colspan="5" class="text-center py-6 text-gray-500">
-                No orders found for this period.
-            </td>
-        </tr>
-      <?php endif; ?>
-      </tbody>
-          <!-- Table Footer for Print -->
-          <tfoot class="hidden print:table-row-group bg-gray-50 font-bold">
-            <tr>
-                <td colspan="5" class="px-4 py-2 text-right">GRAND TOTAL:</td>
-                <td class="px-4 py-2 text-right">₱<?= number_format($total_sales, 2); ?></td>
-            </tr>
-          </tfoot>
-        </table>
-=======
           <i x-show="sidebarOpen" class="fas fa-chevron-down transition-transform duration-200" :class="{ 'rotate-180': userMenu }"></i>
         </button>
         <ul x-show="userMenu" class="text-sm text-gray-700 space-y-1 mt-1 bg-gray-50 rounded-md overflow-hidden transition-all" :class="sidebarOpen ? 'pl-8' : 'pl-0 text-center'">
           <li><a href="manage_users.php" class="block py-2 hover:text-[var(--rose)] flex items-center" :class="sidebarOpen ? '' : 'justify-center'"><i class="fas fa-user w-4 mr-2" :class="sidebarOpen ? '' : 'mr-0 text-md'"></i><span x-show="sidebarOpen">Users</span></a></li>
           <li><a href="manage_roles.php" class="block py-2 hover:text-[var(--rose)] flex items-center" :class="sidebarOpen ? '' : 'justify-center'"><i class="fas fa-user-tag w-4 mr-2" :class="sidebarOpen ? '' : 'mr-0 text-md'"></i><span x-show="sidebarOpen">Roles</span></a></li>
         </ul>
->>>>>>> 0069ccb3f21ea424352bdef8bfc7e90923f0acdb
       </div>
 
       <!-- Product Management -->
