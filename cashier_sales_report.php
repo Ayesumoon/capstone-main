@@ -30,34 +30,21 @@ if ($row = $result->fetch_assoc()) {
 $stmt->close();
 
 // 🔹 Date filter
-$date_filter = $_GET['date_range'] ?? 'today';
+$start_date = $_GET['start_date'] ?? '';
+$end_date = $_GET['end_date'] ?? '';
+$selected_cashier = $_GET['cashier_id'] ?? '';
 
-switch ($date_filter) {
-  case 'today':
-    $date_condition = "DATE(o.created_at) = CURDATE()";
-    $date_label = "Today's Sales";
-    break;
-  case 'week':
-    $date_condition = "YEARWEEK(o.created_at, 1) = YEARWEEK(CURDATE(), 1)";
-    $date_label = "This Week's Sales";
-    break;
-  case 'month':
-    $date_condition = "MONTH(o.created_at) = MONTH(CURDATE()) AND YEAR(o.created_at) = YEAR(CURDATE())";
-    $date_label = "This Month's Sales";
-    break;
-  case 'year':
-    $date_condition = "YEAR(o.created_at) = YEAR(CURDATE())";
-    $date_label = "This Year's Sales";
-    break;
-  default:
-    $date_condition = "1=1";
-    $date_label = "All Time Sales";
-    break;
+if ($start_date && $end_date) {
+  $date_condition = "DATE(o.created_at) BETWEEN '" . $conn->real_escape_string($start_date) . "' AND '" . $conn->real_escape_string($end_date) . "'";
+  $date_label = "Sales from " . htmlspecialchars($start_date) . " to " . htmlspecialchars($end_date);
+} else {
+  $date_condition = "1=1";
+  $date_label = "All Time Sales";
 }
 
 // 🔹 Fetch each cashier’s total sales
 $sql = "
-  SELECT 
+  SELECT
       a.admin_id,
       CONCAT(a.first_name, ' ', a.last_name) AS cashier_name,
       COUNT(o.order_id) AS total_orders,
@@ -69,7 +56,15 @@ $sql = "
   ORDER BY total_sales DESC
 ";
 $result = $conn->query($sql);
-$cashiers = $result->fetch_all(MYSQLI_ASSOC);
+$all_cashiers = $result->fetch_all(MYSQLI_ASSOC);
+
+if ($selected_cashier) {
+  $cashiers = array_filter($all_cashiers, function($c) use ($selected_cashier) {
+    return $c['admin_id'] == $selected_cashier;
+  });
+} else {
+  $cashiers = $all_cashiers;
+}
 
 // 🔹 Summary totals
 $total_orders = 0;
@@ -79,7 +74,22 @@ foreach ($cashiers as $c) {
   $total_sales += $c['total_sales'];
 }
 
-$conn->close();
+$orders = [];
+$order_sql = "
+  SELECT
+    o.order_id,
+    o.created_at,
+    o.total_amount,
+    CONCAT(a.first_name, ' ', a.last_name) AS cashier_name
+  FROM orders o
+  LEFT JOIN adminusers a ON o.admin_id = a.admin_id
+  WHERE $date_condition
+  ORDER BY o.created_at DESC
+";
+$order_result = $conn->query($order_sql);
+if ($order_result) {
+  $orders = $order_result->fetch_all(MYSQLI_ASSOC);
+}
 ?>
 
 <!DOCTYPE html>
@@ -236,59 +246,111 @@ $conn->close();
 
         <!-- Filters -->
         <form method="GET" class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
-            <label for="date_range" class="font-bold text-gray-700 text-xs uppercase">View sales for:</label>
-            <select name="date_range" id="date_range" onchange="this.form.submit()"
-              class="px-3 py-2 border rounded-lg text-sm bg-gray-50 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--rose)]">
-              <option value="today" <?= $date_filter === 'today' ? 'selected' : '' ?>>Today</option>
-              <option value="week" <?= $date_filter === 'week' ? 'selected' : '' ?>>This Week</option>
-              <option value="month" <?= $date_filter === 'month' ? 'selected' : '' ?>>This Month</option>
-              <option value="year" <?= $date_filter === 'year' ? 'selected' : '' ?>>This Year</option>
-              <option value="all" <?= $date_filter === 'all' ? 'selected' : '' ?>>All Time</option>
-            </select>
+            <label for="start_date" class="font-bold text-gray-700 text-xs uppercase">Start Date:</label>
+            <input type="date" name="start_date" id="start_date"
+              value="<?= htmlspecialchars($start_date); ?>"
+              class="px-3 py-2 border rounded-lg text-sm bg-gray-50 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--rose)]" />
+        
+            <label for="end_date" class="font-bold text-gray-700 text-xs uppercase">End Date:</label>
+            <input type="date" name="end_date" id="end_date"
+              value="<?= htmlspecialchars($end_date); ?>"
+              class="px-3 py-2 border rounded-lg text-sm bg-gray-50 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--rose)]" />
+        
+            <button type="submit" class="ml-2 px-4 py-2 bg-[var(--rose)] text-white rounded-lg font-semibold hover:bg-[var(--rose-hover)] transition">Filter</button>
+            <a href="cashier_sales_report.php" class="ml-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition">Reset</a>
         </form>
 
         <!-- Main Content Card -->
         <div class="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
 
-          <!-- Summary Cards -->
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <div class="bg-green-50 p-6 rounded-xl text-center shadow-sm border border-green-100 transition hover:scale-[1.02]">
-              <p class="text-gray-500 text-xs uppercase font-bold tracking-wider">Total Orders</p>
-              <h2 class="text-3xl font-bold text-green-700 mt-2"><?= $total_orders; ?></h2>
-            </div>
-            <div class="bg-blue-50 p-6 rounded-xl text-center shadow-sm border border-blue-100 transition hover:scale-[1.02]">
-              <p class="text-gray-500 text-xs uppercase font-bold tracking-wider">Total Sales</p>
-              <h2 class="text-3xl font-bold text-blue-700 mt-2">₱<?= number_format($total_sales, 2); ?></h2>
+          <!-- Orders Table for Selected Date Range (now above filter) -->
+          <div class="mb-6">
+            <h2 class="text-lg font-bold mb-4 text-gray-700">Orders for Selected Date Range</h2>
+            <div class="overflow-x-auto rounded-lg border border-gray-100">
+              <table class="min-w-full text-left text-sm text-gray-600">
+                <thead class="bg-gray-50 text-gray-500 uppercase font-bold text-xs">
+                  <tr>
+                    <th class="px-6 py-3 text-left">Order ID</th>
+                    <th class="px-6 py-3 text-left">Date</th>
+                    <th class="px-6 py-3 text-left">Cashier</th>
+                    <th class="px-6 py-3 text-left">Total Amount</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 text-gray-700">
+                  <?php if (!empty($orders)): ?>
+                    <?php foreach ($orders as $order): ?>
+                      <tr class="hover:bg-gray-50 transition">
+                        <td class="px-6 py-4 font-mono text-gray-800"><?= htmlspecialchars($order['order_id']); ?></td>
+                        <td class="px-6 py-4"><?= htmlspecialchars(date('Y-m-d H:i', strtotime($order['created_at']))); ?></td>
+                        <td class="px-6 py-4"><?= htmlspecialchars($order['cashier_name']); ?></td>
+                        <td class="px-6 py-4 font-bold text-blue-700">₱<?= number_format($order['total_amount'], 2); ?></td>
+                      </tr>
+                    <?php endforeach; ?>
+                  <?php else: ?>
+                    <tr><td colspan="4" class="text-center py-8 text-gray-500">No orders found for this period.</td></tr>
+                  <?php endif; ?>
+                </tbody>
+              </table>
             </div>
           </div>
 
-          <!-- Sales Table -->
-          <div class="overflow-x-auto rounded-lg border border-gray-100">
-            <table class="min-w-full text-left text-sm text-gray-600">
-              <thead class="bg-gray-50 text-gray-500 uppercase font-bold text-xs">
-                <tr>
-                  <th class="px-6 py-3 text-left">Cashier</th>
-                  <th class="px-6 py-3 text-left">Total Orders</th>
-                  <th class="px-6 py-3 text-left">Total Sales</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-100 text-gray-700">
-                <?php if (!empty($cashiers)): ?>
-                  <?php foreach ($cashiers as $cashier): ?>
-                    <tr class="hover:bg-gray-50 transition">
-                      <td class="px-6 py-4 font-bold text-gray-800"><?= htmlspecialchars($cashier['cashier_name']); ?></td>
-                      <td class="px-6 py-4 font-mono text-gray-600"><?= $cashier['total_orders']; ?></td>
-                      <td class="px-6 py-4 font-bold text-green-700">₱<?= number_format($cashier['total_sales'], 2); ?></td>
-                    </tr>
-                  <?php endforeach; ?>
-                <?php else: ?>
-                  <tr><td colspan="3" class="text-center py-8 text-gray-500">No sales found for this period.</td></tr>
-                <?php endif; ?>
-              </tbody>
-            </table>
+          <!-- Cashier Summary Table in its own container -->
+          </div> <!-- End of main content card -->
+          
+          <div class="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 mt-8">
+            <h2 class="text-lg font-bold mb-4 text-gray-700">Cashier Sales Summary</h2>
+            <form method="GET" class="mb-6 flex flex-col sm:flex-row items-center gap-4">
+              <!-- Preserve date filters when selecting cashier -->
+              <input type="hidden" name="start_date" value="<?= htmlspecialchars($start_date); ?>">
+              <input type="hidden" name="end_date" value="<?= htmlspecialchars($end_date); ?>">
+              <div class="flex items-center gap-2 w-full sm:w-auto">
+                <label for="cashier_id" class="font-semibold text-gray-700 text-sm uppercase mr-2">Select Cashier:</label>
+                <div class="relative w-full sm:w-64">
+                  <select name="cashier_id" id="cashier_id" onchange="this.form.submit()"
+                    class="block w-full appearance-none px-4 py-2 pr-10 border border-gray-300 rounded-lg bg-white text-gray-700 text-base focus:outline-none focus:ring-2 focus:ring-[var(--rose)] transition">
+                    <option value="">All Cashiers</option>
+                    <?php foreach ($all_cashiers as $c): ?>
+                      <option value="<?= $c['admin_id']; ?>" <?= $selected_cashier == $c['admin_id'] ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($c['cashier_name']); ?>
+                      </option>
+                    <?php endforeach; ?>
+                  </select>
+                  <span class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                    <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </span>
+                </div>
+              </div>
+            </form>
+            <div class="overflow-x-auto rounded-lg border border-gray-100">
+              <table class="min-w-full text-left text-sm text-gray-600">
+                <thead class="bg-gray-50 text-gray-500 uppercase font-bold text-xs">
+                  <tr>
+                    <th class="px-6 py-3 text-left">Cashier</th>
+                    <th class="px-6 py-3 text-left">Total Orders</th>
+                    <th class="px-6 py-3 text-left">Total Sales</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 text-gray-700">
+                  <?php if (!empty($cashiers)): ?>
+                    <?php foreach ($cashiers as $cashier): ?>
+                      <tr class="hover:bg-gray-50 transition">
+                        <td class="px-6 py-4 font-bold text-gray-800"><?= htmlspecialchars($cashier['cashier_name']); ?></td>
+                        <td class="px-6 py-4 font-mono text-gray-600"><?= $cashier['total_orders']; ?></td>
+                        <td class="px-6 py-4 font-bold text-green-700">₱<?= number_format($cashier['total_sales'], 2); ?></td>
+                      </tr>
+                    <?php endforeach; ?>
+                  <?php else: ?>
+                    <tr><td colspan="3" class="text-center py-8 text-gray-500">No sales found for this period.</td></tr>
+                  <?php endif; ?>
+                </tbody>
+              </table>
+            </div>
           </div>
 
         </div> 
+      <!-- Removed duplicate orders table -->
     </section>
 
   </main>
