@@ -59,20 +59,14 @@ if (!empty($product['image_url'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $product_name   = trim($_POST['product_name']);
     // Removed Description
-    $price          = (float)$_POST['price'];
-    $supplier_price = (float)$_POST['supplier_price'];
     $category_id    = (int)$_POST['category_id'];
     $supplier_id    = (int)$_POST['supplier_id'];
 
     // 🛑 VALIDATION 1: Check Empty Fields
     if (empty($product_name) || empty($category_id) || empty($supplier_id)) {
         $error_msg = "Product Name, Category, and Supplier are required.";
-    } 
-    // 🛑 VALIDATION 2: Check Price
-    elseif ($price <= 0) {
-        $error_msg = "Selling Price must be greater than 0.";
     }
-    // 🛑 VALIDATION 3: Check Duplicate Name (Excluding current ID)
+    // 🛑 VALIDATION 2: Check Duplicate Name (Excluding current ID)
     else {
         $checkStmt = $conn->prepare("SELECT product_id FROM products WHERE product_name = ? AND product_id != ?");
         $checkStmt->bind_param("si", $product_name, $product_id);
@@ -118,18 +112,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $imageString = json_encode($finalImages, JSON_UNESCAPED_SLASHES);
 
-        // ✅ Update database (Removed Description)
+        // ✅ Update database (Removed Description, price, supplier_price)
         $updateStmt = $conn->prepare("
-            UPDATE products 
-            SET product_name = ?, price_id = ?, supplier_price = ?, 
-                category_id = ?, supplier_id = ?, image_url = ?
+            UPDATE products
+            SET product_name = ?, category_id = ?, supplier_id = ?, image_url = ?
             WHERE product_id = ?
         ");
         $updateStmt->bind_param(
-            "sddiisi",
+            "siisi",
             $product_name,
-            $price,
-            $supplier_price,
             $category_id,
             $supplier_id,
             $imageString,
@@ -271,34 +262,7 @@ $conn->close();
             <hr class="border-gray-100">
 
             <!-- Section 2: Pricing -->
-            <div>
-                <h3 class="text-sm uppercase tracking-wider text-gray-500 font-bold mb-4">Pricing</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                        <label class="block text-gray-700 font-semibold mb-2 text-sm">Selling Price (₱) <span class="text-red-500">*</span></label>
-                        <div class="relative">
-                            <span class="absolute left-4 top-3.5 text-gray-400">₱</span>
-                            <input 
-                                type="number" name="price" step="0.01" min="0.01"
-                                value="<?= htmlspecialchars($_POST['price'] ?? $product['price_id']); ?>" 
-                                required
-                                class="input-field w-full border border-gray-300 rounded-xl pl-8 pr-4 py-3 outline-none bg-gray-50 focus:bg-white font-medium"
-                            >
-                        </div>
-                    </div>
-                    <div>
-                        <label class="block text-gray-700 font-semibold mb-2 text-sm">Supplier Price (Cost) (₱)</label>
-                        <div class="relative">
-                            <span class="absolute left-4 top-3.5 text-gray-400">₱</span>
-                            <input 
-                                type="number" name="supplier_price" step="0.01" min="0"
-                                value="<?= htmlspecialchars($_POST['supplier_price'] ?? $product['supplier_price'] ?? 0); ?>"
-                                class="input-field w-full border border-gray-300 rounded-xl pl-8 pr-4 py-3 outline-none bg-gray-50 focus:bg-white"
-                            >
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <!-- Selling Price and Supplier Price fields removed -->
 
             <hr class="border-gray-100">
 

@@ -13,7 +13,6 @@ $supplier_result = $conn->query("SELECT supplier_id, supplier_name FROM supplier
 // -----------------------------
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $product_name   = trim($_POST['product_name'] ?? '');
-    $price          = isset($_POST['price_id']) ? floatval($_POST['price_id']) : 0;
     $supplier_price = isset($_POST['supplier_price']) ? floatval($_POST['supplier_price']) : 0;
     $category_id    = isset($_POST['category']) ? intval($_POST['category']) : 0;
     $supplier_id    = isset($_POST['supplier_id']) ? intval($_POST['supplier_id']) : 0;
@@ -22,11 +21,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     // Validation Logic
     if ($product_name === '') $errors[] = "Product name is required.";
-    if ($price <= 0) $errors[] = "Selling price must be greater than 0.";
     if ($supplier_price < 0) $errors[] = "Supplier price cannot be negative."; // Changed to allow 0
     if ($category_id <= 0) $errors[] = "Please select a valid category.";
     if ($supplier_id <= 0) $errors[] = "Please select a valid supplier.";
-    if ($price < $supplier_price) $errors[] = "Selling price cannot be lower than supplier price.";
 
     // Check category exists
     $cat_check = $conn->prepare("SELECT category_id FROM categories WHERE category_id = ?");
@@ -95,13 +92,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     }
 
     $image_url_str = json_encode($image_filenames, JSON_UNESCAPED_SLASHES);
-    $revenue = $price - $supplier_price; // Calculated field
 
-    // Insert
-    $sql = "INSERT INTO products (product_name, price_id, supplier_price, revenue, category_id, image_url, supplier_id, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, NOW())";
+    // Insert (no selling price, no revenue)
+    $sql = "INSERT INTO products (product_name, supplier_price, category_id, image_url, supplier_id, created_at)
+            VALUES (?, ?, ?, ?, ?, NOW())";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("sdddisi", $product_name, $price, $supplier_price, $revenue, $category_id, $image_url_str, $supplier_id);
+    $stmt->bind_param("sdisi", $product_name, $supplier_price, $category_id, $image_url_str, $supplier_id);
 
     if ($stmt->execute()) {
         $_SESSION['success'] = "Product added successfully!";
@@ -200,6 +196,7 @@ body {
             </div>
           </div>
         </div>
+        <!-- Selling Price field removed -->
 
         <hr class="border-gray-100">
 

@@ -28,7 +28,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Input sanitization
     $username   = htmlspecialchars(trim($_POST['username']), ENT_QUOTES, 'UTF-8');
-    $email      = filter_var(trim($_POST['email']), FILTER_VALIDATE_EMAIL);
     $password   = $_POST['password'];
     $confirm_password = $_POST['confirm_password'];
     $first_name = htmlspecialchars(trim($_POST['first_name']), ENT_QUOTES, 'UTF-8');
@@ -36,12 +35,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $role_id    = (int) $_POST['role_id'];
     $status_id  = 1; // ✅ default Active
     $created_at = date("Y-m-d H:i:s");
-
-    if (!$email) {
-        $_SESSION['message'] = "Invalid email format!";
-        header("Location: add_user.php");
-        exit();
-    }
 
     // ✅ Password match check
     if ($password !== $confirm_password) {
@@ -59,42 +52,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $password_hash = password_hash($password, PASSWORD_DEFAULT);
 
-    // ✅ Check if username or email already exists
-    $check_query = "SELECT admin_id FROM adminusers WHERE username = ? OR admin_email = ?";
+    // ✅ Check if username already exists
+    $check_query = "SELECT admin_id FROM adminusers WHERE username = ?";
     $check_stmt = $conn->prepare($check_query);
-    $check_stmt->bind_param("ss", $username, $email);
+    $check_stmt->bind_param("s", $username);
     $check_stmt->execute();
     $check_result = $check_stmt->get_result();
 
     if ($check_result->num_rows > 0) {
-        $_SESSION['message'] = "Error: Username or Email already exists!";
+        $_SESSION['message'] = "Error: Username already exists!";
         header("Location: add_user.php");
         exit();
     } else {
-        // ✅ Insert new user
-        $sql = "INSERT INTO adminusers (username, admin_email, password_hash, role_id, status_id, created_at, first_name, last_name) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+        // ✅ Insert new user (no email)
+        $sql = "INSERT INTO adminusers (username, password_hash, role_id, status_id, created_at, first_name, last_name)
+                VALUES (?, ?, ?, ?, ?, ?, ?)";
         $stmt = $conn->prepare($sql);
-        $stmt->bind_param("sssissss", $username, $email, $password_hash, $role_id, $status_id, $created_at, $first_name, $last_name);
+        $stmt->bind_param("ssissss", $username, $password_hash, $role_id, $status_id, $created_at, $first_name, $last_name);
 
         if ($stmt->execute()) {
-    // ✅ Add to logs
-    $log_sql = "INSERT INTO system_logs (user_id, username, role_id, action) VALUES (?, ?, ?, ?)";
-    $log_stmt = $conn->prepare($log_sql);
-    $action = "Added a new user: " . $username;
-    $log_stmt->bind_param("isis", $_SESSION['admin_id'], $_SESSION['username'], $_SESSION['role_id'], $action);
-    $log_stmt->execute();
-    $log_stmt->close();
+            // ✅ Add to logs
+            $log_sql = "INSERT INTO system_logs (user_id, username, role_id, action) VALUES (?, ?, ?, ?)";
+            $log_stmt = $conn->prepare($log_sql);
+            $action = "Added a new user: " . $username;
+            $log_stmt->bind_param("isis", $_SESSION['admin_id'], $_SESSION['username'], $_SESSION['role_id'], $action);
+            $log_stmt->execute();
+            $log_stmt->close();
 
-    $_SESSION['success'] = "User added successfully!";
-    header("Location: manage_users.php");
-    exit();
-} else {
-    error_log("DB Error: " . $stmt->error);
-    $_SESSION['message'] = "Something went wrong. Please try again.";
-    header("Location: add_user.php");
-    exit();
-}
+            $_SESSION['success'] = "User added successfully!";
+            header("Location: manage_users.php");
+            exit();
+        } else {
+            error_log("DB Error: " . $stmt->error);
+            $_SESSION['message'] = "Something went wrong. Please try again.";
+            header("Location: add_user.php");
+            exit();
+        }
 
         $stmt->close();
     }

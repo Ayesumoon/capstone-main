@@ -29,11 +29,22 @@ $admin_role = $admin['role_name'] ?? "Administrator";
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_role'])) {
     $role_name = trim($_POST['role_name']);
     if (!empty($role_name)) {
-        $stmt = $conn->prepare("INSERT INTO roles (role_name) VALUES (?)");
-        $stmt->bind_param("s", $role_name);
-        $stmt->execute();
-        $_SESSION['success'] = "Role added successfully!";
-        $stmt->close();
+        // Check if role name already exists
+        $check_stmt = $conn->prepare("SELECT role_id FROM roles WHERE role_name = ?");
+        $check_stmt->bind_param("s", $role_name);
+        $check_stmt->execute();
+        $check_result = $check_stmt->get_result();
+        if ($check_result->num_rows > 0) {
+            $_SESSION['message'] = "Role name already exists!";
+            $check_stmt->close();
+        } else {
+            $check_stmt->close();
+            $stmt = $conn->prepare("INSERT INTO roles (role_name) VALUES (?)");
+            $stmt->bind_param("s", $role_name);
+            $stmt->execute();
+            $_SESSION['success'] = "Role added successfully!";
+            $stmt->close();
+        }
     } else {
         $_SESSION['message'] = "Role name cannot be empty!";
     }
