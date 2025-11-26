@@ -167,14 +167,7 @@ input, button, select {
 
     <form method="POST" action="edit_user.php?id=<?= $admin_id; ?>" class="space-y-5">
       
-      <!-- Username -->
-      <div>
-        <label class="block text-gray-700 font-medium mb-1">Username</label>
-        <input type="text" name="username" value="<?= htmlspecialchars($user['username']); ?>" 
-          class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[var(--rose)] focus:outline-none">
-      </div>
-
-      <!-- First & Last Name -->
+ <!-- First & Last Name -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label class="block text-gray-700 font-medium mb-1">First Name</label>
@@ -188,13 +181,15 @@ input, button, select {
         </div>
       </div>
 
-      <!-- Email -->
+
+      <!-- Username -->
       <div>
-        <label class="block text-gray-700 font-medium mb-1">Email</label>
-        <input type="email" name="admin_email" value="<?= htmlspecialchars($user['admin_email']); ?>" 
+        <label class="block text-gray-700 font-medium mb-1">Username</label>
+        <input type="text" name="username" value="<?= htmlspecialchars($user['username']); ?>" 
           class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[var(--rose)] focus:outline-none">
       </div>
 
+  
       <!-- Role -->
       <div>
         <label class="block text-gray-700 font-medium mb-1">Role</label>

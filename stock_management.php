@@ -73,12 +73,14 @@ if (count($whereClauses) > 0) {
 }
 
 // 🔹 Stock Query
-// 🟢 UPDATED SORTING LOGIC HERE
+// 🟢 UPDATED: Added p.supplier_price and p.price_id (Seller Price)
 $stockQuery = "
     SELECT 
         s.stock_id,
         p.product_id,
         p.product_name,
+        p.supplier_price,
+        p.price_id AS seller_price,
         s.color_id,
         s.size_id,
         col.color,
@@ -97,8 +99,8 @@ $stockQuery = "
     " . $whereSQL . "
     GROUP BY s.stock_id, p.product_id, p.product_name, s.color_id, s.size_id, col.color, sz.size, s.current_qty
     ORDER BY 
-        date_added DESC,    -- Most recent Stock-In moves to top
-        s.stock_id DESC     -- If no Stock-In history, newest items move to top
+        date_added DESC,
+        s.stock_id DESC
 ";
 
 if ($stmt = $conn->prepare($stockQuery)) {
@@ -160,7 +162,9 @@ if ($stmt = $conn->prepare($stockQuery)) {
             supplier_id: '',
             product_id: '',
             color_id: '',
-            size_id: ''
+            size_id: '',
+            supplier_price: '',
+            price: ''
         }
      }" 
      x-init="$watch('sidebarOpen', val => localStorage.setItem('sidebarOpen', val))">
@@ -344,10 +348,6 @@ if ($stmt = $conn->prepare($stockQuery)) {
                           <tr class="hover:bg-gray-50 transition">
                             <td class="px-6 py-4 font-bold text-gray-800">
                                 <?= e($row['product_name']) ?>
-                                <?php if (!empty($row['date_added'])): ?>
-                                  <!-- Optional: Show recent stock-in date on hover or text -->
-                                  <!-- <span class="text-xs text-gray-400 block"><?= date('M d, Y', strtotime($row['date_added'])) ?></span> -->
-                                <?php endif; ?>
                             </td>
                             <td class="px-6 py-4"><?= $row['color'] ? e($row['color']) : '<span class="text-gray-400">—</span>' ?></td>
                             <td class="px-6 py-4"><?= $row['size'] ? e($row['size']) : '<span class="text-gray-400">—</span>' ?></td>
@@ -362,6 +362,10 @@ if ($stmt = $conn->prepare($stockQuery)) {
                                         editData.product_id = '<?= $row['product_id'] ?? '' ?>';
                                         editData.color_id = '<?= $row['color_id'] ?? '' ?>';
                                         editData.size_id = '<?= $row['size_id'] ?? '' ?>';
+                                        
+                                        // 🟢 Populate Prices for Edit
+                                        editData.supplier_price = '<?= $row['supplier_price'] ?? '' ?>';
+                                        editData.price = '<?= $row['seller_price'] ?? '' ?>';
                                         
                                         editStockOpen = true; 
                                         fetchProducts(editData.supplier_id, 'editProductSelect', editData.product_id);
@@ -401,6 +405,19 @@ if ($stmt = $conn->prepare($stockQuery)) {
             <option value="">Select Supplier First</option>
           </select>
         </div>
+        
+        <!-- 🟢 New Price Fields for Stock In -->
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-bold text-gray-700 mb-1">Supplier Price</label>
+              <input type="number" step="0.01" name="supplier_price" placeholder="0.00" class="border border-gray-300 w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)]">
+            </div>
+            <div>
+              <label class="block text-sm font-bold text-gray-700 mb-1">Seller Price</label>
+              <input type="number" step="0.01" name="price" placeholder="0.00" class="border border-gray-300 w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)]">
+            </div>
+        </div>
+
         <div class="grid grid-cols-2 gap-4">
             <div>
               <label class="block text-sm font-bold text-gray-700 mb-1">Color</label>
@@ -461,6 +478,18 @@ if ($stmt = $conn->prepare($stockQuery)) {
           <select id="editProductSelect" name="product_id" x-model="editData.product_id" class="border border-gray-300 w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)]">
               <option value="">Select Supplier First</option>
           </select>
+        </div>
+
+        <!-- 🟢 New Price Fields for Edit Modal -->
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-bold text-gray-700 mb-1">Supplier Price</label>
+              <input type="number" step="0.01" name="supplier_price" x-model="editData.supplier_price" class="border border-gray-300 w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)]">
+            </div>
+            <div>
+              <label class="block text-sm font-bold text-gray-700 mb-1">Seller Price</label>
+              <input type="number" step="0.01" name="price" x-model="editData.price" class="border border-gray-300 w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)]">
+            </div>
         </div>
 
         <div class="grid grid-cols-2 gap-4">
