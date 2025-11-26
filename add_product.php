@@ -203,35 +203,6 @@ body {
 
         <hr class="border-gray-100">
 
-        <!-- Section 2: Pricing -->
-        <div>
-          <h3 class="text-xs uppercase tracking-wider text-gray-500 font-bold mb-4">Pricing Strategy</h3>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <!-- Selling Price -->
-            <div>
-              <label class="block text-gray-700 font-semibold mb-2 text-sm">Selling Price (₱) <span class="text-red-500">*</span></label>
-              <div class="relative">
-                <span class="absolute left-4 top-3.5 text-gray-400 font-bold">₱</span>
-                <input type="number" step="0.01" name="price_id" id="price_id" required
-                  value="<?= htmlspecialchars($old['price_id'] ?? '') ?>"
-                  class="input-field w-full border border-gray-300 rounded-xl pl-10 pr-4 py-3 outline-none bg-gray-50 font-semibold text-gray-800">
-              </div>
-            </div>
-            <!-- Supplier Price -->
-            <div>
-              <label class="block text-gray-700 font-semibold mb-2 text-sm">Supplier Cost (₱) <span class="text-red-500">*</span></label>
-              <div class="relative">
-                <span class="absolute left-4 top-3.5 text-gray-400 font-bold">₱</span>
-                <input type="number" step="0.01" name="supplier_price" id="supplier_price" required
-                  value="<?= htmlspecialchars($old['supplier_price'] ?? '') ?>"
-                  class="input-field w-full border border-gray-300 rounded-xl pl-10 pr-4 py-3 outline-none bg-gray-50 text-gray-600">
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <hr class="border-gray-100">
-
         <!-- Section 3: Organization -->
         <div>
           <h3 class="text-xs uppercase tracking-wider text-gray-500 font-bold mb-4">Organization</h3>

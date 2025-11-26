@@ -217,7 +217,10 @@ if ($stmt = $conn->prepare($stockQuery)) {
           </li>
         </ul>
       </div>
-
+    <a href="suppliers.php" class="block px-4 py-3 hover:bg-gray-100 rounded-md transition-all duration-300 flex items-center" :class="sidebarOpen ? 'space-x-2' : 'justify-center px-0'">
+        <i class="fas fa-industry w-5 text-center text-lg"></i>
+        <span x-show="sidebarOpen" class="whitespace-nowrap">Suppliers</span>
+      </a>
       <!-- Product Management Dropdown (Active) -->
       <div>
         <button @click="productMenu = !productMenu" class="w-full text-left px-4 py-3 flex items-center hover:bg-gray-100 rounded-md transition-all duration-300" :class="sidebarOpen ? 'justify-between' : 'justify-center px-0'">
@@ -241,15 +244,15 @@ if ($stmt = $conn->prepare($stockQuery)) {
             </a>
           </li>
           <li>
-            <a href="inventory.php" class="block py-2 hover:text-[var(--rose)] flex items-center" :class="sidebarOpen ? '' : 'justify-center'" title="Inventory">
-              <i class="fas fa-warehouse w-4 mr-2" :class="sidebarOpen ? '' : 'mr-0 text-md'"></i>
-              <span x-show="sidebarOpen">Inventory</span>
-            </a>
-          </li>
-          <li>
             <a href="stock_management.php" class="block py-2 active-nav flex items-center" :class="sidebarOpen ? '' : 'justify-center'" title="Stock">
               <i class="fas fa-boxes w-4 mr-2" :class="sidebarOpen ? '' : 'mr-0 text-md'"></i>
               <span x-show="sidebarOpen">Stock In</span>
+            </a>
+          </li>
+          <li>
+            <a href="inventory.php" class="block py-2 hover:text-[var(--rose)] flex items-center" :class="sidebarOpen ? '' : 'justify-center'" title="Inventory">
+              <i class="fas fa-warehouse w-4 mr-2" :class="sidebarOpen ? '' : 'mr-0 text-md'"></i>
+              <span x-show="sidebarOpen">Inventory</span>
             </a>
           </li>
         </ul>
@@ -262,10 +265,6 @@ if ($stmt = $conn->prepare($stockQuery)) {
       <a href="cashier_sales_report.php" class="block px-4 py-3 hover:bg-gray-100 rounded-md transition-all duration-300 flex items-center" :class="sidebarOpen ? 'space-x-2' : 'justify-center px-0'">
         <i class="fas fa-chart-line w-5 text-center text-lg"></i>
         <span x-show="sidebarOpen" class="whitespace-nowrap">Cashier Sales</span>
-      </a>
-      <a href="suppliers.php" class="block px-4 py-3 hover:bg-gray-100 rounded-md transition-all duration-300 flex items-center" :class="sidebarOpen ? 'space-x-2' : 'justify-center px-0'">
-        <i class="fas fa-industry w-5 text-center text-lg"></i>
-        <span x-show="sidebarOpen" class="whitespace-nowrap">Suppliers</span>
       </a>
       <a href="system_logs.php" class="block px-4 py-3 hover:bg-gray-100 rounded-md transition-all duration-300 flex items-center" :class="sidebarOpen ? 'space-x-2' : 'justify-center px-0'">
         <i class="fas fa-file-alt w-5 text-center text-lg"></i>

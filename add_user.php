@@ -177,12 +177,6 @@ function validatePassword() {
     <form action="add_user.php" method="POST" class="space-y-5">
       <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?? ''; ?>">
 
-      <!-- Username -->
-      <div>
-        <label class="block text-gray-700 font-medium mb-1">Username</label>
-        <input type="text" name="username" required
-          class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[var(--rose)] focus:outline-none">
-      </div>
 
       <!-- First / Last Name -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -198,10 +192,10 @@ function validatePassword() {
         </div>
       </div>
 
-      <!-- Email -->
+    <!-- Username -->
       <div>
-        <label class="block text-gray-700 font-medium mb-1">Email</label>
-        <input type="email" name="email" required
+        <label class="block text-gray-700 font-medium mb-1">Username</label>
+        <input type="text" name="username" required
           class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[var(--rose)] focus:outline-none">
       </div>
 
