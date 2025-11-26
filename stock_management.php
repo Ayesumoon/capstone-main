@@ -51,10 +51,29 @@ while ($s = $res->fetch_assoc()) $size_list[] = $s;
 
 // 🔹 Filters & Logic
 $selected_category = isset($_GET['category_id']) ? intval($_GET['category_id']) : 0;
+$selected_status = isset($_GET['stock_status']) ? $_GET['stock_status'] : 'all';
+
 $stock_rows = [];
 $outStock = false;
 
+// 🔹 Build Dynamic WHERE Clause
+$whereClauses = [];
+if ($selected_category) {
+    $whereClauses[] = "p.category_id = ?";
+}
+if ($selected_status === 'in') {
+    $whereClauses[] = "s.current_qty > 0";
+} elseif ($selected_status === 'out') {
+    $whereClauses[] = "s.current_qty <= 0";
+}
+
+$whereSQL = "";
+if (count($whereClauses) > 0) {
+    $whereSQL = " WHERE " . implode(" AND ", $whereClauses) . " ";
+}
+
 // 🔹 Stock Query
+// 🟢 UPDATED SORTING LOGIC HERE
 $stockQuery = "
     SELECT 
         s.stock_id,
@@ -75,9 +94,11 @@ $stockQuery = "
     LEFT JOIN sizes sz ON s.size_id = sz.size_id
     LEFT JOIN stock_in si ON si.stock_id = s.stock_id
     LEFT JOIN suppliers sup ON p.supplier_id = sup.supplier_id
-    " . ($selected_category ? "WHERE p.category_id = ? " : "") . "
+    " . $whereSQL . "
     GROUP BY s.stock_id, p.product_id, p.product_name, s.color_id, s.size_id, col.color, sz.size, s.current_qty
-    ORDER BY date_added DESC, p.product_name ASC
+    ORDER BY 
+        date_added DESC,    -- Most recent Stock-In moves to top
+        s.stock_id DESC     -- If no Stock-In history, newest items move to top
 ";
 
 if ($stmt = $conn->prepare($stockQuery)) {
@@ -102,9 +123,7 @@ if ($stmt = $conn->prepare($stockQuery)) {
   <title>Stock Management | Seven Dwarfs</title>
   
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Fixed Alpine Version -->
   <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js" defer></script>
-  
   <script src="https://unpkg.com/nprogress@0.2.0/nprogress.js"></script>
   <link rel="stylesheet" href="https://unpkg.com/nprogress@0.2.0/nprogress.css" />
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" />
@@ -127,7 +146,7 @@ if ($stmt = $conn->prepare($stockQuery)) {
 
 <body class="text-sm animate-fade-in">
 
-<!-- 🟢 START GLOBAL WRAPPER: x-data is defined here -->
+<!-- 🟢 START GLOBAL WRAPPER -->
 <div class="flex min-h-screen" 
      x-data="{ 
         sidebarOpen: localStorage.getItem('sidebarOpen') === 'false' ? false : true, 
@@ -146,7 +165,7 @@ if ($stmt = $conn->prepare($stockQuery)) {
      }" 
      x-init="$watch('sidebarOpen', val => localStorage.setItem('sidebarOpen', val))">
 
-    <!-- 🌸 SIDEBAR (Restored Full Version) -->
+    <!-- 🌸 SIDEBAR -->
   <aside 
     class="bg-white shadow-md fixed top-0 left-0 h-screen z-30 transition-all duration-300 ease-in-out no-scrollbar overflow-y-auto"
     :class="sidebarOpen ? 'w-64' : 'w-20'"
@@ -273,7 +292,7 @@ if ($stmt = $conn->prepare($stockQuery)) {
     </header>
 
     <section class="p-6 space-y-6">
-        <?php if ($outStock): ?>
+        <?php if ($outStock && $selected_status != 'in'): ?>
           <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl shadow-sm flex items-center animate-pulse">
             <i class="fas fa-exclamation-triangle mr-2"></i><span><strong>Alert:</strong> Some items are out of stock!</span>
           </div>
@@ -281,14 +300,26 @@ if ($stmt = $conn->prepare($stockQuery)) {
 
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <div class="flex flex-wrap justify-between items-center gap-4 mb-6">
-                <form method="GET" class="flex items-center gap-2">
-                    <label class="text-gray-700 font-bold text-xs uppercase tracking-wide">Category:</label>
-                    <select name="category_id" onchange="this.form.submit()" class="px-3 py-2 border rounded-lg text-sm bg-gray-50">
-                      <option value="0">All Categories</option>
-                      <?php foreach ($categories as $cat): ?>
-                        <option value="<?= $cat['category_id'] ?>" <?= ($cat['category_id']==$selected_category)?'selected':'' ?> ><?= e($cat['category_name']) ?></option>
-                      <?php endforeach; ?>
-                    </select>
+                <!-- 🟢 FILTERS -->
+                <form method="GET" class="flex flex-wrap items-center gap-2">
+                    <div class="flex items-center gap-2">
+                        <label class="text-gray-700 font-bold text-xs uppercase tracking-wide">Category:</label>
+                        <select name="category_id" onchange="this.form.submit()" class="px-3 py-2 border rounded-lg text-sm bg-gray-50 focus:outline-none focus:ring-1 focus:ring-[var(--rose)]">
+                          <option value="0">All Categories</option>
+                          <?php foreach ($categories as $cat): ?>
+                            <option value="<?= $cat['category_id'] ?>" <?= ($cat['category_id']==$selected_category)?'selected':'' ?> ><?= e($cat['category_name']) ?></option>
+                          <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <label class="text-gray-700 font-bold text-xs uppercase tracking-wide">Status:</label>
+                        <select name="stock_status" onchange="this.form.submit()" class="px-3 py-2 border rounded-lg text-sm bg-gray-50 focus:outline-none focus:ring-1 focus:ring-[var(--rose)]">
+                          <option value="all" <?= $selected_status == 'all' ? 'selected' : '' ?>>All Status</option>
+                          <option value="in" <?= $selected_status == 'in' ? 'selected' : '' ?>>In Stock</option>
+                          <option value="out" <?= $selected_status == 'out' ? 'selected' : '' ?>>Out of Stock</option>
+                        </select>
+                    </div>
                 </form>
 
                 <button type="button" @click="stockInOpen = true"
@@ -312,7 +343,13 @@ if ($stmt = $conn->prepare($stockQuery)) {
                     <tbody class="divide-y divide-gray-100 text-gray-700">
                         <?php if (count($stock_rows) > 0): foreach ($stock_rows as $row): ?>
                           <tr class="hover:bg-gray-50 transition">
-                            <td class="px-6 py-4 font-bold text-gray-800"><?= e($row['product_name']) ?></td>
+                            <td class="px-6 py-4 font-bold text-gray-800">
+                                <?= e($row['product_name']) ?>
+                                <?php if (!empty($row['date_added'])): ?>
+                                  <!-- Optional: Show recent stock-in date on hover or text -->
+                                  <!-- <span class="text-xs text-gray-400 block"><?= date('M d, Y', strtotime($row['date_added'])) ?></span> -->
+                                <?php endif; ?>
+                            </td>
                             <td class="px-6 py-4"><?= $row['color'] ? e($row['color']) : '<span class="text-gray-400">—</span>' ?></td>
                             <td class="px-6 py-4"><?= $row['size'] ? e($row['size']) : '<span class="text-gray-400">—</span>' ?></td>
                             <td class="px-6 py-4 font-bold <?= ((int)$row['current_qty'] == 0) ? 'text-red-600' : 'text-green-600' ?>"><?= (int)$row['current_qty'] ?></td>
@@ -336,7 +373,7 @@ if ($stmt = $conn->prepare($stockQuery)) {
                             </td>
                           </tr>
                         <?php endforeach; else: ?>
-                          <tr><td colspan="6" class="text-center py-8 text-gray-500">No stock records found.</td></tr>
+                          <tr><td colspan="6" class="text-center py-8 text-gray-500">No stock records found matching filters.</td></tr>
                         <?php endif; ?>
                     </tbody>
                 </table>
@@ -344,8 +381,6 @@ if ($stmt = $conn->prepare($stockQuery)) {
         </div> 
     </section>
   </main>
-
-  <!-- 🟢 MODALS ARE NOW INSIDE THE GLOBAL DIV -->
 
   <!-- Stock In Modal -->
   <div x-show="stockInOpen" x-cloak class="fixed inset-0 flex items-center justify-center bg-black/50 z-50 p-4 backdrop-blur-sm animate-fade-in">
@@ -464,7 +499,7 @@ if ($stmt = $conn->prepare($stockQuery)) {
   </div>
 
 </div> 
-<!-- 🔴 END GLOBAL WRAPPER (This needs to be here!) -->
+<!-- 🔴 END GLOBAL WRAPPER -->
 
 <script>
 // NProgress Logic
@@ -504,9 +539,7 @@ function fetchProducts(supplierId, targetSelectId, preSelectedId = null) {
         
         // Handle pre-selection for Edit Modal
         if (preSelectedId) {
-            // Set DOM value
             productSel.value = preSelectedId;
-            // Update Alpine Data Model so the dropdown shows the correct value visually
             const root = document.querySelector('[x-data]');
             if(root && root.__x) {
                 root.__x.$data.editData.product_id = preSelectedId;
