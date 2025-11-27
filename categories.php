@@ -1,5 +1,6 @@
 <?php
 // Database connection
+require 'admin_only.php';
 require 'conn.php';
 
 session_start();

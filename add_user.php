@@ -1,5 +1,6 @@
 <?php
 session_start();
+require 'admin_only.php';
 require 'conn.php'; // Database connection
 
 // ✅ Generate CSRF token if not exists

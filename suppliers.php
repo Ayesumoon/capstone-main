@@ -1,15 +1,11 @@
 <?php
+require 'admin_only.php';
 require 'conn.php';
-// Include authentication check directly instead of file if simpler
 session_start();
 if (!isset($_SESSION['admin_id'])) {
     header("Location: login.php");
     exit;
 }
-
-// ======================================
-// FETCH ADMIN DETAILS
-// ======================================
 
 $admin_id   = $_SESSION['admin_id'] ?? null;
 $admin_name = "Admin";
@@ -35,10 +31,6 @@ if ($admin_id) {
 }
 
 
-// ======================================
-// ADD SUPPLIER
-// ======================================
-
 if (isset($_POST['add_supplier'])) {
 
     $supplier_name  = trim($_POST['supplier_name']);
@@ -59,10 +51,6 @@ if (isset($_POST['add_supplier'])) {
     }
 }
 
-
-// ======================================
-// UPDATE SUPPLIER
-// ======================================
 
 if (isset($_POST['edit_supplier'])) {
 
@@ -87,10 +75,6 @@ if (isset($_POST['edit_supplier'])) {
 }
 
 
-// ======================================
-// DELETE SUPPLIER
-// ======================================
-
 if (isset($_POST['delete_supplier'])) {
 
     $delete_id = intval($_POST['delete_id']);
@@ -105,11 +89,6 @@ if (isset($_POST['delete_supplier'])) {
         exit;
     }
 }
-
-
-// ======================================
-// FETCH SUPPLIERS
-// ======================================
 
 $suppliers = $conn->query("
     SELECT supplier_id, supplier_name, supplier_email, supplier_phone, created_at
@@ -136,16 +115,13 @@ $suppliers = $conn->query("
     body { font-family: 'Poppins', sans-serif; background-color: #f9fafb; color: #374151; }
     [x-cloak] { display: none !important; }
 
-    /* Custom scrollbar */
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-thumb { background: var(--rose); border-radius: 3px; }
     
-    /* Sidebar specific */
     .active-nav { background-color: #fce8eb; color: var(--rose); font-weight: 600; border-radius: 0.5rem; }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-    /* Animations */
     @keyframes fadeInSlide {
         from { opacity: 0; transform: translateY(10px); }
         to { opacity: 1; transform: translateY(0); }

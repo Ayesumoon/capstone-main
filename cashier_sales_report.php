@@ -1,5 +1,6 @@
 <?php
 session_start();
+require 'admin_only.php';
 require 'conn.php';
 
 // Verify admin session

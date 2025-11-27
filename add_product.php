@@ -1,5 +1,6 @@
 <?php
 session_start();
+require 'admin_only.php';
 require 'conn.php';
 
 $preselectedCategoryId = isset($_GET['category_id']) ? intval($_GET['category_id']) : null;

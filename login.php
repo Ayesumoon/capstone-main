@@ -1,13 +1,24 @@
-
 <?php
+ob_start(); // 🟢 1. Fixes header issues caused by spaces
 session_start();
-require 'conn.php'; // Database connection
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+require 'conn.php';
 
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["login"]) && isset($_POST["password"])) {
-    $login_input = trim($_POST["login"]); // can be username OR email
+// Check for spaces in conn.php
+if (headers_sent($file, $line)) {
+    die("⚠️ Error: Output started in $file on line $line. Remove spaces before <?php in that file.");
+}
+
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["login"])) {
+    $login_input = trim($_POST["login"]); 
     $password = $_POST["password"];
 
-    // 🔹 1. Check if it's an admin (username OR email)
+    echo "<div style='background:yellow; padding:10px; border:1px solid black; z-index:9999; position:relative;'>";
+    echo "<strong>DEBUG MODE:</strong><br>";
+    echo "Login Input: " . htmlspecialchars($login_input) . "<br>";
+
+    // 🔹 1. Check Admin/Staff
     $sql = "SELECT admin_id, admin_email, username, password_hash, role_id 
             FROM adminusers 
             WHERE admin_email = ? OR username = ?";
@@ -16,91 +27,70 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["login"]) && isset($_PO
     $stmt->execute();
     $stmt->store_result();
 
+    echo "Admin Match Found: " . ($stmt->num_rows > 0 ? "YES" : "NO") . "<br>";
+
     if ($stmt->num_rows > 0) {
         $stmt->bind_result($admin_id, $db_email, $db_username, $db_password_hash, $role_id);
         $stmt->fetch();
 
+        echo "Stored Hash: " . substr($db_password_hash, 0, 10) . "...<br>";
+        echo "Role ID found: " . $role_id . "<br>";
+
         if (password_verify($password, $db_password_hash)) {
+            echo "<span style='color:green'>✔ Password Verified!</span><br>";
+            
             $_SESSION["loggedin"] = true;
             $_SESSION["admin_id"] = $admin_id;
-            $_SESSION["email"] = $db_email;
-            $_SESSION["username"] = $db_username;
             $_SESSION["role_id"] = $role_id;
 
-            // 🔹 Update last_logged_in
-            $updateLogin = "UPDATE adminusers 
-                            SET last_logged_in = NOW(), last_logged_out = NULL 
-                            WHERE admin_id = ?";
-            $stmtUpdate = $conn->prepare($updateLogin);
-            $stmtUpdate->bind_param("i", $admin_id);
-            $stmtUpdate->execute();
-            $stmtUpdate->close();
+            // ... (Logging Logic Skipped for Debug) ...
 
-            // 🔹 Get the role name from roles table
-            $roleQuery = $conn->prepare("SELECT role_name FROM roles WHERE role_id = ?");
-            $roleQuery->bind_param("i", $role_id);
-            $roleQuery->execute();
-            $roleResult = $roleQuery->get_result();
-            $roleRow = $roleResult->fetch_assoc();
-            $role_name = $roleRow['role_name'] ?? 'Unknown';
-            $roleQuery->close();
-
-            // 🔹 Insert into system_logs (properly stores role_id)
-            $log_sql = "INSERT INTO system_logs (user_id, username, role_id, action) 
-                        VALUES (?, ?, ?, 'Login')";
-            $stmtLog = $conn->prepare($log_sql);
-            $stmtLog->bind_param("isi", $admin_id, $db_username, $role_id);
-            $stmtLog->execute();
-            $stmtLog->close();
-
-            // 🔹 Redirect based on role
-            if ($role_name === 'Admin') {
+            if ($role_id == 2) {
+                echo "Attempting Redirect to: <strong>dashboard.php</strong>";
                 header("Location: dashboard.php");
-            } elseif ($role_name === 'Cashier') {
+                exit;
+            } elseif ($role_id == 1) {
+                echo "Attempting Redirect to: <strong>cashier_pos.php</strong>";
                 header("Location: cashier_pos.php");
+                exit;
             } else {
-                header("Location: dashboard.php");
+                echo "<span style='color:red'>❌ Role ID is not 1 or 2. It is $role_id. Script sends back to login.</span>";
             }
             exit;
+        } else {
+            echo "<span style='color:red'>❌ Admin Password Verification FAILED. Hash mismatch.</span><br>";
         }
     }
     $stmt->close();
 
-    // 🔹 2. If not admin, check if it's a customer
-    $sql = "SELECT customer_id, email, password_hash 
-            FROM customers 
-            WHERE email = ?";
+    // 🔹 2. Check Customer
+    $sql = "SELECT customer_id, email, password_hash FROM customers WHERE email = ?";
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("s", $login_input);
     $stmt->execute();
     $stmt->store_result();
+
+    echo "Customer Match Found: " . ($stmt->num_rows > 0 ? "YES" : "NO") . "<br>";
 
     if ($stmt->num_rows > 0) {
         $stmt->bind_result($customer_id, $db_email, $db_password_hash);
         $stmt->fetch();
 
         if (password_verify($password, $db_password_hash)) {
+            echo "<span style='color:green'>✔ Customer Password Verified!</span><br>";
+            echo "Attempting Redirect to: customerside/homepage.php";
             $_SESSION["loggedin"] = true;
-            $_SESSION["customer_id"] = $customer_id;
-            $_SESSION["email"] = $db_email;
             $_SESSION["role"] = "Customer";
-
             header("Location: customerside/homepage.php");
             exit;
+        } else {
+             echo "<span style='color:red'>❌ Customer Password Verification FAILED.</span><br>";
         }
     }
 
+    echo "</div>"; // End Debug
     $stmt->close();
-    // Do NOT close $conn here, let the rest of the page use it
-
-    $error = "Invalid username/email or password.";
 }
-
-// Forgot password handler
-// (Removed as per request)
-?>
-<?php
-// Close the connection at the end of the script
 $conn->close();
 ?>
 

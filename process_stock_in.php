@@ -8,18 +8,37 @@ if (!isset($_SESSION['admin_id'])) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // 1. Get Data
     $product_id  = intval($_POST['product_id']);
     $color_id    = intval($_POST['color_id']);
     $size_id     = intval($_POST['size_id']);
     $quantity    = intval($_POST['quantity']);
     $supplier_id = intval($_POST['supplier_id']);
+    
+    // 🟢Get the prices from the form
+    // We use floatval because prices have decimals
+    $supplier_price = isset($_POST['supplier_price']) ? floatval($_POST['supplier_price']) : 0.00;
+    $selling_price  = isset($_POST['price']) ? floatval($_POST['price']) : 0.00;
 
     // Validate inputs
     if ($product_id <= 0 || $color_id <= 0 || $size_id <= 0 || $quantity <= 0 || $supplier_id <= 0) {
         die("Invalid input.");
     }
 
-    // 1️⃣ Check if stock entry exists for this product + color + size
+   
+    if ($product_id > 0) {
+        $updatePrices = $conn->prepare("
+            UPDATE products 
+            SET supplier_price = ?, price_id = ?, supplier_id = ? 
+            WHERE product_id = ?
+        ");
+        // "d" stands for decimal/double, "i" for integer
+        $updatePrices->bind_param("ddii", $supplier_price, $selling_price, $supplier_id, $product_id);
+        $updatePrices->execute();
+        $updatePrices->close();
+    }
+
+    // 2️⃣ Check if stock entry exists for this product + color + size
     $checkStock = $conn->prepare("
         SELECT stock_id, current_qty 
         FROM stock 
@@ -31,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $result = $checkStock->get_result();
 
     if ($row = $result->fetch_assoc()) {
-        // 2️⃣ Update existing stock quantity
+        // 3️⃣ Update existing stock quantity
         $stock_id = $row['stock_id'];
         $new_qty = $row['current_qty'] + $quantity;
 
@@ -44,7 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $updateStock->execute();
         $updateStock->close();
     } else {
-        // 3️⃣ Insert a new stock record for this variant
+        // 4️⃣ Insert a new stock record for this variant
         $insertStock = $conn->prepare("
             INSERT INTO stock (product_id, color_id, size_id, current_qty) 
             VALUES (?, ?, ?, ?)
@@ -56,7 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     $checkStock->close();
 
-    // 4️⃣ Record the stock-in transaction
+    // 5️⃣ Record the stock-in transaction
     $insertStockIn = $conn->prepare("
         INSERT INTO stock_in (stock_id, supplier_id, quantity, date_added) 
         VALUES (?, ?, ?, NOW())
@@ -65,8 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $insertStockIn->execute();
     $insertStockIn->close();
 
-    // ⚠️ 5️⃣ Optional: Remove or adjust product-level stock tracking
-    // If you still want products.stocks to reflect total stock (all variants combined):
+    // 6️⃣ Optional: Update total product-level stock tracking
     $updateProductStock = $conn->prepare("
         UPDATE products 
         SET stocks = COALESCE(stocks, 0) + ? 
@@ -76,7 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $updateProductStock->execute();
     $updateProductStock->close();
 
-    // 6️⃣ Redirect back with success
+    // 7️⃣ Redirect back with success
     header("Location: stock_management.php?success=1");
     exit;
 } else {

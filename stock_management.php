@@ -1,5 +1,5 @@
 <?php
-// stock_management.php
+require 'admin_only.php';
 require 'conn.php';
 session_start();
 
@@ -385,46 +385,55 @@ if ($stmt = $conn->prepare($stockQuery)) {
     </section>
   </main>
 
-  <!-- Stock In Modal -->
+   <!-- Stock In Modal -->
   <div x-show="stockInOpen" x-cloak class="fixed inset-0 flex items-center justify-center bg-black/50 z-50 p-4 backdrop-blur-sm animate-fade-in">
     <div @click.away="stockInOpen = false" class="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 transform transition-all">
       <h3 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Stock In (New)</h3>
       <form action="process_stock_in.php" method="POST" class="space-y-4">
+        
+        <!-- Supplier Select -->
         <div>
           <label class="block text-sm font-bold text-gray-700 mb-1">Supplier</label>
-          <select id="supplierSelect" name="supplier_id" onchange="fetchProducts(this.value, 'productSelect')" class="border border-gray-300 w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)]" required>
+          <select id="supplierSelect" name="supplier_id" 
+                  onchange="fetchProducts(this.value, 'productSelect')" 
+                  class="border border-gray-300 w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)]" required>
             <option value="">Select Supplier</option>
             <?php foreach ($supplier_list as $sup): ?>
-              <option value="<?= $sup['supplier_id'] ?>"><?= e($sup['supplier_name']) ?></option>
+              <option value="<?= $sup['supplier_id'] ?>"><?= htmlspecialchars($sup['supplier_name']) ?></option>
             <?php endforeach; ?>
           </select>
         </div>
+
+        <!-- 🟢 Product Select (UPDATED: Added onchange="fillPrices(...)") -->
         <div>
           <label class="block text-sm font-bold text-gray-700 mb-1">Product</label>
-          <select id="productSelect" name="product_id" class="border border-gray-300 w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)]" required>
+          <select id="productSelect" name="product_id" 
+                  onchange="fillPrices(this)" 
+                  class="border border-gray-300 w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)]" required>
             <option value="">Select Supplier First</option>
           </select>
         </div>
         
-        <!-- 🟢 New Price Fields for Stock In -->
+        <!-- 🟢 Price Fields (IDs added for targeting) -->
         <div class="grid grid-cols-2 gap-4">
             <div>
               <label class="block text-sm font-bold text-gray-700 mb-1">Supplier Price</label>
-              <input type="number" step="0.01" name="supplier_price" placeholder="0.00" class="border border-gray-300 w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)]">
+              <input type="number" step="0.01" id="stockInSupplierPrice" name="supplier_price" placeholder="0.00" class="border border-gray-300 w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)]">
             </div>
             <div>
               <label class="block text-sm font-bold text-gray-700 mb-1">Seller Price</label>
-              <input type="number" step="0.01" name="price" placeholder="0.00" class="border border-gray-300 w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)]">
+              <input type="number" step="0.01" id="stockInSellerPrice" name="price" placeholder="0.00" class="border border-gray-300 w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)]">
             </div>
         </div>
 
+        <!-- ... (Rest of your form remains the same) ... -->
         <div class="grid grid-cols-2 gap-4">
             <div>
               <label class="block text-sm font-bold text-gray-700 mb-1">Color</label>
               <select name="color_id" class="border border-gray-300 w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)]" required>
                 <option value="">Select</option>
                 <?php foreach ($color_list as $c): ?>
-                    <option value="<?= $c['color_id'] ?>"><?= e($c['color']) ?></option>
+                    <option value="<?= $c['color_id'] ?>"><?= htmlspecialchars($c['color']) ?></option>
                 <?php endforeach; ?>
               </select>
             </div>
@@ -433,7 +442,7 @@ if ($stmt = $conn->prepare($stockQuery)) {
               <select name="size_id" class="border border-gray-300 w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)]" required>
                 <option value="">Select</option>
                 <?php foreach ($size_list as $s): ?>
-                    <option value="<?= $s['size_id'] ?>"><?= e($s['size']) ?></option>
+                    <option value="<?= $s['size_id'] ?>"><?= htmlspecialchars($s['size']) ?></option>
                 <?php endforeach; ?>
               </select>
             </div>
@@ -542,8 +551,33 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('pageshow', () => NProgress.done());
 });
 
+// 🟢 NEW FUNCTION: Fill prices when product is selected
+function fillPrices(selectElement) {
+    // Get the currently selected option
+    const selectedOption = selectElement.options[selectElement.selectedIndex];
+    
+    // Read the data attributes we stored in fetchProducts
+    const supplierPrice = selectedOption.getAttribute('data-supplier-price');
+    const sellerPrice = selectedOption.getAttribute('data-seller-price');
+
+    // Update the inputs in the Stock In modal
+    // Note: We check if the element exists to avoid errors if this function is reused elsewhere
+    const supInput = document.getElementById('stockInSupplierPrice');
+    const sellInput = document.getElementById('stockInSellerPrice');
+
+    if(supInput) supInput.value = supplierPrice || '';
+    if(sellInput) sellInput.value = sellerPrice || '';
+}
+
 function fetchProducts(supplierId, targetSelectId, preSelectedId = null) {
     const productSel = document.getElementById(targetSelectId);
+    
+    // Clear prices when supplier changes
+    if (targetSelectId === 'productSelect') {
+        document.getElementById('stockInSupplierPrice').value = '';
+        document.getElementById('stockInSellerPrice').value = '';
+    }
+
     if (!supplierId) {
         productSel.innerHTML = '<option value="">Select Supplier First</option>';
         return;
@@ -554,20 +588,28 @@ function fetchProducts(supplierId, targetSelectId, preSelectedId = null) {
       .then(response => response.json())
       .then(data => {
         productSel.innerHTML = '<option value="">Select Product</option>';
+        
         if (!Array.isArray(data) || data.length === 0) {
             productSel.innerHTML = '<option value="">No products found</option>';
             return;
         }
+
         data.forEach(p => {
             const opt = document.createElement('option');
             opt.value = p.product_id;
             opt.textContent = p.product_name;
+            
+            // 🟢 Store prices in data attributes
+            opt.setAttribute('data-supplier-price', p.supplier_price); // From DB
+            opt.setAttribute('data-seller-price', p.price_id);         // From DB
+            
             productSel.appendChild(opt);
         });
         
         // Handle pre-selection for Edit Modal
         if (preSelectedId) {
             productSel.value = preSelectedId;
+            // Alpine JS sync for the Edit Modal
             const root = document.querySelector('[x-data]');
             if(root && root.__x) {
                 root.__x.$data.editData.product_id = preSelectedId;

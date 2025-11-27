@@ -1,6 +1,6 @@
 <?php
+require 'admin_only.php';
 include 'conn.php';
-include 'auth_session.php';
 
 $admin_id = $_SESSION['admin_id'] ?? null;
 $admin_name = "Admin";

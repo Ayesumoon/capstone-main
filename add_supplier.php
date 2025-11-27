@@ -1,4 +1,5 @@
 <?php
+require 'admin_only.php';
 require 'conn.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

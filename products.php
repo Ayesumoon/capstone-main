@@ -1,5 +1,6 @@
 <?php
 session_start();
+require 'admin_only.php';
 require 'conn.php'; // Database connection
 
 // 🔐 Ensure logged-in admin
@@ -44,21 +45,22 @@ $selectedCategory = $_GET['category'] ?? 'all';
 $searchQuery = $_GET['search'] ?? '';
 $searchTerm = "%$searchQuery%";
 
-// 🔹 Fetch products (Updated to include Supplier)
+// 🔹 Fetch products (🟢 UPDATED: Added supplier_price)
 $sql = "
     SELECT 
         p.product_id,
         p.product_name,
         p.description,
-        p.price_id,
+        p.price_id,        -- Selling Price
+        p.supplier_price,  -- 🟢 Supplier Price (Cost)
         p.image_url,
         c.category_name,
-        s.supplier_name,  -- 1. Added Supplier Name
+        s.supplier_name,
         GROUP_CONCAT(DISTINCT col.color ORDER BY col.color SEPARATOR ', ') AS colors,
         GROUP_CONCAT(DISTINCT sz.size ORDER BY sz.size SEPARATOR ', ') AS sizes
     FROM products p
     LEFT JOIN categories c ON p.category_id = c.category_id
-    LEFT JOIN suppliers s ON p.supplier_id = s.supplier_id  -- 2. Added Join to Suppliers
+    LEFT JOIN suppliers s ON p.supplier_id = s.supplier_id
     LEFT JOIN stock st ON p.product_id = st.product_id
     LEFT JOIN colors col ON st.color_id = col.color_id
     LEFT JOIN sizes sz ON st.size_id = sz.size_id
@@ -128,9 +130,6 @@ while ($row = $result->fetch_assoc()) {
 
 $stmt->close();
 $conn->close();
-
-// Notifications (Mock logic for consistency)
-$newOrdersNotif = 0; $lowStockNotif = 0; $totalNotif = 0;
 ?>
 
 <!DOCTYPE html>
@@ -165,17 +164,14 @@ $newOrdersNotif = 0; $lowStockNotif = 0; $totalNotif = 0;
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-    /* 1. View Transitions API */
     @view-transition { navigation: auto; }
 
-    /* 2. Fade In Animation */
     @keyframes fadeInSlide {
         from { opacity: 0; transform: translateY(10px); }
         to { opacity: 1; transform: translateY(0); }
     }
     .animate-fade-in { animation: fadeInSlide 0.4s ease-out; }
-
-    /* 3. NProgress Customization */
+    
     #nprogress .bar { background: var(--rose) !important; height: 3px !important; }
     #nprogress .peg { box-shadow: 0 0 10px var(--rose), 0 0 5px var(--rose) !important; }
   </style>
@@ -192,7 +188,7 @@ $newOrdersNotif = 0; $lowStockNotif = 0; $totalNotif = 0;
      }" 
      x-init="$watch('sidebarOpen', val => localStorage.setItem('sidebarOpen', val))">
 
-  <!-- 🌸 Sidebar (Dynamic Width) -->
+  <!-- 🌸 Sidebar -->
   <aside 
     class="bg-white shadow-md fixed top-0 left-0 h-screen z-30 transition-all duration-300 ease-in-out no-scrollbar overflow-y-auto overflow-x-hidden"
     :class="sidebarOpen ? 'w-64' : 'w-20'"
@@ -229,7 +225,6 @@ $newOrdersNotif = 0; $lowStockNotif = 0; $totalNotif = 0;
           </div>
           <i x-show="sidebarOpen" class="fas fa-chevron-down transition-transform duration-200" :class="{ 'rotate-180': userMenu }"></i>
         </button>
-        <!-- Submenu -->
         <ul x-show="userMenu" class="text-sm text-gray-700 space-y-1 mt-1 bg-gray-50 rounded-md overflow-hidden transition-all" :class="sidebarOpen ? 'pl-8' : 'pl-0 text-center'">
           <li>
             <a href="manage_users.php" class="block py-2 hover:text-[var(--rose)] flex items-center" :class="sidebarOpen ? '' : 'justify-center'" title="Users">
@@ -245,10 +240,12 @@ $newOrdersNotif = 0; $lowStockNotif = 0; $totalNotif = 0;
           </li>
         </ul>
       </div>
+
       <a href="suppliers.php" class="block px-4 py-3 hover:bg-gray-100 rounded-md transition-all duration-300 flex items-center" :class="sidebarOpen ? 'space-x-2' : 'justify-center px-0'">
         <i class="fas fa-industry w-5 text-center text-lg"></i>
         <span x-show="sidebarOpen" class="whitespace-nowrap">Suppliers</span>
       </a>
+
       <!-- Product Management (Active) -->
       <div>
         <button @click="productMenu = !productMenu" class="w-full text-left px-4 py-3 flex items-center hover:bg-gray-100 rounded-md transition-all duration-300" :class="sidebarOpen ? 'justify-between' : 'justify-center px-0'">
@@ -306,37 +303,30 @@ $newOrdersNotif = 0; $lowStockNotif = 0; $totalNotif = 0;
     </nav>
   </aside>
 
-  <!-- 🌸 Main Content (Dynamic Margin) -->
+  <!-- 🌸 Main Content -->
   <main class="flex-1 flex flex-col pt-20 bg-gray-50 transition-all duration-300 ease-in-out" 
         :class="sidebarOpen ? 'ml-64' : 'ml-20'">
     
-    <!-- Header (Dynamic Position) -->
+    <!-- Header -->
     <header class="bg-[var(--rose)] text-white p-4 flex justify-between items-center shadow-md rounded-bl-2xl fixed top-0 right-0 z-20 transition-all duration-300 ease-in-out"
             :class="sidebarOpen ? 'left-64' : 'left-20'">
       
       <div class="flex items-center gap-4">
-          <!-- Toggle Button -->
           <button @click="sidebarOpen = !sidebarOpen" class="text-white hover:bg-white/20 p-2 rounded-full transition focus:outline-none">
              <i class="fas fa-bars text-xl"></i>
           </button>
           <h1 class="text-xl font-semibold">Products</h1>
-      </div>
-
-      <div class="flex items-center gap-4">
-        
       </div>
     </header>
 
     <!-- 📄 Page Content -->
     <section class="p-6">
         
-        <!-- The White Card -->
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-6">
             
-            <!-- Filters and Add Button -->
+            <!-- Filters -->
             <div class="flex flex-wrap justify-between items-center gap-4">
                 <div class="flex gap-4 items-center flex-wrap">
-                    <!-- Category Filter -->
                     <form method="GET" id="categoryForm" class="flex items-center gap-2">
                       <label class="text-gray-700 font-medium text-xs uppercase tracking-wide">Category:</label>
                       <select name="category" onchange="document.getElementById('categoryForm').submit()"
@@ -350,7 +340,6 @@ $newOrdersNotif = 0; $lowStockNotif = 0; $totalNotif = 0;
                       </select>
                     </form>
 
-                    <!-- Live Search Input -->
                     <div class="flex items-center relative">
                       <i class="fas fa-search absolute left-3 text-gray-400"></i>
                       <input type="text" id="searchBox" placeholder="Search product..." class="pl-10 pr-4 py-2 border rounded-lg w-64 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--rose)]">
@@ -371,7 +360,9 @@ $newOrdersNotif = 0; $lowStockNotif = 0; $totalNotif = 0;
                         <tr>
                             <th class="px-6 py-3">Images</th>
                             <th class="px-6 py-3">Product Info</th>
-                            <th class="px-6 py-3">Price</th>
+                            <th class="px-6 py-3">Selling Price</th>
+                            <!-- 🟢 UPDATED: Added Supplier Price Column -->
+                            <th class="px-6 py-3">Supplier Price</th>
                             <th class="px-6 py-3">Category</th>
                             <th class="px-6 py-3">Supplier</th>
                             <th class="px-6 py-3 text-center">Actions</th>
@@ -381,16 +372,17 @@ $newOrdersNotif = 0; $lowStockNotif = 0; $totalNotif = 0;
                         <?php if (!empty($products)): ?>
                           <?php foreach ($products as $product): ?>
                             <tr class="hover:bg-gray-50 transition">
+                              
                               <!-- Images -->
                               <td class="px-6 py-4">
                                 <div class="flex flex-wrap gap-2" x-data="{ open: false, imageSrc: '' }">
                                   <?php foreach ($product['display_images'] as $img): ?>
                                     <img src="<?= $img ?>" 
-                                         alt="Product Image" 
                                          class="w-12 h-12 rounded-lg border shadow-sm object-cover cursor-pointer hover:scale-105 transition-transform duration-200"
                                          @click="imageSrc = '<?= $img ?>'; open = true"
                                          onerror="this.src='uploads/products/default.png';">
                                   <?php endforeach; ?>
+                                  
                                   <!-- Modal Preview -->
                                   <div x-show="open" x-cloak x-transition @click="open = false" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
                                     <div class="relative bg-white rounded-xl shadow-lg p-2 max-w-md w-full">
@@ -411,8 +403,15 @@ $newOrdersNotif = 0; $lowStockNotif = 0; $totalNotif = 0;
                                 </div>
                               </td>
 
-                              <!-- Price -->
-                              <td class="px-6 py-4 font-bold text-[var(--rose)]">₱<?= number_format($product['price_id'], 2); ?></td>
+                              <!-- Selling Price -->
+                              <td class="px-6 py-4 font-bold text-[var(--rose)]">
+                                ₱<?= number_format($product['price_id'], 2); ?>
+                              </td>
+
+                              <!-- 🟢 UPDATED: Supplier Price (Cost) -->
+                              <td class="px-6 py-4 font-bold text-gray-500">
+                                ₱<?= number_format($product['supplier_price'] ?? 0, 2); ?>
+                              </td>
                               
                               <!-- Category -->
                               <td class="px-6 py-4">
@@ -445,7 +444,7 @@ $newOrdersNotif = 0; $lowStockNotif = 0; $totalNotif = 0;
                             </tr>
                           <?php endforeach; ?>
                         <?php else: ?>
-                          <tr><td colspan="6" class="text-center text-gray-500 py-10">No products found.</td></tr>
+                          <tr><td colspan="7" class="text-center text-gray-500 py-10">No products found.</td></tr>
                         <?php endif; ?>
                     </tbody>
                 </table>

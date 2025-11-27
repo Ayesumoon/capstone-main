@@ -3,13 +3,13 @@
 session_start();
 require 'conn.php';
 
-// 1. Check if Admin is logged in
+// Check if Admin is logged in
 if (!isset($_SESSION['admin_id'])) {
     header("Location: login.php");
     exit;
 }
 
-// 2. Validate POST request
+// Validate POST request
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Get values from the form
     $stock_id       = intval($_POST['stock_id']);
@@ -23,11 +23,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $supplier_price = isset($_POST['supplier_price']) ? floatval($_POST['supplier_price']) : 0.00;
     $seller_price   = isset($_POST['price']) ? floatval($_POST['price']) : 0.00;
 
-    // Start Transaction to ensure both tables update, or neither does
+    // Start Transaction to ensure both tables update, or neither
     $conn->begin_transaction();
 
     try {
-        // 🔹 STEP 1: Update the STOCK table (Quantity, Color, Size)
+        // Update the STOCK table (Quantity, Color, Size)
         $stock_sql = "UPDATE stock 
                       SET current_qty = ?, 
                           color_id = ?, 
@@ -43,8 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $stmt->close();
 
-        // 🔹 STEP 2: Update the PRODUCTS table (Supplier Price, Seller Price)
-        // Note: Based on your database schema, 'price_id' seems to hold the selling price value
+        // Update the PRODUCTS table (Supplier Price, Seller Price)
         $product_sql = "UPDATE products 
                         SET supplier_price = ?, 
                             price_id = ?, 
@@ -59,7 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $stmt2->close();
 
-        // 🔹 STEP 3: Log the Action (Optional but recommended)
+        // Log the Action
         $admin_id = $_SESSION['admin_id'];
         $log_action = "Updated Stock ID: $stock_id and Prices for Product ID: $product_id";
         $log_sql = "INSERT INTO system_logs (user_id, action) VALUES (?, ?)";
@@ -68,23 +67,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt_log->execute();
         $stmt_log->close();
 
-        // Commit changes
         $conn->commit();
-
-        // Redirect back with success message
         header("Location: stock_management.php?status=success&msg=Stock and Prices Updated");
         exit;
 
     } catch (Exception $e) {
-        // Rollback changes if anything failed
         $conn->rollback();
         header("Location: stock_management.php?status=error&msg=" . urlencode($e->getMessage()));
         exit;
     }
 
 } else {
-    // If accessed directly without POST
-    header("Location: stock_management.php");
+        header("Location: stock_management.php");
     exit;
 }
 ?>
