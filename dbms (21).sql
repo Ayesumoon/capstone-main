@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Nov 27, 2025 at 10:53 AM
+-- Generation Time: Nov 30, 2025 at 02:37 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -46,9 +46,9 @@ CREATE TABLE `adminusers` (
 --
 
 INSERT INTO `adminusers` (`admin_id`, `username`, `admin_email`, `password_hash`, `role_id`, `status_id`, `created_at`, `first_name`, `last_name`, `last_logged_in`, `last_logged_out`) VALUES
-(1, 'Eya', 'nicholedeguzman@yahoo.com', '$2y$10$ENseQNg1WhLbfCjBEi3P4ezFAjuxciD8TWR/KoKqSUAKRJAR8HiKu', 1, 1, '2025-03-30 04:35:12', 'Nichole', 'De Guzman', '2025-11-25 21:32:16', '2025-11-25 22:17:02'),
-(3, 'admin2', 'lilysmith1@email.com', '$2y$10$nO07giUvM0zjpiUREi6chOSWSRxuqRqKgT2ds6sPY0EyE93x1c6Mm', 2, 1, '2025-08-21 20:35:19', 'Lily', 'Smith', '2025-11-27 16:41:19', NULL),
-(5, 'admin1', 'doejohn@gmail.com', '$2y$10$Y73IRDzJXTmdDB5cz50JzOaLtoKmGVifpEKtcGF3ehFywtzqAq/IG', 2, 1, '2025-10-11 19:43:57', 'John', 'Doe', '2025-11-26 22:11:05', NULL),
+(1, 'Eya', 'nicholedeguzman@yahoo.com', '$2y$10$ENseQNg1WhLbfCjBEi3P4ezFAjuxciD8TWR/KoKqSUAKRJAR8HiKu', 1, 1, '2025-03-30 04:35:12', 'Nichole', 'De Guzman', '2025-11-30 21:00:59', '2025-11-27 22:21:50'),
+(3, 'admin2', 'lilysmith1@email.com', '$2y$10$nO07giUvM0zjpiUREi6chOSWSRxuqRqKgT2ds6sPY0EyE93x1c6Mm', 2, 1, '2025-08-21 20:35:19', 'Lily', 'Smith', '2025-11-27 16:41:19', '2025-11-27 18:23:30'),
+(5, 'admin1', 'doejohn@gmail.com', '$2y$10$Y73IRDzJXTmdDB5cz50JzOaLtoKmGVifpEKtcGF3ehFywtzqAq/IG', 2, 1, '2025-10-11 19:43:57', 'John', 'Doe', '2025-11-30 21:05:55', '2025-11-30 21:00:54'),
 (6, 'Aisha', 'aishacayago@email.com', '$2y$10$/onU1AGHLfZfPRSS7KK2iuTNsUG5oEfh.ewlIWEpRDQXNQqy99/6q', 1, 1, '2025-10-14 04:22:08', 'Aisha', 'Cayago', '2025-10-14 18:26:04', '2025-10-14 18:50:30');
 
 -- --------------------------------------------------------
@@ -153,7 +153,8 @@ INSERT INTO `colors` (`color_id`, `color`) VALUES
 (7, 'Yellow'),
 (8, 'Violet'),
 (9, 'Brown'),
-(10, 'Orange');
+(10, 'Orange'),
+(11, 'Any');
 
 -- --------------------------------------------------------
 
@@ -247,7 +248,11 @@ INSERT INTO `orders` (`order_id`, `admin_id`, `customer_id`, `total_amount`, `di
 (75, 1, NULL, 300.00, 50.00, 1000.00, 350.00, 4, '2025-11-24 08:52:39', 1, 3, NULL),
 (76, 1, NULL, 350.00, 0.00, 500.00, 150.00, 0, '2025-11-24 09:01:44', 1, 3, NULL),
 (77, 1, NULL, 320.00, 0.00, 320.00, 0.00, 0, '2025-11-25 03:51:20', 1, 1, NULL),
-(78, 1, NULL, 630.00, 70.00, 1000.00, 370.00, 0, '2025-11-25 13:58:13', 1, 3, NULL);
+(78, 1, NULL, 630.00, 70.00, 1000.00, 370.00, 0, '2025-11-25 13:58:13', 1, 3, NULL),
+(79, 1, NULL, -85.00, 85.00, 1615.00, 0.00, 4, '2025-11-27 11:09:06', 1, 1, NULL),
+(82, 1, NULL, 612.00, 0.00, 1000.00, 388.00, 0, '2025-11-30 13:04:20', 1, 3, NULL),
+(83, 1, NULL, 324.00, 0.00, 1000.00, 343.50, 4, '2025-11-30 13:04:31', 1, 3, NULL),
+(84, 1, NULL, 636.50, 0.00, 1000.00, 363.50, 4, '2025-11-30 13:23:29', 1, 3, NULL);
 
 -- --------------------------------------------------------
 
@@ -263,69 +268,77 @@ CREATE TABLE `order_items` (
   `size` varchar(50) DEFAULT NULL,
   `stock_id` int(11) NOT NULL,
   `qty` int(11) NOT NULL,
-  `price` double NOT NULL
+  `price` double NOT NULL,
+  `discount_amount` decimal(10,2) DEFAULT 0.00
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `order_items`
 --
 
-INSERT INTO `order_items` (`id`, `order_id`, `product_id`, `color`, `size`, `stock_id`, `qty`, `price`) VALUES
-(2, 5, NULL, NULL, NULL, 1, 1, 350),
-(3, 6, NULL, NULL, NULL, 1, 1, 350),
-(4, 7, NULL, NULL, NULL, 1, 1, 350),
-(8, 11, NULL, NULL, NULL, 8, 2, 500),
-(15, 15, NULL, NULL, NULL, 8, 1, 500),
-(16, 15, NULL, NULL, NULL, 14, 1, 350),
-(18, 17, NULL, NULL, NULL, 14, 1, 350),
-(19, 18, NULL, NULL, NULL, 8, 1, 500),
-(22, 20, NULL, NULL, NULL, 1, 3, 350),
-(25, 24, NULL, NULL, NULL, 1, 2, 350),
-(26, 25, NULL, NULL, NULL, 12, 1, 350),
-(29, 26, NULL, NULL, NULL, 8, 1, 500),
-(30, 26, NULL, NULL, NULL, 14, 1, 350),
-(32, 41, NULL, NULL, NULL, 16, 1, 400),
-(33, 41, NULL, NULL, NULL, 17, 1, 400),
-(38, 46, 3, 'Yellow', 'S', 1, 1, 350),
-(40, 48, 3, NULL, NULL, 1, 1, 350),
-(41, 49, 3, NULL, NULL, 1, 1, 350),
-(42, 49, 7, NULL, NULL, 16, 1, 400),
-(43, 50, 3, NULL, NULL, 1, 3, 350),
-(44, 51, 6, NULL, NULL, 18, 1, 400),
-(45, 51, 3, NULL, NULL, 1, 1, 350),
-(46, 51, 2, NULL, NULL, 8, 1, 500),
-(47, 52, 3, NULL, NULL, 1, 2, 350),
-(48, 53, 9, NULL, NULL, 22, 3, 350),
-(49, 54, 6, NULL, NULL, 18, 1, 400),
-(50, 54, 2, NULL, NULL, 8, 1, 500),
-(51, 54, 3, NULL, NULL, 1, 1, 350),
-(52, 55, 9, NULL, NULL, 22, 1, 350),
-(53, 55, 3, NULL, NULL, 1, 1, 350),
-(54, 60, 3, 'Green', 'S', 12, 1, 350),
-(55, 60, 6, 'Brown', 'L', 20, 1, 400),
-(56, 62, 6, 'Black', 'M', 18, 1, 400),
-(57, 62, 9, 'Orange', 'M', 27, 1, 350),
-(58, 63, 10, 'Blue', 'L', 28, 2, 320),
-(59, 64, 10, 'Blue', 'L', 28, 1, 320),
-(60, 64, 7, 'Pink', 'M', 16, 1, 350),
-(61, 67, 6, 'Black', 'M', 18, 1, 400),
-(62, 67, 6, 'Brown', 'L', 20, 1, 400),
-(63, 68, 10, 'Red', 'L', 29, 1, 320),
-(64, 68, 10, 'Blue', 'L', 28, 1, 320),
-(65, 69, 0, NULL, NULL, 28, -1, 320),
-(66, 70, 6, 'Brown', 'L', 20, 1, 400),
-(67, 70, 9, 'Black', 'M', 24, 1, 350),
-(68, 71, 10, 'Blue', 'L', 28, 1, 320),
-(69, 71, 10, 'Green', 'L', 30, 1, 320),
-(70, 72, 2, 'Red', 'M', 8, 1, 500),
-(71, 72, 2, 'Green', 'M', 25, 1, 500),
-(72, 72, 2, 'Orange', 'M', 26, 1, 500),
-(73, 73, 3, 'Yellow', 'S', 1, 5, 350),
-(74, 74, 3, 'Yellow', 'S', 1, 2, 350),
-(75, 75, 3, 'Violet', 'S', 14, 2, 350),
-(76, 76, 3, 'Violet', 'S', 14, 1, 350),
-(77, 77, 10, 'Blue', 'L', 28, 1, 320),
-(78, 78, 3, 'Yellow', 'S', 1, 2, 350);
+INSERT INTO `order_items` (`id`, `order_id`, `product_id`, `color`, `size`, `stock_id`, `qty`, `price`, `discount_amount`) VALUES
+(2, 5, NULL, NULL, NULL, 1, 1, 350, 0.00),
+(3, 6, NULL, NULL, NULL, 1, 1, 350, 0.00),
+(4, 7, NULL, NULL, NULL, 1, 1, 350, 0.00),
+(8, 11, NULL, NULL, NULL, 8, 2, 500, 0.00),
+(15, 15, NULL, NULL, NULL, 8, 1, 500, 0.00),
+(16, 15, NULL, NULL, NULL, 14, 1, 350, 0.00),
+(18, 17, NULL, NULL, NULL, 14, 1, 350, 0.00),
+(19, 18, NULL, NULL, NULL, 8, 1, 500, 0.00),
+(22, 20, NULL, NULL, NULL, 1, 3, 350, 0.00),
+(25, 24, NULL, NULL, NULL, 1, 2, 350, 0.00),
+(26, 25, NULL, NULL, NULL, 12, 1, 350, 0.00),
+(29, 26, NULL, NULL, NULL, 8, 1, 500, 0.00),
+(30, 26, NULL, NULL, NULL, 14, 1, 350, 0.00),
+(32, 41, NULL, NULL, NULL, 16, 1, 400, 0.00),
+(33, 41, NULL, NULL, NULL, 17, 1, 400, 0.00),
+(38, 46, 3, 'Yellow', 'S', 1, 1, 350, 0.00),
+(40, 48, 3, NULL, NULL, 1, 1, 350, 0.00),
+(41, 49, 3, NULL, NULL, 1, 1, 350, 0.00),
+(42, 49, 7, NULL, NULL, 16, 1, 400, 0.00),
+(43, 50, 3, NULL, NULL, 1, 3, 350, 0.00),
+(44, 51, 6, NULL, NULL, 18, 1, 400, 0.00),
+(45, 51, 3, NULL, NULL, 1, 1, 350, 0.00),
+(46, 51, 2, NULL, NULL, 8, 1, 500, 0.00),
+(47, 52, 3, NULL, NULL, 1, 2, 350, 0.00),
+(48, 53, 9, NULL, NULL, 22, 3, 350, 0.00),
+(49, 54, 6, NULL, NULL, 18, 1, 400, 0.00),
+(50, 54, 2, NULL, NULL, 8, 1, 500, 0.00),
+(51, 54, 3, NULL, NULL, 1, 1, 350, 0.00),
+(52, 55, 9, NULL, NULL, 22, 1, 350, 0.00),
+(53, 55, 3, NULL, NULL, 1, 1, 350, 0.00),
+(54, 60, 3, 'Green', 'S', 12, 1, 350, 0.00),
+(55, 60, 6, 'Brown', 'L', 20, 1, 400, 0.00),
+(56, 62, 6, 'Black', 'M', 18, 1, 400, 0.00),
+(57, 62, 9, 'Orange', 'M', 27, 1, 350, 0.00),
+(58, 63, 10, 'Blue', 'L', 28, 2, 320, 0.00),
+(59, 64, 10, 'Blue', 'L', 28, 1, 320, 0.00),
+(60, 64, 7, 'Pink', 'M', 16, 1, 350, 0.00),
+(61, 67, 6, 'Black', 'M', 18, 1, 400, 0.00),
+(62, 67, 6, 'Brown', 'L', 20, 1, 400, 0.00),
+(63, 68, 10, 'Red', 'L', 29, 1, 320, 0.00),
+(64, 68, 10, 'Blue', 'L', 28, 1, 320, 0.00),
+(65, 69, 0, NULL, NULL, 28, -1, 320, 0.00),
+(66, 70, 6, 'Brown', 'L', 20, 1, 400, 0.00),
+(67, 70, 9, 'Black', 'M', 24, 1, 350, 0.00),
+(68, 71, 10, 'Blue', 'L', 28, 1, 320, 0.00),
+(69, 71, 10, 'Green', 'L', 30, 1, 320, 0.00),
+(70, 72, 2, 'Red', 'M', 8, 1, 500, 0.00),
+(71, 72, 2, 'Green', 'M', 25, 1, 500, 0.00),
+(72, 72, 2, 'Orange', 'M', 26, 1, 500, 0.00),
+(73, 73, 3, 'Yellow', 'S', 1, 5, 350, 0.00),
+(74, 74, 3, 'Yellow', 'S', 1, 2, 350, 0.00),
+(75, 75, 3, 'Violet', 'S', 14, 2, 350, 0.00),
+(76, 76, 3, 'Violet', 'S', 14, 1, 350, 0.00),
+(77, 77, 10, 'Blue', 'L', 28, 1, 320, 0.00),
+(78, 78, 3, 'Yellow', 'S', 1, 2, 350, 0.00),
+(79, 79, 14, 'Pink', 'M', 34, 1, 1700, 0.00),
+(80, 82, 10, 'Green', 'L', 30, 1, 342, 18.00),
+(81, 82, 11, 'White', 'M', 32, 1, 270, 0.00),
+(82, 83, 9, 'Black', 'M', 24, 1, 332.5, 17.50),
+(83, 83, 10, 'Green', 'L', 30, 1, 324, 36.00),
+(84, 84, 11, 'Brown', 'M', 31, 1, 256.5, 13.50),
+(85, 84, 6, 'Brown', 'M', 19, 1, 380, 20.00);
 
 -- --------------------------------------------------------
 
@@ -347,7 +360,7 @@ INSERT INTO `order_status` (`order_status_id`, `order_status_name`) VALUES
 (0, 'Completed'),
 (1, 'Pending'),
 (4, 'Refunded'),
-(2, 'Shipped');
+(2, 'Return');
 
 -- --------------------------------------------------------
 
@@ -402,7 +415,7 @@ INSERT INTO `products` (`product_id`, `product_name`, `description`, `price_id`,
 (9, 'ZF1569', '', 350, 40, 1, '[\"uploads/products/68eb80cff3163_blouse4.jpg\",\"uploads/products/68eb80cff348d_blouse3 (2).jpg\",\"uploads/products/68eb80cff377f_blouse1 (2).jpg\"]', '2025-10-12 10:15:21', 1, 250.00, NULL, NULL),
 (10, 'New Blouse', '', 360, 30, 2, '[\"uploads/products/prod_691fb376a6b7c.jpg\",\"uploads/products/prod_691fb376a6f9e.jpg\",\"uploads/products/prod_691fb376a71d6.jpg\"]', '2025-11-21 00:33:58', 1, 220.00, NULL, NULL),
 (11, 'New Dress', NULL, 270, 10, 2, '[\"uploads/products/prod_69280f3f13341.jpg\",\"uploads/products/prod_69280f3f13577.jpg\"]', '2025-11-27 08:43:43', 5, 170.00, NULL, NULL),
-(14, 'New Gown', NULL, 1700, 10, 15, '[\"uploads/products/prod_69281aa2b2b18.jpg\",\"uploads/products/prod_69281aa2b3050.jpg\"]', '2025-11-27 09:32:18', 5, 700.00, NULL, NULL),
+(14, 'New Gown', NULL, 1700, 20, 15, '[\"uploads/products/prod_69281aa2b2b18.jpg\",\"uploads/products/prod_69281aa2b3050.jpg\"]', '2025-11-27 09:32:18', 5, 700.00, NULL, NULL),
 (15, 'New Purse', NULL, 3500, 2, 18, '[\"uploads/products/prod_69281e300d0bd.jpg\",\"uploads/products/prod_69281e300d455.jpg\"]', '2025-11-27 09:47:28', 5, 2500.00, NULL, NULL);
 
 -- --------------------------------------------------------
@@ -490,7 +503,10 @@ INSERT INTO `refunds` (`refund_id`, `order_id`, `order_item_id`, `product_id`, `
 (17, 72, 71, 2, 25, 2, 6, 500.00, '2025-11-23 09:54:44', 1),
 (18, 72, 72, 2, 26, 2, 10, 500.00, '2025-11-23 09:54:44', 1),
 (19, 73, 73, 3, 1, 1, 7, 700.00, '2025-11-24 08:19:23', 1),
-(20, 75, 75, 3, 14, 1, 8, 350.00, '2025-11-24 08:53:18', 1);
+(20, 75, 75, 3, 14, 1, 8, 350.00, '2025-11-24 08:53:18', 1),
+(21, 79, 79, 14, 34, 2, 1, 1700.00, '2025-11-27 13:31:08', 1),
+(22, 83, 82, 9, 24, 2, 5, 332.50, '2025-11-30 13:05:11', 1),
+(23, 84, 85, 6, 19, 2, 9, 0.00, '2025-11-30 13:25:24', 1);
 
 -- --------------------------------------------------------
 
@@ -509,9 +525,7 @@ CREATE TABLE `roles` (
 
 INSERT INTO `roles` (`role_id`, `role_name`) VALUES
 (2, 'Admin'),
-(1, 'Cashier'),
-(4, 'Manager'),
-(5, 'Staff');
+(1, 'Cashier');
 
 -- --------------------------------------------------------
 
@@ -586,18 +600,42 @@ INSERT INTO `stock` (`stock_id`, `product_id`, `current_qty`, `color_id`, `size_
 (21, 6, 20, 5, 3),
 (22, 9, 10, 3, 2),
 (23, 9, 10, 9, 2),
-(24, 9, 10, 5, 2),
+(24, 9, 9, 5, 2),
 (25, 2, 10, 6, 2),
 (26, 2, 5, 10, 2),
 (27, 9, 10, 10, 2),
 (28, 10, 5, 4, 3),
 (29, 10, 9, 2, 3),
-(30, 10, 10, 6, 3),
-(31, 11, 5, 9, 2),
-(32, 11, 5, 3, 2),
+(30, 10, 8, 6, 3),
+(31, 11, 4, 9, 2),
+(32, 11, 4, 3, 2),
 (34, 14, 5, 1, 2),
-(35, 14, 10, 7, 3),
+(35, 14, 15, 7, 3),
 (36, 15, 2, 1, 5);
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `stock_adjustments`
+--
+
+CREATE TABLE `stock_adjustments` (
+  `adjustment_id` int(11) NOT NULL,
+  `stock_id` int(11) NOT NULL,
+  `quantity` int(11) NOT NULL,
+  `type` enum('damaged','lost','return_restock','return_discard') NOT NULL,
+  `reason` text DEFAULT NULL,
+  `adjusted_by` int(11) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `stock_adjustments`
+--
+
+INSERT INTO `stock_adjustments` (`adjustment_id`, `stock_id`, `quantity`, `type`, `reason`, `adjusted_by`, `created_at`) VALUES
+(1, 24, 1, 'damaged', 'Order #83 Return (Damaged)', 1, '2025-11-30 13:05:11'),
+(2, 19, 1, 'return_restock', 'Order #84 Return (Sellable/No Refund)', 1, '2025-11-30 13:25:24');
 
 -- --------------------------------------------------------
 
@@ -652,7 +690,8 @@ INSERT INTO `stock_in` (`stock_in_id`, `stock_id`, `quantity`, `date_added`, `su
 (39, 32, 5, '2025-11-27', 5, NULL),
 (41, 34, 5, '2025-11-27', 5, NULL),
 (42, 35, 5, '2025-11-27', 5, NULL),
-(43, 36, 2, '2025-11-27', 5, NULL);
+(43, 36, 2, '2025-11-27', 5, NULL),
+(44, 35, 10, '2025-11-30', 5, NULL);
 
 -- --------------------------------------------------------
 
@@ -915,7 +954,17 @@ INSERT INTO `system_logs` (`log_id`, `user_id`, `username`, `role_id`, `action`,
 (193, 3, 'admin2', 2, 'Login', '2025-11-27 08:41:19'),
 (194, 3, 'admin2', 2, 'Added a new user: EyaLee', '2025-11-27 08:41:48'),
 (195, 3, '', 0, 'Updated Stock ID: 31 and Prices for Product ID: 11', '2025-11-27 09:02:51'),
-(196, 3, '', 0, 'Updated Stock ID: 36 and Prices for Product ID: 15', '2025-11-27 09:50:53');
+(196, 3, '', 0, 'Updated Stock ID: 36 and Prices for Product ID: 15', '2025-11-27 09:50:53'),
+(197, 3, '', 0, 'Logout', '2025-11-27 10:23:30'),
+(198, 5, 'Unknown', 2, 'Logout', '2025-11-27 11:08:39'),
+(199, 1, 'Unknown', 1, 'Logout', '2025-11-27 11:09:40'),
+(200, 1, 'Unknown', 1, 'Logout', '2025-11-27 14:21:50'),
+(201, 5, 'Unknown', 2, 'Logout', '2025-11-30 11:58:06'),
+(202, 5, 'Unknown', 2, 'Logout', '2025-11-30 12:11:12'),
+(203, 5, 'admin1', 2, 'Login', '2025-11-30 12:13:50'),
+(204, 5, 'Unknown', 2, 'Logout', '2025-11-30 13:00:54'),
+(205, 1, 'Eya', 1, 'Login', '2025-11-30 13:00:59'),
+(206, 5, 'admin1', 2, 'Login', '2025-11-30 13:05:55');
 
 -- --------------------------------------------------------
 
@@ -977,7 +1026,13 @@ INSERT INTO `transactions` (`transaction_id`, `order_id`, `customer_id`, `paymen
 (48, 75, NULL, NULL, -350.00, 2, '2025-11-24 16:53:18'),
 (49, 76, NULL, 3, 350.00, 0, '2025-11-24 17:01:44'),
 (50, 77, NULL, 1, 320.00, 0, '2025-11-25 11:51:20'),
-(51, 78, NULL, 3, 630.00, 0, '2025-11-25 21:58:13');
+(51, 78, NULL, 3, 630.00, 0, '2025-11-25 21:58:13'),
+(52, 79, NULL, 1, 1615.00, 0, '2025-11-27 19:09:06'),
+(53, 79, NULL, NULL, -1700.00, 2, '2025-11-27 21:31:08'),
+(54, 82, NULL, 3, 612.00, 0, '2025-11-30 21:04:20'),
+(55, 83, NULL, 3, 656.50, 0, '2025-11-30 21:04:31'),
+(56, 83, NULL, NULL, -332.50, 4, '2025-11-30 21:05:11'),
+(57, 84, NULL, 3, 636.50, 0, '2025-11-30 21:23:29');
 
 --
 -- Indexes for dumped tables
@@ -1126,6 +1181,13 @@ ALTER TABLE `stock`
   ADD KEY `fk_stock_size` (`size_id`);
 
 --
+-- Indexes for table `stock_adjustments`
+--
+ALTER TABLE `stock_adjustments`
+  ADD PRIMARY KEY (`adjustment_id`),
+  ADD KEY `stock_id` (`stock_id`);
+
+--
 -- Indexes for table `stock_in`
 --
 ALTER TABLE `stock_in`
@@ -1169,7 +1231,7 @@ ALTER TABLE `transactions`
 -- AUTO_INCREMENT for table `adminusers`
 --
 ALTER TABLE `adminusers`
-  MODIFY `admin_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
+  MODIFY `admin_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
 
 --
 -- AUTO_INCREMENT for table `carts`
@@ -1193,7 +1255,7 @@ ALTER TABLE `categories`
 -- AUTO_INCREMENT for table `colors`
 --
 ALTER TABLE `colors`
-  MODIFY `color_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
+  MODIFY `color_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
 
 --
 -- AUTO_INCREMENT for table `customers`
@@ -1205,13 +1267,13 @@ ALTER TABLE `customers`
 -- AUTO_INCREMENT for table `orders`
 --
 ALTER TABLE `orders`
-  MODIFY `order_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=79;
+  MODIFY `order_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=85;
 
 --
 -- AUTO_INCREMENT for table `order_items`
 --
 ALTER TABLE `order_items`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=79;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=86;
 
 --
 -- AUTO_INCREMENT for table `payment_methods`
@@ -1241,7 +1303,7 @@ ALTER TABLE `product_sizes`
 -- AUTO_INCREMENT for table `refunds`
 --
 ALTER TABLE `refunds`
-  MODIFY `refund_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
+  MODIFY `refund_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=24;
 
 --
 -- AUTO_INCREMENT for table `roles`
@@ -1268,10 +1330,16 @@ ALTER TABLE `stock`
   MODIFY `stock_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=37;
 
 --
+-- AUTO_INCREMENT for table `stock_adjustments`
+--
+ALTER TABLE `stock_adjustments`
+  MODIFY `adjustment_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+
+--
 -- AUTO_INCREMENT for table `stock_in`
 --
 ALTER TABLE `stock_in`
-  MODIFY `stock_in_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=44;
+  MODIFY `stock_in_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=45;
 
 --
 -- AUTO_INCREMENT for table `store_settings`
@@ -1289,13 +1357,13 @@ ALTER TABLE `suppliers`
 -- AUTO_INCREMENT for table `system_logs`
 --
 ALTER TABLE `system_logs`
-  MODIFY `log_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=197;
+  MODIFY `log_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=207;
 
 --
 -- AUTO_INCREMENT for table `transactions`
 --
 ALTER TABLE `transactions`
-  MODIFY `transaction_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=52;
+  MODIFY `transaction_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=58;
 
 --
 -- Constraints for dumped tables
@@ -1383,6 +1451,12 @@ ALTER TABLE `stock`
   ADD CONSTRAINT `fk_stock_color` FOREIGN KEY (`color_id`) REFERENCES `colors` (`color_id`),
   ADD CONSTRAINT `fk_stock_size` FOREIGN KEY (`size_id`) REFERENCES `sizes` (`size_id`),
   ADD CONSTRAINT `stock_ibfk_1` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `stock_adjustments`
+--
+ALTER TABLE `stock_adjustments`
+  ADD CONSTRAINT `fk_adjustment_stock` FOREIGN KEY (`stock_id`) REFERENCES `stock` (`stock_id`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `stock_in`
