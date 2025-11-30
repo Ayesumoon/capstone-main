@@ -1,25 +1,23 @@
 <?php
-ob_start(); // 🟢 1. Fixes header issues caused by spaces
+ob_start();
 session_start();
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 require 'conn.php';
 
-// Check for spaces in conn.php
+// Prevent output buffering issues
 if (headers_sent($file, $line)) {
     die("⚠️ Error: Output started in $file on line $line. Remove spaces before <?php in that file.");
 }
+
+$error = ""; // Variable to hold error messages
 
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["login"])) {
     $login_input = trim($_POST["login"]); 
     $password = $_POST["password"];
 
-    echo "<div style='background:yellow; padding:10px; border:1px solid black; z-index:9999; position:relative;'>";
-    echo "<strong>DEBUG MODE:</strong><br>";
-    echo "Login Input: " . htmlspecialchars($login_input) . "<br>";
-
-    // 🔹 1. Check Admin/Staff
-    $sql = "SELECT admin_id, admin_email, username, password_hash, role_id 
+    // 🔹 1. Check Admin/Staff Table
+    $sql = "SELECT admin_id, admin_email, username, password_hash, role_id, status_id 
             FROM adminusers 
             WHERE admin_email = ? OR username = ?";
     $stmt = $conn->prepare($sql);
@@ -27,71 +25,90 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["login"])) {
     $stmt->execute();
     $stmt->store_result();
 
-    echo "Admin Match Found: " . ($stmt->num_rows > 0 ? "YES" : "NO") . "<br>";
-
     if ($stmt->num_rows > 0) {
-        $stmt->bind_result($admin_id, $db_email, $db_username, $db_password_hash, $role_id);
+        $stmt->bind_result($admin_id, $db_email, $db_username, $db_password_hash, $role_id, $status_id);
         $stmt->fetch();
 
-        echo "Stored Hash: " . substr($db_password_hash, 0, 10) . "...<br>";
-        echo "Role ID found: " . $role_id . "<br>";
-
         if (password_verify($password, $db_password_hash)) {
-            echo "<span style='color:green'>✔ Password Verified!</span><br>";
-            
-            $_SESSION["loggedin"] = true;
-            $_SESSION["admin_id"] = $admin_id;
-            $_SESSION["role_id"] = $role_id;
-
-            // ... (Logging Logic Skipped for Debug) ...
-
-            if ($role_id == 2) {
-                echo "Attempting Redirect to: <strong>dashboard.php</strong>";
-                header("Location: dashboard.php");
-                exit;
-            } elseif ($role_id == 1) {
-                echo "Attempting Redirect to: <strong>cashier_pos.php</strong>";
-                header("Location: cashier_pos.php");
-                exit;
+            // 🛑 CHECK STATUS
+            if ($status_id != 1) {
+                $error = "🚫 Your account is deactivated. Please contact the administrator.";
             } else {
-                echo "<span style='color:red'>❌ Role ID is not 1 or 2. It is $role_id. Script sends back to login.</span>";
+                // ✅ Login Success
+                $_SESSION["loggedin"] = true;
+                $_SESSION["admin_id"] = $admin_id;
+                $_SESSION["role_id"] = $role_id;
+
+                $log_action = "Login";
+                
+                $log_sql = "INSERT INTO system_logs (user_id, username, role_id, action) VALUES (?, ?, ?, ?)";
+                
+                if ($log_stmt = $conn->prepare($log_sql)) {
+                    $log_stmt->bind_param("isis", $admin_id, $db_username, $role_id, $log_action);
+                    $log_stmt->execute();
+                    $log_stmt->close();
+                }
+
+                $update_sql = "UPDATE adminusers SET last_logged_in = NOW() WHERE admin_id = ?";
+                if ($update_stmt = $conn->prepare($update_sql)) {
+                    $update_stmt->bind_param("i", $admin_id);
+                    $update_stmt->execute();
+                    $update_stmt->close();
+                }
+
+                if ($role_id == 2) {
+                    header("Location: dashboard.php");
+                } elseif ($role_id == 1) {
+                    header("Location: cashier_pos.php");
+                } else {
+                    $error = "Error: Invalid Role assigned.";
+                }
+                exit;
             }
-            exit;
         } else {
-            echo "<span style='color:red'>❌ Admin Password Verification FAILED. Hash mismatch.</span><br>";
+            $error = "Invalid password.";
+        }
+    } else {
+        // 🔹 2. Check Customer Table (if not found in Admin)
+        $stmt->close(); // Close previous statement
+        
+        $sql = "SELECT customer_id, email, password_hash, status_id FROM customers WHERE email = ?";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param("s", $login_input);
+        $stmt->execute();
+        $stmt->store_result();
+
+        if ($stmt->num_rows > 0) {
+            $stmt->bind_result($customer_id, $db_email, $db_password_hash, $cust_status_id);
+            $stmt->fetch();
+
+            if (password_verify($password, $db_password_hash)) {
+                // 🛑 CHECK CUSTOMER STATUS
+                if ($cust_status_id != 1) {
+                    $error = "🚫 Your account is deactivated.";
+                } else {
+                    // ✅ Login Success
+                    $_SESSION["loggedin"] = true;
+                    $_SESSION["role"] = "Customer";
+                    
+                    // Note: We do NOT log customers into 'system_logs' because that table 
+                    // has a Foreign Key linking 'user_id' to 'adminusers'. 
+                    
+                    header("Location: customerside/homepage.php");
+                    exit;
+                }
+            } else {
+                $error = "Invalid password.";
+            }
+        } else {
+            $error = "Account not found.";
         }
     }
+    
     $stmt->close();
-
-    // 🔹 2. Check Customer
-    $sql = "SELECT customer_id, email, password_hash FROM customers WHERE email = ?";
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("s", $login_input);
-    $stmt->execute();
-    $stmt->store_result();
-
-    echo "Customer Match Found: " . ($stmt->num_rows > 0 ? "YES" : "NO") . "<br>";
-
-    if ($stmt->num_rows > 0) {
-        $stmt->bind_result($customer_id, $db_email, $db_password_hash);
-        $stmt->fetch();
-
-        if (password_verify($password, $db_password_hash)) {
-            echo "<span style='color:green'>✔ Customer Password Verified!</span><br>";
-            echo "Attempting Redirect to: customerside/homepage.php";
-            $_SESSION["loggedin"] = true;
-            $_SESSION["role"] = "Customer";
-            header("Location: customerside/homepage.php");
-            exit;
-        } else {
-             echo "<span style='color:red'>❌ Customer Password Verification FAILED.</span><br>";
-        }
-    }
-
-    echo "</div>"; // End Debug
-    $stmt->close();
+    $conn->close();
 }
-$conn->close();
+ob_end_flush();
 ?>
 
 <!DOCTYPE html>
@@ -99,38 +116,41 @@ $conn->close();
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Admin Login</title>
+  <title>Seven Dwarfs | Login</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Load Google Font: Poppins -->
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/login.css">
-  <style>
-    body {
-      font-family: 'Poppins', sans-serif;
-    }
-  </style>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <style> body { font-family: 'Poppins', sans-serif; } </style>
 </head>
 <body class="min-h-screen flex items-center justify-center bg-gradient-to-br from-pink-200 via-white to-pink-400">
-  <div class="glassmorphism-container w-full max-w-md p-8 rounded-3xl shadow-2xl border border-pink-200 backdrop-blur-lg transition-transform duration-300 hover:scale-105">
+  
+  <div class="glassmorphism-container w-full max-w-md p-8 rounded-3xl shadow-2xl border border-pink-200 backdrop-blur-lg bg-white/80 transition-transform duration-300 hover:scale-[1.01]">
+      
       <!-- Logo -->
       <div class="flex flex-col items-center mb-6">
-        <img src="New logo.jpg" alt="Seven Dwarfs Logo" class="h-32 w-32 shadow-lg rounded-full border-4 border-pink-200 mb-2" />
-        <h2 class="text-4xl font-extrabold text-center text-pink-600 mt-2 tracking-wide drop-shadow">Seven Dwarfs</h2>
+        <img src="logo2.png" alt="Seven Dwarfs Logo" class="h-32 w-32 shadow-lg rounded-full border-4 border-pink-200 mb-2 object-cover" />
+        <h2 class="text-3xl font-extrabold text-center text-pink-600 mt-2 tracking-wide drop-shadow-sm">Seven Dwarfs</h2>
       </div>
-      <h3 class="text-xl font-semibold text-center text-gray-700 mb-6">Admin Login</h3>
-      <?php if (!empty($error)) echo "<p class='text-red-500 text-center mb-4'>$error</p>"; ?>
+      
+      <h3 class="text-xl font-semibold text-center text-gray-700 mb-6">System Login</h3>
+
+      <!-- 🔴 DISPLAY ERROR MESSAGE HERE -->
+      <?php if (!empty($error)): ?>
+        <div class="mb-4 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md text-sm flex items-start animate-pulse">
+            <i class="fas fa-exclamation-circle mt-1 mr-2"></i>
+            <div><?php echo $error; ?></div>
+        </div>
+      <?php endif; ?>
+      
       <form method="post" class="space-y-5">
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Username or Email</label>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
           <div class="relative">
             <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-pink-400">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path d="M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"/>
-                <path d="M12 16v2m0 0a6 6 0 1 1 0-12 6 6 0 0 1 0 12z"/>
-              </svg>
+              <i class="fas fa-user"></i>
             </span>
-            <input type="text" name="login" required
-              class="mt-1 w-full pl-10 px-4 py-2 border border-gray-300 rounded-md bg-white/90
+            <input type="text" name="login" required placeholder="Enter your username"
+              class="mt-1 w-full pl-10 px-4 py-2 border border-gray-300 rounded-lg bg-white/90
                 focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-transparent transition" />
           </div>
         </div>
@@ -138,43 +158,38 @@ $conn->close();
           <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
           <div class="relative">
             <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-pink-400">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path d="M12 17a5 5 0 0 0 5-5V9a5 5 0 0 0-10 0v3a5 5 0 0 0 5 5z"/>
-                <path d="M12 17v2m0 0a6 6 0 1 1 0-12 6 6 0 0 1 0 12z"/>
-              </svg>
+              <i class="fas fa-lock"></i>
             </span>
-            <input type="password" name="password" id="password" required
-              class="mt-1 w-full pl-10 px-4 py-2 border border-gray-300 rounded-md bg-white/90
+            <input type="password" name="password" id="password" required placeholder="••••••••"
+              class="mt-1 w-full pl-10 px-4 py-2 border border-gray-300 rounded-lg bg-white/90
                 focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-transparent pr-10 transition" />
             <button type="button" onclick="togglePassword()"
               class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-pink-500 focus:outline-none">
-              <svg id="eyeIcon" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                <circle cx="12" cy="12" r="3"/>
-              </svg>
+              <i class="fas fa-eye" id="eyeIcon"></i>
             </button>
           </div>
-          <!-- Forgot password link removed as per request -->
         </div>
         <div class="pt-2">
           <button type="submit"
-            class="w-full bg-gradient-to-r from-pink-400 to-pink-500 text-white py-2 rounded-md font-semibold shadow-lg hover:scale-105 hover:from-pink-500 hover:to-pink-600 transition-all duration-200">
+            class="w-full bg-gradient-to-r from-pink-400 to-pink-500 text-white py-2.5 rounded-lg font-semibold shadow-lg hover:shadow-xl hover:from-pink-500 hover:to-pink-600 transition-all duration-200 transform hover:-translate-y-0.5">
             Login
           </button>
         </div>
       </form>
+  </div>
 
-   <!-- Forgot Password Modal removed as per request -->
   <script>
     function togglePassword() {
       const passwordInput = document.getElementById("password");
       const eyeIcon = document.getElementById("eyeIcon");
       if (passwordInput.type === "password") {
         passwordInput.type = "text";
-        eyeIcon.innerHTML = '<path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.77 21.77 0 0 1 5.06-7.94M1 1l22 22"/><circle cx="12" cy="12" r="3"/>';
+        eyeIcon.classList.remove('fa-eye');
+        eyeIcon.classList.add('fa-eye-slash');
       } else {
         passwordInput.type = "password";
-        eyeIcon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+        eyeIcon.classList.remove('fa-eye-slash');
+        eyeIcon.classList.add('fa-eye');
       }
     }
   </script>

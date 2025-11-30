@@ -14,8 +14,10 @@ $message = '';
 $roles = [];
 $role_query = "SELECT role_id, role_name FROM roles";
 $role_result = $conn->query($role_query);
-while ($row = $role_result->fetch_assoc()) {
-    $roles[] = $row;
+if ($role_result) {
+    while ($row = $role_result->fetch_assoc()) {
+        $roles[] = $row;
+    }
 }
 
 // ✅ Handle form submission securely
@@ -36,6 +38,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $role_id    = (int) $_POST['role_id'];
     $status_id  = 1; // ✅ default Active
     $created_at = date("Y-m-d H:i:s");
+
+    // ✅ Basic Validation
+    if (empty($username) || empty($first_name) || empty($last_name)) {
+        $_SESSION['message'] = "All fields are required.";
+        header("Location: add_user.php");
+        exit();
+    }
 
     // ✅ Password match check
     if ($password !== $confirm_password) {
@@ -58,41 +67,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $check_stmt = $conn->prepare($check_query);
     $check_stmt->bind_param("s", $username);
     $check_stmt->execute();
-    $check_result = $check_stmt->get_result();
-
-    if ($check_result->num_rows > 0) {
+    $check_stmt->store_result(); // Store result to check num_rows
+    
+    if ($check_stmt->num_rows > 0) {
+        $check_stmt->close(); // Close immediately
         $_SESSION['message'] = "Error: Username already exists!";
         header("Location: add_user.php");
         exit();
-    } else {
-        // ✅ Insert new user (no email)
-        $sql = "INSERT INTO adminusers (username, password_hash, role_id, status_id, created_at, first_name, last_name)
-                VALUES (?, ?, ?, ?, ?, ?, ?)";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("ssissss", $username, $password_hash, $role_id, $status_id, $created_at, $first_name, $last_name);
+    } 
+    
+    // Close the check statement strictly before starting the next one
+    $check_stmt->close();
+
+    // ✅ Insert new user
+    // FIX: Create a fresh variable for binding to break reference links from the previous statement
+    $insert_username = $username;
+
+    $sql = "INSERT INTO adminusers (username, password_hash, role_id, status_id, created_at, first_name, last_name)
+            VALUES (?, ?, ?, ?, ?, ?, ?)";
+    
+    $stmt = $conn->prepare($sql);
+    
+    if ($stmt) {
+        // Bind parameters using the new variable
+        $stmt->bind_param("ssissss", $insert_username, $password_hash, $role_id, $status_id, $created_at, $first_name, $last_name);
 
         if ($stmt->execute()) {
             // ✅ Add to logs
             $log_sql = "INSERT INTO system_logs (user_id, username, role_id, action) VALUES (?, ?, ?, ?)";
             $log_stmt = $conn->prepare($log_sql);
-            $action = "Added a new user: " . $username;
-            $log_stmt->bind_param("isis", $_SESSION['admin_id'], $_SESSION['username'], $_SESSION['role_id'], $action);
-            $log_stmt->execute();
-            $log_stmt->close();
+            if ($log_stmt) {
+                $action = "Added a new user: " . $insert_username;
+                $log_stmt->bind_param("isis", $_SESSION['admin_id'], $_SESSION['username'], $_SESSION['role_id'], $action);
+                $log_stmt->execute();
+                $log_stmt->close();
+            }
 
             $_SESSION['success'] = "User added successfully!";
             header("Location: manage_users.php");
             exit();
         } else {
             error_log("DB Error: " . $stmt->error);
-            $_SESSION['message'] = "Something went wrong. Please try again.";
+            $_SESSION['message'] = "Database error: " . $stmt->error;
             header("Location: add_user.php");
             exit();
         }
-
         $stmt->close();
+    } else {
+        $_SESSION['message'] = "Failed to prepare database statement.";
+        header("Location: add_user.php");
+        exit();
     }
-    $check_stmt->close();
+    
     $conn->close();
 }
 ?><!DOCTYPE html>
@@ -176,12 +202,12 @@ function validatePassword() {
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label class="block text-gray-700 font-medium mb-1">First Name</label>
-          <input type="text" name="first_name" required
+          <input type="text" name="first_name" required value="<?= isset($_POST['first_name']) ? htmlspecialchars($_POST['first_name']) : '' ?>"
             class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[var(--rose)] focus:outline-none">
         </div>
         <div>
           <label class="block text-gray-700 font-medium mb-1">Last Name</label>
-          <input type="text" name="last_name" required
+          <input type="text" name="last_name" required value="<?= isset($_POST['last_name']) ? htmlspecialchars($_POST['last_name']) : '' ?>"
             class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[var(--rose)] focus:outline-none">
         </div>
       </div>
@@ -189,7 +215,7 @@ function validatePassword() {
     <!-- Username -->
       <div>
         <label class="block text-gray-700 font-medium mb-1">Username</label>
-        <input type="text" name="username" required
+        <input type="text" name="username" required value="<?= isset($_POST['username']) ? htmlspecialchars($_POST['username']) : '' ?>"
           class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[var(--rose)] focus:outline-none">
       </div>
 
@@ -219,7 +245,9 @@ function validatePassword() {
           class="w-full border border-gray-300 rounded-lg p-3 bg-white focus:ring-2 focus:ring-[var(--rose)] focus:outline-none">
           <option value="" disabled selected>Select a role</option>
           <?php foreach ($roles as $role): ?>
-            <option value="<?= (int) $role['role_id']; ?>"><?= htmlspecialchars($role['role_name']); ?></option>
+            <option value="<?= (int) $role['role_id']; ?>" <?= (isset($_POST['role_id']) && $_POST['role_id'] == $role['role_id']) ? 'selected' : '' ?>>
+                <?= htmlspecialchars($role['role_name']); ?>
+            </option>
           <?php endforeach; ?>
         </select>
       </div>

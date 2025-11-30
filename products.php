@@ -45,22 +45,19 @@ $selectedCategory = $_GET['category'] ?? 'all';
 $searchQuery = $_GET['search'] ?? '';
 $searchTerm = "%$searchQuery%";
 
-// 🔹 Fetch products (🟢 UPDATED: Added supplier_price)
+// 🔹 Fetch products (REMOVED: Supplier Joins and Supplier Price)
 $sql = "
     SELECT 
         p.product_id,
         p.product_name,
         p.description,
         p.price_id,        -- Selling Price
-        p.supplier_price,  -- 🟢 Supplier Price (Cost)
         p.image_url,
         c.category_name,
-        s.supplier_name,
         GROUP_CONCAT(DISTINCT col.color ORDER BY col.color SEPARATOR ', ') AS colors,
         GROUP_CONCAT(DISTINCT sz.size ORDER BY sz.size SEPARATOR ', ') AS sizes
     FROM products p
     LEFT JOIN categories c ON p.category_id = c.category_id
-    LEFT JOIN suppliers s ON p.supplier_id = s.supplier_id
     LEFT JOIN stock st ON p.product_id = st.product_id
     LEFT JOIN colors col ON st.color_id = col.color_id
     LEFT JOIN sizes sz ON st.size_id = sz.size_id
@@ -241,11 +238,6 @@ $conn->close();
         </ul>
       </div>
 
-      <a href="suppliers.php" class="block px-4 py-3 hover:bg-gray-100 rounded-md transition-all duration-300 flex items-center" :class="sidebarOpen ? 'space-x-2' : 'justify-center px-0'">
-        <i class="fas fa-industry w-5 text-center text-lg"></i>
-        <span x-show="sidebarOpen" class="whitespace-nowrap">Suppliers</span>
-      </a>
-
       <!-- Product Management (Active) -->
       <div>
         <button @click="productMenu = !productMenu" class="w-full text-left px-4 py-3 flex items-center hover:bg-gray-100 rounded-md transition-all duration-300" :class="sidebarOpen ? 'justify-between' : 'justify-center px-0'">
@@ -361,10 +353,8 @@ $conn->close();
                             <th class="px-6 py-3">Images</th>
                             <th class="px-6 py-3">Product Info</th>
                             <th class="px-6 py-3">Selling Price</th>
-                            <!-- 🟢 UPDATED: Added Supplier Price Column -->
-                            <th class="px-6 py-3">Supplier Price</th>
+                            <!-- REMOVED: Supplier Price Column -->
                             <th class="px-6 py-3">Category</th>
-                            <th class="px-6 py-3">Supplier</th>
                             <th class="px-6 py-3 text-center">Actions</th>
                         </tr>
                     </thead>
@@ -408,21 +398,11 @@ $conn->close();
                                 ₱<?= number_format($product['price_id'], 2); ?>
                               </td>
 
-                              <!-- 🟢 UPDATED: Supplier Price (Cost) -->
-                              <td class="px-6 py-4 font-bold text-gray-500">
-                                ₱<?= number_format($product['supplier_price'] ?? 0, 2); ?>
-                              </td>
-                              
                               <!-- Category -->
                               <td class="px-6 py-4">
                                   <span class="bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full text-xs font-medium">
                                       <?= htmlspecialchars($product['category_name']); ?>
                                   </span>
-                              </td>
-
-                              <!-- Supplier -->
-                              <td class="px-6 py-4 text-gray-600 text-xs">
-                                <?= htmlspecialchars($product['supplier_name'] ?? 'N/A'); ?>
                               </td>
 
                               <!-- Actions -->
@@ -444,7 +424,7 @@ $conn->close();
                             </tr>
                           <?php endforeach; ?>
                         <?php else: ?>
-                          <tr><td colspan="7" class="text-center text-gray-500 py-10">No products found.</td></tr>
+                          <tr><td colspan="5" class="text-center text-gray-500 py-10">No products found.</td></tr>
                         <?php endif; ?>
                     </tbody>
                 </table>

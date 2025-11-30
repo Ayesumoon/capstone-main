@@ -1,9 +1,9 @@
 <?php
 // Database connection
+session_start();
 require 'admin_only.php';
 require 'conn.php';
 
-session_start();
 
 // Default admin values
 $admin_id   = $_SESSION['admin_id'] ?? null;

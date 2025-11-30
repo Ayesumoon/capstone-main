@@ -76,6 +76,7 @@ switch ($date_filter) {
 }
 
 // 🔹 MAIN QUERY
+// We look at stock_adjustments where the 'reason' matches the Order ID pattern
 $sql = "
     SELECT 
     o.order_id, 
@@ -83,22 +84,45 @@ $sql = "
     os.order_status_name AS order_status,
     pm.payment_method_name AS payment_method,
     o.created_at,
+    
+    -- 1. List Purchased Items
     GROUP_CONCAT(
         DISTINCT CONCAT(
-            p.product_name, ' (', COALESCE(sz.size, '-'), ', ', COALESCE(c2.color, '-'), ') x', oi.qty
-        ) ORDER BY oi.id SEPARATOR '<br>'
+            '<div class=\"mb-1\">• <b>', p.product_name, '</b> <span class=\"text-gray-500 text-[10px]\">(', 
+            COALESCE(sz.size, 'Free'), ', ', COALESCE(c2.color, 'Std'), 
+            ')</span> <span class=\"bg-blue-50 text-blue-700 px-1 rounded font-bold ml-1\">x', oi.qty, '</span></div>'
+        ) ORDER BY oi.id SEPARATOR ''
     ) AS purchased_items,
-    GROUP_CONCAT(
-        DISTINCT CONCAT(
-            '<span class=\"text-red-600 font-bold\">[REFUND]</span> ', 
-            p.product_name,
-            ' (', COALESCE(sz.size, '-'), ', ', COALESCE(c2.color, '-'), ') ',
-            '<span class=\"bg-red-100 text-red-800 px-1 rounded font-bold\">x',
-            (SELECT FLOOR(SUM(r.refund_amount) / NULLIF(oi.price, 0)) FROM refunds r WHERE r.order_item_id = oi.id),
-            '</span> — ₱',
-            (SELECT FORMAT(SUM(refund_amount), 2) FROM refunds r WHERE r.order_item_id = oi.id)
-        ) ORDER BY oi.id SEPARATOR '<br>'
-    ) AS refunded_items
+
+    -- 2. List Returned/Refunded Items (From Stock Adjustments)
+    (
+        SELECT GROUP_CONCAT(
+            CONCAT(
+                '<div class=\"text-xs mt-1 border-t pt-1 ',
+                IF(sa.type = 'return_restock', 'text-green-600 border-green-100', 'text-red-600 border-red-100'),
+                '\">',
+                IF(sa.type = 'return_restock', '<i class=\"fas fa-sync\"></i> <b>Restocked (Wrong Item):</b> ', '<i class=\"fas fa-trash\"></i> <b>Refunded (Damaged):</b> '),
+                p2.product_name, ' (', COALESCE(sz2.size, '-'), ', ', COALESCE(c3.color, '-'), ') ',
+                '<span class=\"px-1 rounded font-bold ',
+                IF(sa.type = 'return_restock', 'bg-green-100 text-green-800', 'bg-red-100 text-red-800'),
+                '\">x', sa.quantity, '</span>',
+                -- Show price only if damaged (Refunded)
+                IF(sa.type = 'damaged', 
+                   CONCAT(' — ₱', FORMAT(sa.quantity * (SELECT price FROM order_items WHERE order_id = o.order_id AND stock_id = sa.stock_id LIMIT 1), 2)),
+                   ''
+                ),
+                '</div>'
+            )
+            SEPARATOR ''
+        )
+        FROM stock_adjustments sa
+        LEFT JOIN stock s2 ON sa.stock_id = s2.stock_id
+        LEFT JOIN products p2 ON s2.product_id = p2.product_id
+        LEFT JOIN sizes sz2 ON s2.size_id = sz2.size_id
+        LEFT JOIN colors c3 ON s2.color_id = c3.color_id
+        WHERE sa.reason LIKE CONCAT('Order #', o.order_id, '%')
+    ) AS return_history
+
 FROM orders o
 LEFT JOIN order_status os ON o.order_status_id = os.order_status_id
 LEFT JOIN payment_methods pm ON o.payment_method_id = pm.payment_method_id
@@ -107,7 +131,6 @@ LEFT JOIN stock s ON oi.stock_id = s.stock_id
 LEFT JOIN products p ON s.product_id = p.product_id
 LEFT JOIN sizes sz ON s.size_id = sz.size_id
 LEFT JOIN colors c2 ON s.color_id = c2.color_id
-LEFT JOIN refunds rf ON oi.id = rf.order_item_id
 WHERE " . implode(" AND ", $where) . "
 GROUP BY o.order_id
 ORDER BY o.created_at DESC
@@ -371,7 +394,7 @@ foreach ($orders as $order) {
                 <tr>
                   <th class="px-6 py-3 text-left">Order #</th>
                   <th class="px-6 py-3 text-left">Date</th>
-                  <th class="px-6 py-3 text-left w-1/3">Order Details</th>
+                  <th class="px-6 py-3 text-left w-1/3">Items & Details</th>
                   <th class="px-6 py-3 text-left">Status</th>
                   <th class="px-6 py-3 text-right">Total</th>
                 </tr>
@@ -379,28 +402,37 @@ foreach ($orders as $order) {
 
               <tbody class="divide-y divide-gray-100 text-gray-700">
               <?php if (!empty($orders)): ?>
-                <?php foreach ($orders as $order): ?>
+                <?php foreach ($orders as $order): 
+                    $status_class = "bg-green-100 text-green-600 border-green-200";
+                    if ($order['order_status'] === 'Refunded') $status_class = "bg-red-100 text-red-600 border-red-200";
+                    if ($order['order_status'] === 'Pending') $status_class = "bg-yellow-100 text-yellow-600 border-yellow-200";
+                ?>
                 <tr class="hover:bg-gray-50 transition">
-                  <td class="px-6 py-4 font-mono font-semibold text-gray-500">
+                  <td class="px-6 py-4 font-mono font-semibold text-gray-500 align-top">
                     #<?= $order['order_id']; ?>
                   </td>
-                  <td class="px-6 py-4 whitespace-nowrap">
+                  <td class="px-6 py-4 whitespace-nowrap align-top">
                     <?= date('M d, Y', strtotime($order['created_at'])); ?>
+                    <div class="text-xs text-gray-400 mt-1"><?= date('h:i A', strtotime($order['created_at'])); ?></div>
                   </td>
-                  <td class="px-6 py-4 text-xs leading-5">
-                    <strong class="text-gray-800">Purchased:</strong><br>
+                  <td class="px-6 py-4 text-xs leading-5 align-top">
                     <?= $order['purchased_items'] ?: '<em>No items recorded</em>' ?>
-                    <?php if (!empty($order['refunded_items'])): ?>
-                        <br><br>
-                        <?= $order['refunded_items'] ?>
+                    
+                    <?php if (!empty($order['return_history'])): ?>
+                        <!-- Spacer -->
+                        <div class="h-2"></div>
+                        <!-- Return/Refund Section -->
+                        <div class="p-2 bg-gray-50 rounded border border-gray-100">
+                            <?= $order['return_history'] ?>
+                        </div>
                     <?php endif; ?>
                   </td>
-                  <td class="px-6 py-4">
-                    <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-600 border border-green-200">
-                      Completed
+                  <td class="px-6 py-4 align-top">
+                    <span class="px-2.5 py-1 rounded-full text-xs font-semibold border <?= $status_class ?>">
+                      <?= htmlspecialchars($order['order_status'] ?? 'Unknown'); ?>
                     </span>
                   </td>
-                  <td class="px-6 py-4 text-right font-bold text-gray-800">
+                  <td class="px-6 py-4 text-right font-bold text-gray-800 align-top">
                     ₱<?= number_format($order['total_amount'], 2); ?>
                   </td>
                 </tr>

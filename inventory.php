@@ -7,7 +7,7 @@ $admin_id   = $_SESSION['admin_id'] ?? null;
 $admin_name = "Admin";
 $admin_role = "Admin";
 
-// 🔹 Fetch admin details
+// 🔹 Fetch Admin Details
 if ($admin_id) {
     $query = "SELECT CONCAT(first_name, ' ', last_name) AS full_name, r.role_name 
               FROM adminusers a LEFT JOIN roles r ON a.role_id = r.role_id WHERE a.admin_id = ?";
@@ -22,148 +22,114 @@ if ($admin_id) {
 }
 
 // 🔹 Fetch dropdowns
-$categories = [];
-$resultCategories = $conn->query("SELECT category_id, category_name FROM categories ORDER BY category_name ASC");
-while ($row = $resultCategories->fetch_assoc()) $categories[] = $row;
+$categories = []; $r = $conn->query("SELECT category_name FROM categories ORDER BY category_name"); while($row=$r->fetch_assoc()) $categories[]=$row;
+$colors = []; $r = $conn->query("SELECT color FROM colors ORDER BY color"); while($row=$r->fetch_assoc()) $colors[]=$row;
+$sizes = []; $r = $conn->query("SELECT size FROM sizes ORDER BY size"); while($row=$r->fetch_assoc()) $sizes[]=$row;
 
-$colors = [];
-$resultColors = $conn->query("SELECT color_id, color FROM colors ORDER BY color ASC");
-while ($row = $resultColors->fetch_assoc()) $colors[] = $row;
+// 🔹 Filters
+$catFilter = $_GET['category'] ?? 'all';
+$colFilter = $_GET['color'] ?? 'all';
+$sizFilter = $_GET['size'] ?? 'all';
+$statusFilter = $_GET['stock_status'] ?? 'all';
+$search = $_GET['search'] ?? '';
 
-$sizes = [];
-$resultSizes = $conn->query("SELECT size_id, size FROM sizes ORDER BY size ASC");
-while ($row = $resultSizes->fetch_assoc()) $sizes[] = $row;
-
-// 🔹 Get Filters
-$selectedCategory = $_GET['category'] ?? 'all';
-$selectedColor    = $_GET['color'] ?? 'all';
-$selectedSize     = $_GET['size'] ?? 'all';
-$selectedStock    = $_GET['stock_status'] ?? 'all'; // <--- NEW STOCK FILTER
-$searchQuery      = $_GET['search'] ?? ''; 
-
-// 🔹 Build Query
-$sqlProducts = "
+// 🔹 QUERY: Fetch Stock + Actual History of Returns/Damages
+$sql = "
     SELECT 
-        p.product_id,
+        st.stock_id,
         p.product_name,
         c.category_name,
-        col.color,
+        co.color,
         sz.size,
-        st.current_qty AS total_stock,
+        st.current_qty,
         p.created_at,
-        s.supplier_name
+        
+        -- 1. Total Stock In (Purchased from Supplier)
+        COALESCE((SELECT SUM(quantity) FROM stock_in WHERE stock_id = st.stock_id), 0) AS total_in,
+        
+        -- 2. Total Sold (From Orders)
+        COALESCE((SELECT SUM(qty) FROM order_items WHERE stock_id = st.stock_id), 0) AS total_sold,
+        
+        -- 3. Returns (Restocked/Sellable)
+        COALESCE((SELECT SUM(quantity) FROM stock_adjustments WHERE stock_id = st.stock_id AND type = 'return_restock'), 0) AS returned_restock,
+        
+        -- 4. Damaged/Discarded (From Returns or Manual Adjustment)
+        COALESCE((SELECT SUM(quantity) FROM stock_adjustments WHERE stock_id = st.stock_id AND type IN ('damaged', 'return_discard', 'lost')), 0) AS total_damaged
+
     FROM stock st
-    INNER JOIN products p ON st.product_id = p.product_id
-    INNER JOIN categories c ON p.category_id = c.category_id
-    LEFT JOIN suppliers s ON p.supplier_id = s.supplier_id
-    LEFT JOIN colors col ON st.color_id = col.color_id
+    JOIN products p ON st.product_id = p.product_id
+    LEFT JOIN categories c ON p.category_id = c.category_id
+    LEFT JOIN colors co ON st.color_id = co.color_id
     LEFT JOIN sizes sz ON st.size_id = sz.size_id
+    WHERE 1=1
 ";
 
-// 🔹 Dynamic WHERE filters
-$where  = ["1=1"];
-$params = [];
-$types  = "";
+// Apply Filters
+$types = ""; $params = [];
+if($catFilter !== 'all') { $sql .= " AND c.category_name = ?"; $params[] = $catFilter; $types .= "s"; }
+if($colFilter !== 'all') { $sql .= " AND co.color = ?"; $params[] = $colFilter; $types .= "s"; }
+if($sizFilter !== 'all') { $sql .= " AND sz.size = ?"; $params[] = $sizFilter; $types .= "s"; }
+if($statusFilter === 'in_stock') { $sql .= " AND st.current_qty > 0"; }
+elseif($statusFilter === 'out_of_stock') { $sql .= " AND st.current_qty <= 0"; }
+if($search) { $sql .= " AND p.product_name LIKE ?"; $params[] = "%$search%"; $types .= "s"; }
 
-if ($selectedCategory !== 'all') {
-    $where[] = "c.category_name = ?";
-    $params[] = $selectedCategory;
-    $types   .= "s";
-}
-if ($selectedColor !== 'all') {
-    $where[] = "col.color = ?";
-    $params[] = $selectedColor;
-    $types   .= "s";
-}
-if ($selectedSize !== 'all') {
-    $where[] = "sz.size = ?";
-    $params[] = $selectedSize;
-    $types   .= "s";
-}
+$sql .= " ORDER BY p.product_name ASC";
 
-// 🔍 Stock Status Logic (NEW)
-if ($selectedStock === 'in_stock') {
-    $where[] = "st.current_qty > 0";
-} elseif ($selectedStock === 'out_of_stock') {
-    $where[] = "st.current_qty <= 0";
-}
-
-// 🔍 Add Search Logic
-if (!empty($searchQuery)) {
-    $where[] = "p.product_name LIKE ?";
-    $params[] = "%" . $searchQuery . "%";
-    $types   .= "s";
-}
-
-if ($where) {
-    $sqlProducts .= " WHERE " . implode(" AND ", $where);
-}
-
-$sqlProducts .= " ORDER BY p.created_at DESC, p.product_name ASC";
-
-// 🔹 Execute query
-$stmt = $conn->prepare($sqlProducts);
-if (!empty($params)) {
-    $stmt->bind_param($types, ...$params);
-}
+$stmt = $conn->prepare($sql);
+if(!empty($params)) $stmt->bind_param($types, ...$params);
 $stmt->execute();
-$resultProducts = $stmt->get_result();
-
+$data = $stmt->get_result();
 $inventory = [];
-if ($resultProducts && $resultProducts->num_rows > 0) {
-    while ($row = $resultProducts->fetch_assoc()) {
-        $inventory[] = $row;
+while($row = $data->fetch_assoc()) $inventory[] = $row;
+
+// 🔹 AJAX Output
+if(isset($_GET['ajax'])) {
+    if(empty($inventory)) { echo "<tr><td colspan='10' class='text-center py-8 text-gray-400'><i class='fas fa-box-open text-2xl mb-2 block'></i>No inventory items found.</td></tr>"; exit; }
+    foreach($inventory as $i) {
+        $qty = (int)$i['current_qty'];
+        
+        // Status Badge
+        if($qty == 0) { $cls="bg-red-100 text-red-700 border-red-200"; $lbl="Out of Stock"; }
+        elseif($qty < 5) { $cls="bg-yellow-100 text-yellow-700 border-yellow-200"; $lbl="Low Stock"; }
+        else { $cls="bg-green-100 text-green-700 border-green-200"; $lbl="In Stock"; }
+
+        // Formatting
+        $prodName = htmlspecialchars($i['product_name']);
+        $catName = htmlspecialchars($i['category_name']);
+        $colBadge = $i['color'] ? "<span class='inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border border-gray-200 shadow-sm bg-white text-gray-800'><span class='w-2 h-2 mr-1.5 rounded-full bg-gray-400'></span>" . htmlspecialchars($i['color']) . "</span>" : "<span class='text-gray-400'>—</span>";
+        $sizBadge = $i['size'] ? "<span class='inline-block w-8 h-8 leading-8 text-center rounded bg-white border border-gray-300 text-xs font-bold text-gray-700 shadow-sm'>" . htmlspecialchars($i['size']) . "</span>" : "<span class='text-gray-400'>—</span>";
+
+        echo "<tr class='hover:bg-gray-50 transition duration-150'>
+            <td class='px-6 py-4 font-medium text-gray-900'>{$prodName}</td>
+            <td class='px-6 py-4'><span class='bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full text-xs font-medium'>{$catName}</span></td>
+            <td class='px-6 py-4 text-center'>$colBadge</td>
+            <td class='px-6 py-4 text-center'>$sizBadge</td>
+            
+            <!-- INVENTORY LOGIC COLUMNS -->
+            <td class='px-6 py-4 text-center text-blue-600 font-bold'>{$i['total_in']}</td>
+            
+            <td class='px-6 py-4 text-center text-orange-600 font-bold'>
+                - {$i['total_sold']}
+            </td>
+
+            <!-- 🟢 NEW COLUMN: Returned (Good) -->
+            <td class='px-6 py-4 text-center text-green-600 font-bold'>
+                ".($i['returned_restock'] > 0 ? "+ {$i['returned_restock']}" : "<span class='text-gray-300'>0</span>")."
+            </td>
+
+            <td class='px-6 py-4 text-center text-red-500 font-bold'>
+                ".($i['total_damaged'] > 0 ? "- {$i['total_damaged']}" : "<span class='text-gray-300'>0</span>")."
+            </td>
+
+            <td class='px-6 py-4 text-center'>
+                <span class='text-lg font-bold text-gray-800 bg-gray-50 px-3 py-1 rounded border border-gray-200'>{$qty}</span>
+            </td>
+
+            <td class='px-6 py-4 text-center'><span class='px-2.5 py-1 rounded-full text-xs font-bold border $cls'>$lbl</span></td>
+        </tr>";
     }
+    exit;
 }
-
-// ---------------------------------------------------------
-// 🔄 AJAX HANDLER (Output ONLY Table Rows)
-// ---------------------------------------------------------
-if (isset($_GET['ajax'])) {
-    if (!empty($inventory)) {
-        foreach ($inventory as $item) {
-            $stock = (int)$item['total_stock'];
-            // Status Logic
-            if ($stock == 0) {
-                $status_label = "Out of Stock";
-                $status_class = "bg-red-100 text-red-700 border-red-200";
-            } elseif ($stock < 0) { 
-                $status_label = "Low Stock"; // Assuming logic: usually < 0 is error or backorder
-                $status_class = "bg-yellow-100 text-yellow-700 border-yellow-200";
-            } else {
-                $status_label = "In Stock";
-                $status_class = "bg-green-100 text-green-700 border-green-200";
-            }
-
-            $prodName = htmlspecialchars($item['product_name']);
-            $catName = htmlspecialchars($item['category_name']);
-            $colorBadge = !empty($item['color']) 
-                ? "<span class='inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border border-gray-200 shadow-sm bg-white text-gray-800'><span class='w-2 h-2 mr-1.5 rounded-full bg-gray-400'></span>" . htmlspecialchars($item['color']) . "</span>" 
-                : "<span class='text-gray-400'>—</span>";
-            $sizeBadge = !empty($item['size']) 
-                ? "<span class='inline-block w-8 h-8 leading-8 text-center rounded bg-white border border-gray-300 text-xs font-bold text-gray-700 shadow-sm'>" . htmlspecialchars($item['size']) . "</span>" 
-                : "<span class='text-gray-400'>—</span>";
-            $date = date('M d, Y', strtotime($item['created_at']));
-
-            echo "
-            <tr class='hover:bg-gray-50 transition duration-150'>
-                <td class='px-6 py-4 font-medium text-gray-900'>{$prodName}</td>
-                <td class='px-6 py-4 text-gray-600'><span class='bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs border'>{$catName}</span></td>
-                <td class='px-6 py-4 text-center'>{$colorBadge}</td>
-                <td class='px-6 py-4 text-center'>{$sizeBadge}</td>
-                <td class='px-6 py-4 text-center font-bold text-gray-700'>{$stock}</td>
-                <td class='px-6 py-4 text-center'><span class='px-2 py-1 rounded-md text-xs font-semibold border {$status_class}'>{$status_label}</span></td>
-                <td class='px-6 py-4 text-right text-gray-500 text-xs'>{$date}</td>
-            </tr>";
-        }
-    } else {
-        echo "<tr><td colspan='7' class='text-center px-6 py-8 text-gray-400'><i class='fas fa-box-open text-2xl mb-2 block'></i>No inventory items found matching your filters.</td></tr>";
-    }
-    exit; // 🛑 STOP HERE FOR AJAX
-}
-
-$stmt->close();
-$conn->close();
 ?>
 
 <!DOCTYPE html>
@@ -173,14 +139,10 @@ $conn->close();
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Inventory | Seven Dwarfs Boutique</title>
   
-  <!-- Libraries -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
-  
-  <!-- NProgress (Loading Bar) -->
   <script src="https://unpkg.com/nprogress@0.2.0/nprogress.js"></script>
   <link rel="stylesheet" href="https://unpkg.com/nprogress@0.2.0/nprogress.css" />
-
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet" />
 
@@ -188,27 +150,12 @@ $conn->close();
     :root { --rose: #e59ca8; --rose-hover: #d27b8c; }
     body { font-family: 'Poppins', sans-serif; background-color: #f9fafb; color: #374151; }
     [x-cloak] { display: none !important; }
-
-    /* Custom scrollbar */
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-thumb { background: var(--rose); border-radius: 3px; }
-    
-    /* Sidebar specific */
-    .active { background-color: #fce8eb; color: var(--rose); font-weight: 600; border-radius: 0.5rem; }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-    /* 1. View Transitions API */
-    @view-transition { navigation: auto; }
-
-    /* 2. Fade In Animation */
-    @keyframes fadeInSlide {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
+    @keyframes fadeInSlide { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     .animate-fade-in { animation: fadeInSlide 0.4s ease-out; }
-
-    /* 3. NProgress Customization */
     #nprogress .bar { background: var(--rose) !important; height: 3px !important; }
     #nprogress .peg { box-shadow: 0 0 10px var(--rose), 0 0 5px var(--rose) !important; }
   </style>
@@ -225,7 +172,7 @@ $conn->close();
      }" 
      x-init="$watch('sidebarOpen', val => localStorage.setItem('sidebarOpen', val))">
 
-  <!-- 🌸 Sidebar (Dynamic Width) -->
+  <!-- 🌸 Sidebar -->
   <aside 
     class="bg-white shadow-md fixed top-0 left-0 h-screen z-30 transition-all duration-300 ease-in-out no-scrollbar overflow-y-auto overflow-x-hidden"
     :class="sidebarOpen ? 'w-64' : 'w-20'"
@@ -262,27 +209,16 @@ $conn->close();
           </div>
           <i x-show="sidebarOpen" class="fas fa-chevron-down transition-transform duration-200" :class="{ 'rotate-180': userMenu }"></i>
         </button>
-        <!-- Submenu -->
         <ul x-show="userMenu" class="text-sm text-gray-700 space-y-1 mt-1 bg-gray-50 rounded-md overflow-hidden transition-all" :class="sidebarOpen ? 'pl-8' : 'pl-0 text-center'">
-          <li>
-            <a href="manage_users.php" class="block py-2 hover:text-[var(--rose)] flex items-center" :class="sidebarOpen ? '' : 'justify-center'" title="Users">
-              <i class="fas fa-user w-4 mr-2" :class="sidebarOpen ? '' : 'mr-0 text-md'"></i>
-              <span x-show="sidebarOpen">Users</span>
-            </a>
-          </li>
-          <li>
-            <a href="manage_roles.php" class="block py-2 hover:text-[var(--rose)] flex items-center" :class="sidebarOpen ? '' : 'justify-center'" title="Roles">
-              <i class="fas fa-user-tag w-4 mr-2" :class="sidebarOpen ? '' : 'mr-0 text-md'"></i>
-              <span x-show="sidebarOpen">Roles</span>
-            </a>
-          </li>
+          <li><a href="manage_users.php" class="block py-2 hover:text-[var(--rose)] flex items-center" :class="sidebarOpen ? '' : 'justify-center'"><i class="fas fa-user w-4 mr-2" :class="sidebarOpen ? '' : 'mr-0 text-md'"></i><span x-show="sidebarOpen">Users</span></a></li>
+          <li><a href="manage_roles.php" class="block py-2 hover:text-[var(--rose)] flex items-center" :class="sidebarOpen ? '' : 'justify-center'"><i class="fas fa-user-tag w-4 mr-2" :class="sidebarOpen ? '' : 'mr-0 text-md'"></i><span x-show="sidebarOpen">Roles</span></a></li>
         </ul>
       </div>
      <a href="suppliers.php" class="block px-4 py-3 hover:bg-gray-100 rounded-md transition-all duration-300 flex items-center" :class="sidebarOpen ? 'space-x-2' : 'justify-center px-0'">
         <i class="fas fa-industry w-5 text-center text-lg"></i>
         <span x-show="sidebarOpen" class="whitespace-nowrap">Suppliers</span>
       </a>
-      <!-- Product Management (Active) -->
+      <!-- Product Management -->
       <div>
         <button @click="productMenu = !productMenu" class="w-full text-left px-4 py-3 flex items-center hover:bg-gray-100 rounded-md transition-all duration-300" :class="sidebarOpen ? 'justify-between' : 'justify-center px-0'">
           <div class="flex items-center" :class="sidebarOpen ? 'space-x-2' : ''">
@@ -292,30 +228,10 @@ $conn->close();
           <i x-show="sidebarOpen" class="fas fa-chevron-down transition-transform duration-200" :class="{ 'rotate-180': productMenu }"></i>
         </button>
         <ul x-show="productMenu" class="text-sm text-gray-700 space-y-1 mt-1 bg-gray-50 rounded-md overflow-hidden" :class="sidebarOpen ? 'pl-8' : 'pl-0 text-center'">
-          <li>
-            <a href="categories.php" class="block py-2 hover:text-[var(--rose)] flex items-center" :class="sidebarOpen ? '' : 'justify-center'" title="Category">
-              <i class="fas fa-tags w-4 mr-2" :class="sidebarOpen ? '' : 'mr-0 text-md'"></i>
-              <span x-show="sidebarOpen">Category</span>
-            </a>
-          </li>
-          <li>
-            <a href="products.php" class="block py-2 hover:text-[var(--rose)] flex items-center" :class="sidebarOpen ? '' : 'justify-center'" title="Product">
-              <i class="fas fa-box w-4 mr-2" :class="sidebarOpen ? '' : 'mr-0 text-md'"></i>
-              <span x-show="sidebarOpen">Product</span>
-            </a>
-          </li>
-          <li>
-            <a href="stock_management.php" class="block py-2 hover:text-[var(--rose)] flex items-center" :class="sidebarOpen ? '' : 'justify-center'" title="Stock">
-              <i class="fas fa-boxes w-4 mr-2" :class="sidebarOpen ? '' : 'mr-0 text-md'"></i>
-              <span x-show="sidebarOpen">Stock In</span>
-            </a>
-          </li>
-          <li>
-            <a href="inventory.php" class="block py-2 active flex items-center" :class="sidebarOpen ? '' : 'justify-center'" title="Inventory">
-              <i class="fas fa-warehouse w-4 mr-2" :class="sidebarOpen ? '' : 'mr-0 text-md'"></i>
-              <span x-show="sidebarOpen">Inventory</span>
-            </a>
-          </li>
+          <li><a href="categories.php" class="block py-2 hover:text-[var(--rose)] flex items-center" :class="sidebarOpen ? '' : 'justify-center'"><i class="fas fa-tags w-4 mr-2" :class="sidebarOpen ? '' : 'mr-0 text-md'"></i><span x-show="sidebarOpen">Category</span></a></li>
+          <li><a href="products.php" class="block py-2 hover:text-[var(--rose)] flex items-center" :class="sidebarOpen ? '' : 'justify-center'"><i class="fas fa-box w-4 mr-2" :class="sidebarOpen ? '' : 'mr-0 text-md'"></i><span x-show="sidebarOpen">Product</span></a></li>
+          <li><a href="stock_management.php" class="block py-2 hover:text-[var(--rose)] flex items-center" :class="sidebarOpen ? '' : 'justify-center'"><i class="fas fa-boxes w-4 mr-2" :class="sidebarOpen ? '' : 'mr-0 text-md'"></i><span x-show="sidebarOpen">Stock In</span></a></li>
+          <li><a href="inventory.php" class="block py-2 active flex items-center" :class="sidebarOpen ? '' : 'justify-center'"><i class="fas fa-warehouse w-4 mr-2" :class="sidebarOpen ? '' : 'mr-0 text-md'"></i><span x-show="sidebarOpen">Inventory</span></a></li>
         </ul>
       </div>
 
@@ -338,97 +254,58 @@ $conn->close();
     </nav>
   </aside>
 
-  <!-- 🌸 Main Content (Dynamic Margin) -->
+  <!-- 🌸 Main Content -->
   <main class="flex-1 flex flex-col pt-20 bg-gray-50 transition-all duration-300 ease-in-out" 
         :class="sidebarOpen ? 'ml-64' : 'ml-20'">
     
-    <!-- Header (Dynamic Position) -->
     <header class="bg-[var(--rose)] text-white p-4 flex justify-between items-center shadow-md rounded-bl-2xl fixed top-0 right-0 z-20 transition-all duration-300 ease-in-out"
             :class="sidebarOpen ? 'left-64' : 'left-20'">
-      
       <div class="flex items-center gap-4">
-          <!-- Toggle Button -->
           <button @click="sidebarOpen = !sidebarOpen" class="text-white hover:bg-white/20 p-2 rounded-full transition focus:outline-none">
              <i class="fas fa-bars text-xl"></i>
           </button>
           <h1 class="text-xl font-semibold">Inventory Management</h1>
-      </div>
-
-      <div class="flex items-center gap-4">
       </div>
     </header>
 
     <!-- 📄 Page Content -->
     <section class="p-6">
         
-        <!-- The White Card -->
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             
             <!-- Filters -->
-            <div class="p-6 border-b border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="p-6 border-b border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4 bg-gray-50">
                 <div class="flex flex-wrap gap-4 items-center">
-                    
-                    <!-- Category Dropdown -->
                     <div>
-                        <label for="category" class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Category</label>
-                        <select id="category" onchange="fetchInventory()" 
-                        class="px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)] text-sm min-w-[140px] cursor-pointer bg-gray-50">
-                        <option value="all">All</option>
-                        <?php foreach ($categories as $category) { ?>
-                            <option value="<?php echo $category['category_name']; ?>" <?php echo ($selectedCategory == $category['category_name']) ? 'selected' : ''; ?>>
-                            <?php echo $category['category_name']; ?>
-                            </option>
-                        <?php } ?>
+                        <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Category</label>
+                        <select id="cat" onchange="load()" class="px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)] text-sm min-w-[140px] cursor-pointer bg-white">
+                        <option value="all">All</option><?php foreach ($categories as $c) echo "<option value='{$c['category_name']}'>{$c['category_name']}</option>"; ?>
                         </select>
                     </div>
-
-                    <!-- Color Dropdown -->
                     <div>
-                        <label for="color" class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Color</label>
-                        <select id="color" onchange="fetchInventory()" 
-                        class="px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)] text-sm min-w-[120px] cursor-pointer bg-gray-50">
-                        <option value="all">All</option>
-                        <?php foreach ($colors as $color) { ?>
-                            <option value="<?php echo $color['color']; ?>" <?php echo ($selectedColor == $color['color']) ? 'selected' : ''; ?>>
-                            <?php echo $color['color']; ?>
-                            </option>
-                        <?php } ?>
+                        <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Color</label>
+                        <select id="col" onchange="load()" class="px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)] text-sm min-w-[120px] cursor-pointer bg-white">
+                        <option value="all">All</option><?php foreach ($colors as $c) echo "<option value='{$c['color']}'>{$c['color']}</option>"; ?>
                         </select>
                     </div>
-
-                    <!-- Size Dropdown -->
                     <div>
-                        <label for="size" class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Size</label>
-                        <select id="size" onchange="fetchInventory()" 
-                        class="px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)] text-sm min-w-[100px] cursor-pointer bg-gray-50">
-                        <option value="all">All</option>
-                        <?php foreach ($sizes as $size) { ?>
-                            <option value="<?php echo $size['size']; ?>" <?php echo ($selectedSize == $size['size']) ? 'selected' : ''; ?>>
-                            <?php echo $size['size']; ?>
-                            </option>
-                        <?php } ?>
+                        <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Size</label>
+                        <select id="siz" onchange="load()" class="px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)] text-sm min-w-[100px] cursor-pointer bg-white">
+                        <option value="all">All</option><?php foreach ($sizes as $c) echo "<option value='{$c['size']}'>{$c['size']}</option>"; ?>
                         </select>
                     </div>
-
-                    <!-- Stock Status Dropdown (NEW) -->
                     <div>
-                        <label for="stock_status" class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Status</label>
-                        <select id="stock_status" onchange="fetchInventory()" 
-                        class="px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)] text-sm min-w-[120px] cursor-pointer bg-gray-50">
-                            <option value="all" <?php echo ($selectedStock == 'all') ? 'selected' : ''; ?>>All</option>
-                            <option value="in_stock" <?php echo ($selectedStock == 'in_stock') ? 'selected' : ''; ?>>In Stock</option>
-                            <option value="out_of_stock" <?php echo ($selectedStock == 'out_of_stock') ? 'selected' : ''; ?>>Out of Stock</option>
+                        <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Status</label>
+                        <select id="sts" onchange="load()" class="px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)] text-sm min-w-[120px] cursor-pointer bg-white">
+                            <option value="all">All</option><option value="in_stock">In Stock</option><option value="out_of_stock">Out of Stock</option>
                         </select>
                     </div>
-
                 </div>
 
-                <!-- 🔍 Search Bar -->
                 <div class="w-full md:w-auto">
-                     <label for="search" class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Search</label>
+                     <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Search</label>
                      <div class="relative">
-                         <input type="text" id="search" placeholder="Search product..." oninput="debounceSearch()"
-                             class="w-full md:w-64 pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)] text-sm shadow-sm">
+                         <input type="text" id="search" oninput="load()" placeholder="Search..." class="w-full md:w-64 pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)] text-sm shadow-sm bg-white">
                          <i class="fas fa-search absolute left-3 top-2.5 text-gray-400"></i>
                      </div>
                 </div>
@@ -437,58 +314,23 @@ $conn->close();
             <!-- Table -->
             <div class="overflow-x-auto">
                 <table class="min-w-full text-left text-sm text-gray-600">
-                    <thead class="bg-gray-50 text-gray-500 uppercase font-bold text-xs">
+                    <thead class="bg-gray-100 text-gray-500 uppercase font-bold text-xs border-b border-gray-200">
                         <tr>
-                            <th class="px-6 py-3">Product Name</th>
-                            <th class="px-6 py-3">Category</th>
-                            <th class="px-6 py-3 text-center">Color</th>
-                            <th class="px-6 py-3 text-center">Size</th>
-                            <th class="px-6 py-3 text-center">Stock</th>
-                            <th class="px-6 py-3 text-center">Status</th>
-                            <th class="px-6 py-3 text-right">Created At</th>
+                            <th class="px-6 py-4">Product Name</th>
+                            <th class="px-6 py-4">Category</th>
+                            <th class="px-6 py-4 text-center">Color</th>
+                            <th class="px-6 py-4 text-center">Size</th>
+                            <!-- LOGIC COLUMNS -->
+                            <th class="px-6 py-4 text-center bg-blue-50 text-blue-700">Total In</th>
+                            <th class="px-6 py-4 text-center bg-orange-50 text-orange-700">Sold</th>
+                            <th class="px-6 py-4 text-center bg-green-50 text-green-700">Returned (Good)</th>
+                            <th class="px-6 py-4 text-center bg-red-50 text-red-700">Damaged</th>
+                            <th class="px-6 py-4 text-center bg-gray-200 text-gray-800">Remaining</th>
+                            <th class="px-6 py-4 text-center">Status</th>
                         </tr>
                     </thead>
-                    <tbody id="inventoryTableBody" class="divide-y divide-gray-100">
-                        <!-- PHP Initial Load Loop -->
-                        <?php 
-                          if (!empty($inventory)) { 
-                            foreach ($inventory as $item) {
-                              $stock = (int)$item['total_stock'];
-                              
-                              if ($stock == 0) {
-                                  $status_label = "Out of Stock";
-                                  $status_class = "bg-red-100 text-red-700 border-red-200";
-                              } elseif ($stock < 0) { 
-                                  $status_label = "Low Stock";
-                                  $status_class = "bg-yellow-100 text-yellow-700 border-yellow-200";
-                              } else {
-                                  $status_label = "In Stock";
-                                  $status_class = "bg-green-100 text-green-700 border-green-200";
-                              }
-                        ?>
-                        <tr class="hover:bg-gray-50 transition duration-150">
-                          <td class="px-6 py-4 font-medium text-gray-800"><?php echo htmlspecialchars($item['product_name']); ?></td>
-                          <td class="px-6 py-4"><span class="bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full text-xs font-medium"><?php echo htmlspecialchars($item['category_name']); ?></span></td>
-                          <td class="px-6 py-4 text-center">
-                              <?php if (!empty($item['color'])): ?>
-                                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border border-gray-200 shadow-sm bg-white text-gray-800"><span class="w-2 h-2 mr-1.5 rounded-full bg-gray-400"></span><?php echo htmlspecialchars($item['color']); ?></span>
-                              <?php else: ?><span class="text-gray-400">—</span><?php endif; ?>
-                          </td>
-                          <td class="px-6 py-4 text-center">
-                              <?php if (!empty($item['size'])): ?>
-                                  <span class="inline-block px-2 py-0.5 rounded bg-white border border-gray-200 text-xs font-bold text-gray-700 shadow-sm"><?php echo htmlspecialchars($item['size']); ?></span>
-                              <?php else: ?><span class="text-gray-400">—</span><?php endif; ?>
-                          </td>
-                          <td class="px-6 py-4 text-center font-bold text-gray-700"><?php echo $stock; ?></td>
-                          <td class="px-6 py-4 text-center"><span class="px-2.5 py-1 rounded-full text-xs font-bold border <?php echo $status_class; ?>"><?php echo $status_label; ?></span></td>
-                          <td class="px-6 py-4 text-right text-gray-400 text-xs"><?php echo date('M d, Y', strtotime($item['created_at'])); ?></td>
-                        </tr>
-                        <?php 
-                            }
-                          } else { 
-                        ?>
-                        <tr><td colspan="7" class="text-center px-6 py-10 text-gray-400"><i class="fas fa-box-open text-2xl mb-2 block"></i>No inventory items found.</td></tr>
-                        <?php } ?>
+                    <tbody id="inventoryTableBody" class="divide-y divide-gray-100 bg-white">
+                        <!-- AJAX LOADED CONTENT -->
                     </tbody>
                 </table>
             </div>
@@ -501,47 +343,34 @@ $conn->close();
 
 <!-- Scripts -->
 <script>
-// NProgress Logic
 document.addEventListener('DOMContentLoaded', () => {
+    // NProgress
     document.querySelectorAll('a').forEach(link => {
         link.addEventListener('click', (e) => {
             if(link.getAttribute('href').startsWith('#') || link.getAttribute('href').startsWith('javascript') || link.target === '_blank') return;
             NProgress.start();
         });
     });
-    window.addEventListener('load', () => NProgress.done());
-    window.addEventListener('pageshow', () => NProgress.done());
+    window.addEventListener('load', () => { NProgress.done(); load(); });
 });
 
 let timeout = null;
-
-function fetchInventory() {
-    const category = document.getElementById('category').value;
-    const color    = document.getElementById('color').value;
-    const size     = document.getElementById('size').value;
-    const stock    = document.getElementById('stock_status').value; // <--- NEW JS LOGIC
-    const search   = document.getElementById('search').value;
-
-    const params = new URLSearchParams({
-        ajax: '1',
-        category: category,
-        color: color,
-        size: size,
-        stock_status: stock, // <--- NEW PARAMETER
-        search: search
-    });
-
-    fetch('inventory.php?' + params.toString())
-        .then(res => res.text())
-        .then(html => {
-            document.getElementById('inventoryTableBody').innerHTML = html;
-        })
-        .catch(err => console.error('Error fetching inventory:', err));
-}
-
-function debounceSearch() {
+function load() {
     clearTimeout(timeout);
-    timeout = setTimeout(fetchInventory, 300);
+    timeout = setTimeout(() => {
+        const params = new URLSearchParams({
+            ajax: 1,
+            category: document.getElementById('cat').value,
+            color: document.getElementById('col').value,
+            size: document.getElementById('siz').value,
+            stock_status: document.getElementById('sts').value,
+            search: document.getElementById('search').value
+        });
+        fetch('inventory.php?' + params)
+            .then(r => r.text())
+            .then(html => document.getElementById('inventoryTableBody').innerHTML = html)
+            .catch(e => console.error(e));
+    }, 300);
 }
 </script>
 

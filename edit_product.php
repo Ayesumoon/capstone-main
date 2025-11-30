@@ -20,12 +20,7 @@ while ($row = $catQuery->fetch_assoc()) {
     $categories[] = $row;
 }
 
-// ✅ Fetch suppliers for dropdown
-$suppliers = [];
-$supplierQuery = $conn->query("SELECT supplier_id, supplier_name FROM suppliers ORDER BY supplier_name ASC");
-while ($row = $supplierQuery->fetch_assoc()) {
-    $suppliers[] = $row;
-}
+// (Removed Supplier Fetching)
 
 // ✅ Fetch product details
 $stmt = $conn->prepare("SELECT * FROM products WHERE product_id = ?");
@@ -58,13 +53,12 @@ if (!empty($product['image_url'])) {
 // ---------------------------------------------------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $product_name   = trim($_POST['product_name']);
-    // Removed Description
     $category_id    = (int)$_POST['category_id'];
-    $supplier_id    = (int)$_POST['supplier_id'];
+    // (Removed supplier_id from POST)
 
     // 🛑 VALIDATION 1: Check Empty Fields
-    if (empty($product_name) || empty($category_id) || empty($supplier_id)) {
-        $error_msg = "Product Name, Category, and Supplier are required.";
+    if (empty($product_name) || empty($category_id)) {
+        $error_msg = "Product Name and Category are required.";
     }
     // 🛑 VALIDATION 2: Check Duplicate Name (Excluding current ID)
     else {
@@ -112,17 +106,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $imageString = json_encode($finalImages, JSON_UNESCAPED_SLASHES);
 
-        // ✅ Update database (Removed Description, price, supplier_price)
+        // ✅ Update database (Removed supplier_id)
         $updateStmt = $conn->prepare("
             UPDATE products
-            SET product_name = ?, category_id = ?, supplier_id = ?, image_url = ?
+            SET product_name = ?, category_id = ?, image_url = ?
             WHERE product_id = ?
         ");
+        
+        // Types: s (string name), i (int category), s (string images), i (int id)
         $updateStmt->bind_param(
-            "siisi",
+            "sisi",
             $product_name,
             $category_id,
-            $supplier_id,
             $imageString,
             $product_id
         );
@@ -225,8 +220,8 @@ $conn->close();
                         >
                     </div>
 
-                    <!-- Category & Supplier Row -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Category Row (Full width now that Supplier is gone) -->
+                    <div class="w-full">
                         <div>
                             <label class="block text-gray-700 font-semibold mb-2 text-sm">Category <span class="text-red-500">*</span></label>
                             <div class="relative">
@@ -240,21 +235,6 @@ $conn->close();
                                 <i class="fas fa-chevron-down absolute right-4 top-4 text-gray-400 pointer-events-none text-xs"></i>
                             </div>
                         </div>
-
-                        <div>
-                            <label class="block text-gray-700 font-semibold mb-2 text-sm">Supplier <span class="text-red-500">*</span></label>
-                            <div class="relative">
-                                <select name="supplier_id" required class="input-field w-full border border-gray-300 rounded-xl px-4 py-3 outline-none appearance-none bg-gray-50 focus:bg-white cursor-pointer">
-                                    <option value="">Select Supplier</option>
-                                    <?php foreach ($suppliers as $sup): ?>
-                                    <option value="<?= $sup['supplier_id']; ?>" <?= (($sup['supplier_id'] == ($_POST['supplier_id'] ?? $product['supplier_id'])) ? 'selected' : ''); ?>>
-                                        <?= htmlspecialchars($sup['supplier_name']); ?>
-                                    </option>
-                                    <?php endforeach; ?>
-                                </select>
-                                <i class="fas fa-chevron-down absolute right-4 top-4 text-gray-400 pointer-events-none text-xs"></i>
-                            </div>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -262,9 +242,7 @@ $conn->close();
             <hr class="border-gray-100">
 
             <!-- Section 2: Pricing -->
-            <!-- Selling Price and Supplier Price fields removed -->
-
-            <hr class="border-gray-100">
+            <!-- Selling Price and Supplier Price fields are removed -->
 
             <!-- Section 3: Images -->
             <div>

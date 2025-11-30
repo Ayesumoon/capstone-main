@@ -1,7 +1,8 @@
 <?php
+session_start();
 require 'admin_only.php';
 require 'conn.php';
-session_start();
+
 if (!isset($_SESSION['admin_id'])) {
     header("Location: login.php");
     exit;

@@ -1,7 +1,8 @@
 <?php
+session_start();
 require 'admin_only.php';
 require 'conn.php';
-session_start();
+
 
 function e($v) { return htmlspecialchars($v ?? '', ENT_QUOTES, 'UTF-8'); }
 
@@ -41,6 +42,11 @@ $supplier_list = [];
 $res = $conn->query("SELECT supplier_id, supplier_name FROM suppliers ORDER BY supplier_name ASC");
 while ($s = $res->fetch_assoc()) $supplier_list[] = $s;
 
+// 🟢 NEW: Fetch All Products for the Stock In Dropdown
+$product_list = [];
+$res = $conn->query("SELECT product_id, product_name, supplier_price, price_id, supplier_id FROM products ORDER BY product_name ASC");
+while ($p = $res->fetch_assoc()) $product_list[] = $p;
+
 $color_list = [];
 $res = $conn->query("SELECT color_id, color FROM colors ORDER BY color ASC");
 while ($c = $res->fetch_assoc()) $color_list[] = $c;
@@ -73,7 +79,6 @@ if (count($whereClauses) > 0) {
 }
 
 // 🔹 Stock Query
-// 🟢 UPDATED: Added p.supplier_price and p.price_id (Seller Price)
 $stockQuery = "
     SELECT 
         s.stock_id,
@@ -363,11 +368,12 @@ if ($stmt = $conn->prepare($stockQuery)) {
                                         editData.color_id = '<?= $row['color_id'] ?? '' ?>';
                                         editData.size_id = '<?= $row['size_id'] ?? '' ?>';
                                         
-                                        // 🟢 Populate Prices for Edit
                                         editData.supplier_price = '<?= $row['supplier_price'] ?? '' ?>';
                                         editData.price = '<?= $row['seller_price'] ?? '' ?>';
                                         
                                         editStockOpen = true; 
+                                        // Edit modal still uses fetchProducts to restrict to correct supplier if needed, 
+                                        // or we can allow it to just load. For now keeping original edit logic.
                                         fetchProducts(editData.supplier_id, 'editProductSelect', editData.product_id);
                                     "
                                     class="text-[var(--rose)] hover:text-white hover:bg-[var(--rose)] p-2 rounded-lg transition" title="Edit">
@@ -391,11 +397,28 @@ if ($stmt = $conn->prepare($stockQuery)) {
       <h3 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Stock In (New)</h3>
       <form action="process_stock_in.php" method="POST" class="space-y-4">
         
-        <!-- Supplier Select -->
+        <!-- 🟢 Product Select (Moved Up & Populated with All Products) -->
+        <div>
+          <label class="block text-sm font-bold text-gray-700 mb-1">Product</label>
+          <select id="productSelect" name="product_id" 
+                  onchange="onProductChange(this)" 
+                  class="border border-gray-300 w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)]" required>
+            <option value="">Select Product</option>
+            <?php foreach ($product_list as $prod): ?>
+                <option value="<?= $prod['product_id'] ?>" 
+                        data-supplier-price="<?= $prod['supplier_price'] ?>"
+                        data-seller-price="<?= $prod['price_id'] ?>"
+                        data-default-supplier="<?= $prod['supplier_id'] ?>">
+                    <?= htmlspecialchars($prod['product_name']) ?>
+                </option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+
+        <!-- 🟢 Supplier Select (Moved Down & Independent) -->
         <div>
           <label class="block text-sm font-bold text-gray-700 mb-1">Supplier</label>
           <select id="supplierSelect" name="supplier_id" 
-                  onchange="fetchProducts(this.value, 'productSelect')" 
                   class="border border-gray-300 w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)]" required>
             <option value="">Select Supplier</option>
             <?php foreach ($supplier_list as $sup): ?>
@@ -403,18 +426,8 @@ if ($stmt = $conn->prepare($stockQuery)) {
             <?php endforeach; ?>
           </select>
         </div>
-
-        <!-- 🟢 Product Select (UPDATED: Added onchange="fillPrices(...)") -->
-        <div>
-          <label class="block text-sm font-bold text-gray-700 mb-1">Product</label>
-          <select id="productSelect" name="product_id" 
-                  onchange="fillPrices(this)" 
-                  class="border border-gray-300 w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)]" required>
-            <option value="">Select Supplier First</option>
-          </select>
-        </div>
         
-        <!-- 🟢 Price Fields (IDs added for targeting) -->
+        <!-- Price Fields -->
         <div class="grid grid-cols-2 gap-4">
             <div>
               <label class="block text-sm font-bold text-gray-700 mb-1">Supplier Price</label>
@@ -426,7 +439,6 @@ if ($stmt = $conn->prepare($stockQuery)) {
             </div>
         </div>
 
-        <!-- ... (Rest of your form remains the same) ... -->
         <div class="grid grid-cols-2 gap-4">
             <div>
               <label class="block text-sm font-bold text-gray-700 mb-1">Color</label>
@@ -459,7 +471,7 @@ if ($stmt = $conn->prepare($stockQuery)) {
     </div>
   </div>
 
-  <!-- Edit Stock Modal -->
+  <!-- Edit Stock Modal (Kept Logic Mostly Same for Editing Existing Entries) -->
   <div x-show="editStockOpen" x-cloak class="fixed inset-0 flex items-center justify-center bg-black/50 z-50 p-4 backdrop-blur-sm animate-fade-in">
     <div @click.away="editStockOpen = false" class="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 transform transition-all">
       <div class="flex justify-between items-center border-b pb-2 mb-4">
@@ -470,6 +482,8 @@ if ($stmt = $conn->prepare($stockQuery)) {
       <form action="process_edit_stock.php" method="POST" class="space-y-4">
         <input type="hidden" name="stock_id" x-model="editData.id">
         
+        <!-- For Edit, we usually keep Supplier -> Product hierarchy to ensure data integrity of existing record, 
+             but fields can be adjustable. -->
         <div>
           <label class="block text-sm font-bold text-gray-700 mb-1">Supplier</label>
           <select id="editSupplierSelect" name="supplier_id" x-model="editData.supplier_id" 
@@ -489,7 +503,6 @@ if ($stmt = $conn->prepare($stockQuery)) {
           </select>
         </div>
 
-        <!-- 🟢 New Price Fields for Edit Modal -->
         <div class="grid grid-cols-2 gap-4">
             <div>
               <label class="block text-sm font-bold text-gray-700 mb-1">Supplier Price</label>
@@ -551,33 +564,33 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('pageshow', () => NProgress.done());
 });
 
-// 🟢 NEW FUNCTION: Fill prices when product is selected
-function fillPrices(selectElement) {
-    // Get the currently selected option
+// 🟢 NEW FUNCTION: Handle Product Selection in Stock In
+function onProductChange(selectElement) {
     const selectedOption = selectElement.options[selectElement.selectedIndex];
     
-    // Read the data attributes we stored in fetchProducts
+    // 1. Fill Prices
     const supplierPrice = selectedOption.getAttribute('data-supplier-price');
     const sellerPrice = selectedOption.getAttribute('data-seller-price');
 
-    // Update the inputs in the Stock In modal
-    // Note: We check if the element exists to avoid errors if this function is reused elsewhere
     const supInput = document.getElementById('stockInSupplierPrice');
     const sellInput = document.getElementById('stockInSellerPrice');
-
+    
     if(supInput) supInput.value = supplierPrice || '';
     if(sellInput) sellInput.value = sellerPrice || '';
+
+    // 2. Auto-select Default Supplier if available (But allow user to change it)
+    const defaultSupplierId = selectedOption.getAttribute('data-default-supplier');
+    const supplierSelect = document.getElementById('supplierSelect');
+    
+    if (supplierSelect && defaultSupplierId) {
+        supplierSelect.value = defaultSupplierId;
+    }
 }
 
+// Keeping this for the Edit Modal
 function fetchProducts(supplierId, targetSelectId, preSelectedId = null) {
     const productSel = document.getElementById(targetSelectId);
     
-    // Clear prices when supplier changes
-    if (targetSelectId === 'productSelect') {
-        document.getElementById('stockInSupplierPrice').value = '';
-        document.getElementById('stockInSellerPrice').value = '';
-    }
-
     if (!supplierId) {
         productSel.innerHTML = '<option value="">Select Supplier First</option>';
         return;
@@ -598,18 +611,13 @@ function fetchProducts(supplierId, targetSelectId, preSelectedId = null) {
             const opt = document.createElement('option');
             opt.value = p.product_id;
             opt.textContent = p.product_name;
-            
-            // 🟢 Store prices in data attributes
-            opt.setAttribute('data-supplier-price', p.supplier_price); // From DB
-            opt.setAttribute('data-seller-price', p.price_id);         // From DB
-            
+            opt.setAttribute('data-supplier-price', p.supplier_price);
+            opt.setAttribute('data-seller-price', p.price_id);
             productSel.appendChild(opt);
         });
         
-        // Handle pre-selection for Edit Modal
         if (preSelectedId) {
             productSel.value = preSelectedId;
-            // Alpine JS sync for the Edit Modal
             const root = document.querySelector('[x-data]');
             if(root && root.__x) {
                 root.__x.$data.editData.product_id = preSelectedId;

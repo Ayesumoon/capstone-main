@@ -5,26 +5,24 @@ require 'conn.php';
 
 $preselectedCategoryId = isset($_GET['category_id']) ? intval($_GET['category_id']) : null;
 
-// Fetch dropdown data
+// Fetch dropdown data (Removed Supplier Fetch)
 $category_result = $conn->query("SELECT category_id, category_name FROM categories ORDER BY category_name ASC");
-$supplier_result = $conn->query("SELECT supplier_id, supplier_name FROM suppliers ORDER BY supplier_name ASC");
 
 // -----------------------------
 // Server-side handling
 // -----------------------------
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $product_name   = trim($_POST['product_name'] ?? '');
-    $supplier_price = isset($_POST['supplier_price']) ? floatval($_POST['supplier_price']) : 0;
+    // Removed Supplier Price
     $category_id    = isset($_POST['category']) ? intval($_POST['category']) : 0;
-    $supplier_id    = isset($_POST['supplier_id']) ? intval($_POST['supplier_id']) : 0;
+    // Removed Supplier ID
 
     $errors = [];
 
     // Validation Logic
     if ($product_name === '') $errors[] = "Product name is required.";
-    if ($supplier_price < 0) $errors[] = "Supplier price cannot be negative."; // Changed to allow 0
     if ($category_id <= 0) $errors[] = "Please select a valid category.";
-    if ($supplier_id <= 0) $errors[] = "Please select a valid supplier.";
+    // Removed Supplier ID Validation
 
     // Check category exists
     $cat_check = $conn->prepare("SELECT category_id FROM categories WHERE category_id = ?");
@@ -33,12 +31,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     if ($cat_check->get_result()->num_rows === 0) $errors[] = "Selected category does not exist.";
     $cat_check->close();
 
-    // Check supplier exists
-    $sup_check = $conn->prepare("SELECT supplier_id FROM suppliers WHERE supplier_id = ?");
-    $sup_check->bind_param("i", $supplier_id);
-    $sup_check->execute();
-    if ($sup_check->get_result()->num_rows === 0) $errors[] = "Selected supplier does not exist.";
-    $sup_check->close();
+    // Removed Supplier Check
 
     // Duplicate check
     $dup_check = $conn->prepare("SELECT product_id FROM products WHERE LOWER(product_name) = LOWER(?) LIMIT 1");
@@ -94,11 +87,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     $image_url_str = json_encode($image_filenames, JSON_UNESCAPED_SLASHES);
 
-    // Insert (no selling price, no revenue)
-    $sql = "INSERT INTO products (product_name, supplier_price, category_id, image_url, supplier_id, created_at)
-            VALUES (?, ?, ?, ?, ?, NOW())";
+    // Insert (Removed supplier_price and supplier_id)
+    $sql = "INSERT INTO products (product_name, category_id, image_url, created_at)
+            VALUES (?, ?, ?, NOW())";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("sdisi", $product_name, $supplier_price, $category_id, $image_url_str, $supplier_id);
+    // Updated bind_param to match 3 variables: s (string), i (int), s (string)
+    $stmt->bind_param("sis", $product_name, $category_id, $image_url_str);
 
     if ($stmt->execute()) {
         $_SESSION['success'] = "Product added successfully!";
@@ -127,8 +121,8 @@ unset($_SESSION['old_inputs']);
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
-  --rose: #e5a5b2;
-  --rose-hover: #d48b98;
+  --rose: #e59ca8; /* Matched the rose color from your products page */
+  --rose-hover: #d27b8c;
   --rose-light: #fff0f3;
 }
 body {
@@ -197,14 +191,14 @@ body {
             </div>
           </div>
         </div>
-        <!-- Selling Price field removed -->
 
         <hr class="border-gray-100">
 
         <!-- Section 3: Organization -->
         <div>
           <h3 class="text-xs uppercase tracking-wider text-gray-500 font-bold mb-4">Organization</h3>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <!-- Removed Grid, made full width since Supplier is gone -->
+          <div class="w-full">
             <!-- Category -->
             <div>
               <label class="block text-gray-700 font-semibold mb-2 text-sm">Category <span class="text-red-500">*</span></label>
@@ -226,27 +220,7 @@ body {
                 <i class="fas fa-chevron-down absolute right-4 top-4 text-gray-400 pointer-events-none text-xs"></i>
               </div>
             </div>
-            <!-- Supplier -->
-            <div>
-              <label class="block text-gray-700 font-semibold mb-2 text-sm">Supplier <span class="text-red-500">*</span></label>
-              <div class="relative">
-                <span class="absolute left-4 top-3.5 text-gray-400"><i class="fas fa-truck"></i></span>
-                <select name="supplier_id" id="supplier_id" required
-                  class="input-field w-full border border-gray-300 rounded-xl pl-10 pr-10 py-3 outline-none bg-gray-50 appearance-none cursor-pointer">
-                  <option value="">Select Supplier</option>
-                  <?php 
-                    if ($supplier_result) {
-                        $supplier_result->data_seek(0);
-                        while ($row = $supplier_result->fetch_assoc()): 
-                  ?>
-                    <option value="<?= $row['supplier_id'] ?>" <?= (($old['supplier_id'] ?? '') == $row['supplier_id']) ? 'selected' : '' ?>>
-                        <?= htmlspecialchars($row['supplier_name']) ?>
-                    </option>
-                  <?php endwhile; } ?>
-                </select>
-                <i class="fas fa-chevron-down absolute right-4 top-4 text-gray-400 pointer-events-none text-xs"></i>
-              </div>
-            </div>
+            <!-- Supplier Field Removed Here -->
           </div>
         </div>
 
