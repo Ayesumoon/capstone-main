@@ -196,7 +196,7 @@ $result = $stmt->get_result();
         </header>
 
         <!-- Scrollable Content -->
-        <div class="flex-1 overflow-y-auto p-8 custom-scroll">
+        <div class="flex-1 overflow-y-auto p-4 md:p-8 custom-scroll bg-[#f9fafb]">
             
             <!-- Filters -->
             <form method="GET" class="flex flex-wrap gap-4 mb-6 bg-white p-4 rounded-2xl shadow-sm border border-slate-100 items-end fade-in-up" style="animation-delay: 0s;">
@@ -259,23 +259,29 @@ $result = $stmt->get_result();
             </form>
 
             <!-- Table -->
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden fade-in-up" style="animation-delay: 0.1s;">
-                <div class="overflow-x-auto">
-                    <table class="w-full text-sm text-left">
-                        <thead class="bg-slate-50 text-slate-500 uppercase text-xs tracking-wider font-semibold border-b border-slate-100">
-                            <tr>
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-x-auto fade-in-up" style="animation-delay: 0.1s; max-width: 100vw;">
+                <table class="min-w-[1200px] w-full text-sm text-left align-middle">
+                    <thead class="bg-slate-50 text-slate-500 uppercase text-xs tracking-wider font-semibold border-b border-slate-100 sticky top-0 z-10">
+                        <tr>
                                 <th class="px-6 py-4">Product</th>
                                 <th class="px-6 py-4">Category</th>
                                 <th class="px-6 py-4 text-center">Size</th>
                                 <th class="px-6 py-4 text-center">Color</th>
                                 <th class="px-6 py-4">Price</th>
-                                <th class="px-6 py-4 text-center">Stock</th>
+                                <th class="px-6 py-4 text-center bg-blue-50 text-blue-700">Stock In</th>
+                                <th class="px-6 py-4 text-center bg-orange-50 text-orange-700">Sold</th>
+                                <th class="px-6 py-4 text-center bg-green-50 text-green-700">Returned</th>
+                                <th class="px-6 py-4 text-center bg-red-50 text-red-700">Damaged/Wrong</th>
+                                <th class="px-6 py-4 text-center bg-gray-200 text-gray-800">Remaining</th>
                                 <th class="px-6 py-4 text-center">Status</th>
+                                <th class="px-6 py-4 text-center">Return History</th>
                             </tr>
                         </thead>
                         <tbody id="tableBody" class="divide-y divide-slate-50">
                             <?php if ($result->num_rows > 0): ?>
-                                <?php $delay = 0; while ($row = $result->fetch_assoc()): 
+                                <?php
+                                $delay = 0;
+                                while ($row = $result->fetch_assoc()):
                                     $imagePath = $row['image_url'];
                                     $img = 'uploads/default.png';
                                     if (!empty($imagePath)) {
@@ -291,12 +297,43 @@ $result = $stmt->get_result();
                                     }
                                     $stock = $row['stock_qty'] ?? 0;
                                     $delay += 0.05;
+                            
+                                    // --- Inventory Logic Queries ---
+                                    $stock_id = null;
+                                    // Get stock_id for this product/size/color
+                                    $stock_id_query = $conn->prepare("SELECT stock_id FROM stock WHERE product_id = ? AND size_id = (SELECT size_id FROM sizes WHERE size = ?) AND color_id = (SELECT color_id FROM colors WHERE color = ?)");
+                                    $stock_id_query->bind_param("iss", $row['product_id'], $row['size'], $row['color']);
+                                    $stock_id_query->execute();
+                                    $stock_id_res = $stock_id_query->get_result();
+                                    if ($stock_id_row = $stock_id_res->fetch_assoc()) {
+                                        $stock_id = $stock_id_row['stock_id'];
+                                    }
+                                    $stock_id_query->close();
+                            
+                                    // Stock In
+                                    $q_in = $conn->query("SELECT COALESCE(SUM(quantity),0) AS total_in FROM stock_in WHERE stock_id = $stock_id")->fetch_assoc();
+                                    $total_in = intval($q_in['total_in']);
+                            
+                                    // Sold
+                                    $q_sold = $conn->query("SELECT COALESCE(SUM(qty),0) AS total_sold FROM order_items WHERE stock_id = $stock_id")->fetch_assoc();
+                                    $total_sold = intval($q_sold['total_sold']);
+                            
+                                    // Returned (Restocked/Sellable)
+                                    $q_returned = $conn->query("SELECT COALESCE(SUM(quantity),0) AS returned_restock FROM stock_adjustments WHERE stock_id = $stock_id AND type = 'return_restock'")->fetch_assoc();
+                                    $returned_restock = intval($q_returned['returned_restock']);
+                            
+                                    // Damaged/Wrong
+                                    $q_damaged = $conn->query("SELECT COALESCE(SUM(quantity),0) AS total_damaged FROM stock_adjustments WHERE stock_id = $stock_id AND type IN ('damaged','return_discard','lost')")->fetch_assoc();
+                                    $total_damaged = intval($q_damaged['total_damaged']);
+                            
+                                    // Remaining
+                                    $remaining = $total_in - $total_sold + $returned_restock - $total_damaged;
                                 ?>
                                 <tr class="hover:bg-rose-50/30 transition-colors group search-row fade-in-up" style="animation-delay: <?= $delay ?>s; animation-fill-mode: forwards;">
                                     <td class="px-6 py-3">
-                                        <div class="flex items-center gap-4">
-                                            <div class="relative">
-                                                <img src="<?= htmlspecialchars($img) ?>" class="w-12 h-12 rounded-lg object-cover border border-slate-100 bg-slate-50 group-hover:scale-105 transition-transform">
+                                        <div class="flex items-center gap-4 min-w-[220px]">
+                                            <div class="relative flex items-center justify-center w-20 h-20 bg-slate-50 border border-slate-100 rounded-lg overflow-hidden">
+                                                <img src="<?= htmlspecialchars($img) ?>" class="w-full h-full object-contain rounded-lg transition-transform duration-200 group-hover:scale-105" style="max-width:70px; max-height:70px;">
                                                 <?php if($stock <= 0): ?><div class="absolute inset-0 bg-white/60 backdrop-blur-[1px] rounded-lg"></div><?php endif; ?>
                                             </div>
                                             <div>
@@ -310,13 +347,11 @@ $result = $stmt->get_result();
                                             <?= htmlspecialchars($row['category_name']) ?>
                                         </span>
                                     </td>
-                                    
                                     <td class="px-6 py-3 text-center">
                                         <span class="text-slate-700 font-bold text-xs border border-slate-200 px-2.5 py-1 rounded-md bg-white shadow-sm">
                                             <?= htmlspecialchars($row['size'] ?? 'N/A') ?>
                                         </span>
                                     </td>
-
                                     <td class="px-6 py-3 text-center">
                                         <?php if(!empty($row['color'])): ?>
                                             <div class="flex items-center justify-center gap-2">
@@ -327,21 +362,20 @@ $result = $stmt->get_result();
                                             <span class="text-slate-400 text-xs">-</span>
                                         <?php endif; ?>
                                     </td>
-
                                     <td class="px-6 py-3 font-bold text-rose-600 text-sm">
                                         ₱<?= number_format($row['price'], 2) ?>
                                     </td>
-                                    
+                                    <td class="px-6 py-3 text-center bg-blue-50 text-blue-700 font-bold"><?= $total_in ?></td>
+                                    <td class="px-6 py-3 text-center bg-orange-50 text-orange-700 font-bold">-<?= $total_sold ?></td>
+                                    <td class="px-6 py-3 text-center bg-green-50 text-green-700 font-bold"><?= $returned_restock > 0 ? "+$returned_restock" : "0" ?></td>
+                                    <td class="px-6 py-3 text-center bg-red-50 text-red-700 font-bold"><?= $total_damaged > 0 ? "-$total_damaged" : "0" ?></td>
+                                    <td class="px-6 py-3 text-center bg-gray-200 text-gray-800 font-bold"><?= $remaining ?></td>
                                     <td class="px-6 py-3 text-center">
-                                        <span class="font-bold <?= $stock <= 0 ? 'text-slate-400' : ($stock < 5 ? 'text-amber-500' : 'text-slate-700') ?>"><?= $stock ?></span>
-                                    </td>
-                                    
-                                    <td class="px-6 py-3 text-center">
-                                        <?php if($stock <= 0): ?>
+                                        <?php if($remaining <= 0): ?>
                                             <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200 uppercase tracking-wide">
                                                 <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span> Out of Stock
                                             </span>
-                                        <?php elseif($stock < 5): ?>
+                                        <?php elseif($remaining < 5): ?>
                                             <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-600 border border-amber-100 uppercase tracking-wide">
                                                 <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Low Stock
                                             </span>
@@ -351,8 +385,47 @@ $result = $stmt->get_result();
                                             </span>
                                         <?php endif; ?>
                                     </td>
-                                </tr>
-                                <?php endwhile; ?>
+                                    <td class="px-6 py-3 text-center">
+                                        <button onclick="openReturnHistoryModal('rh<?= $stock_id ?>')" class="px-3 py-1 rounded bg-slate-100 text-slate-700 font-bold text-xs hover:bg-rose-100 transition">View</button>
+                                    </td>
+                                    <?php
+                                    // Render modal at end of table for each stock_id
+                                    echo <<<MODAL
+                                    <div id="rh{$stock_id}" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/30">
+                                        <div class="bg-white border border-slate-200 rounded-xl shadow-2xl p-6 w-full max-w-xs relative">
+                                            <button onclick="closeReturnHistoryModal('rh{$stock_id}')" class="absolute top-2 right-2 text-slate-400 hover:text-rose-600 text-xl font-bold">&times;</button>
+                                            <div class="font-bold text-base mb-3 text-slate-700">Return History</div>
+                                    MODAL;
+                                    $returns = $conn->query("SELECT quantity, type, reason, created_at FROM stock_adjustments WHERE stock_id = $stock_id AND type IN ('return_restock','damaged','return_discard') ORDER BY created_at DESC LIMIT 5");
+                                    if ($returns->num_rows > 0) {
+                                        while ($ret = $returns->fetch_assoc()) {
+                                            $typeLabel = $ret['type'] === 'return_restock' ? '<span class="text-green-600 font-bold">Good</span>' : '<span class="text-red-600 font-bold">Damaged</span>';
+                                            echo '<div class="mb-3 text-xs flex flex-col gap-1">';
+                                            echo '<div><b>Date:</b> ' . date('Y-m-d H:i', strtotime($ret['created_at'])) . '</div>';
+                                            echo '<div><b>Qty:</b> ' . intval($ret['quantity']) . ' | <b>Type:</b> ' . $typeLabel . '</div>';
+                                            echo '<div><b>Remarks:</b> ' . htmlspecialchars($ret['reason']) . '</div>';
+                                            echo '</div><hr class="my-2">';
+                                        }
+                                    } else {
+                                        echo '<div class="text-xs text-slate-400">No returns recorded.</div>';
+                                    }
+                                    echo <<<MODAL
+                                        </div>
+                                        <script>
+                                        function openReturnHistoryModal(id) {
+                                            document.getElementById(id).classList.remove('hidden');
+                                            document.body.style.overflow = 'hidden';
+                                        }
+                                        function closeReturnHistoryModal(id) {
+                                            document.getElementById(id).classList.add('hidden');
+                                            document.body.style.overflow = '';
+                                        }
+                                        </script>
+                                    </div>
+                                    MODAL;
+                                    ?>
+                                    </tr>
+                                    <?php endwhile; ?>
                             <?php else: ?>
                                 <tr>
                                     <td colspan="7" class="px-6 py-12 text-center text-slate-400 text-sm bg-white">

@@ -214,10 +214,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
             $itemStmt->close();
             $conn->query("INSERT INTO transactions (order_id, customer_id, payment_method_id, total, order_status_id, date_time) VALUES ($order_id, NULL, $payment_method_id, $total, 0, NOW())");
             $conn->commit();
-            echo "<script>window.location.href='receipt.php?order_id=$order_id';</script>";
+            echo "<script>alert('Transaction successful! Transaction #: $order_id'); window.location.href='receipt.php?order_id=$order_id';</script>";
             exit;
         } catch (Exception $e) { $conn->rollback(); echo "<script>alert('Error: " . addslashes($e->getMessage()) . "');</script>"; }
     }
+}
+?>
+<?php
+/* ========================================================
+   API: GET ORDER ID BY TRANSACTION NUMBER
+   ======================================================== */
+if (isset($_GET['action']) && $_GET['action'] === 'get_order_id_by_transaction') {
+    while (ob_get_level()) ob_end_clean();
+    header('Content-Type: application/json');
+    try {
+        if (!isset($_GET['tid'])) throw new Exception("Missing Transaction Number");
+        $tid = intval($_GET['tid']);
+        // Transaction Number is order_id in transactions table
+        $stmt = $conn->prepare("SELECT order_id FROM transactions WHERE order_id = ? LIMIT 1");
+        $stmt->bind_param("i", $tid); $stmt->execute();
+        $res = $stmt->get_result();
+        if ($row = $res->fetch_assoc()) {
+            echo json_encode(['status' => 'success', 'order_id' => $row['order_id']]);
+        } else {
+            throw new Exception("Transaction #$tid not found.");
+        }
+        $stmt->close();
+    } catch (Exception $e) {
+        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+    }
+    exit;
 }
 ?>
 <!DOCTYPE html>
@@ -307,9 +333,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
                 <?php endwhile; ?>
             </div>
             <div id="productPagination" class="flex justify-center gap-2 mt-8 pb-4"></div>
+            <!-- Pagination Controls (Page 1, 2, 3...) will be rendered here by JS -->
         </div>
     </main>
 
+
+    
     <!-- CART SIDEBAR -->
     <aside class="w-[400px] bg-white border-l border-slate-100 flex flex-col shadow-2xl z-40 shrink-0">
         <div class="h-20 glass-header flex items-center px-6 justify-between"><h3 class="font-bold text-lg text-slate-800 flex items-center gap-2"><i class="fas fa-shopping-bag text-rose-500"></i> Current Order</h3><span class="text-xs bg-rose-100 text-rose-600 px-2 py-1 rounded-full font-bold" id="itemCountBadge">0 items</span></div>
@@ -345,15 +374,93 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
     <div id="securityModal" class="fixed inset-0 z-[60] flex items-center justify-center invisible opacity-0 modal-backdrop"><div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"></div><div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl relative z-10 p-6 transform scale-95 opacity-0 modal-content" id="securityModalContent"><div class="text-center mb-4"><div class="w-12 h-12 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-3 text-xl"><i class="fas fa-lock"></i></div><h4 class="text-lg font-bold text-slate-800">Security Check</h4><p class="text-xs text-slate-500">Please enter your password to authorize this refund.</p></div><input type="password" id="securityPassword" class="w-full border border-slate-200 rounded-xl px-4 py-3 text-center text-lg outline-none focus:ring-2 focus:ring-rose-200 mb-4" placeholder="••••••"><div class="flex gap-3"><button onclick="closeSecurityModal()" class="flex-1 py-3 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50">Cancel</button><button onclick="verifyAndSubmitRefund()" class="flex-1 py-3 rounded-xl bg-rose-600 text-white font-bold hover:bg-rose-700 shadow-lg">Verify</button></div></div></div>
 
     <!-- RETURN MODAL -->
-    <div id="returnModalBackdrop" class="fixed inset-0 z-50 bg-slate-900/30 backdrop-blur-sm invisible opacity-0 transition-all duration-300"></div><div id="returnModal" class="fixed inset-y-0 right-0 z-50 w-[500px] bg-white shadow-2xl transform translate-x-full transition-transform duration-300 flex flex-col"><div class="h-20 flex items-center justify-between px-6 border-b border-slate-100 bg-rose-50/50"><div><h4 class="text-lg font-bold text-rose-800">Process Return</h4><p class="text-xs text-rose-500">Look up order and select items</p></div><button id="closeReturnModal" class="text-slate-400 hover:text-rose-600 transition text-2xl">&times;</button></div><div class="flex-1 overflow-y-auto p-6 space-y-6"><div class="bg-slate-50 p-4 rounded-xl border border-slate-200 transition-all focus-within:ring-2 ring-rose-100"><label class="block text-xs font-bold text-slate-500 uppercase mb-2">Find Order</label><div class="flex gap-2"><input type="number" id="searchOrderId" class="flex-1 bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-rose-400 transition" placeholder="Order ID"><button onclick="fetchOrderItems()" class="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-900 transition shadow-lg active:scale-95">Find</button></div><p id="orderMsg" class="text-xs mt-2 font-medium hidden"></p></div><div id="returnItemsContainer" class="hidden space-y-4 fade-in-up"><h5 class="font-bold text-slate-700">Select Items to Return</h5><form id="refundForm" class="space-y-3"><input type="hidden" name="order_id" id="finalOrderId"><div id="itemsList" class="space-y-3"></div></form></div></div><div class="p-6 border-t border-slate-100 bg-slate-50"><button type="button" onclick="openSecurityModal()" id="submitRefundBtn" class="w-full bg-rose-600 text-white font-bold py-3 rounded-xl hover:bg-rose-700 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed active:scale-95" disabled>Confirm Refund</button></div></div>
+    <div id="returnModalBackdrop" class="fixed inset-0 z-50 bg-slate-900/30 backdrop-blur-sm invisible opacity-0 transition-all duration-300"></div>
+    <div id="returnModal" class="fixed inset-y-0 right-0 z-50 w-[500px] bg-white shadow-2xl transform translate-x-full transition-transform duration-300 flex flex-col">
+        <div class="h-20 flex items-center justify-between px-6 border-b border-slate-100 bg-rose-50/50">
+            <div>
+                <h4 class="text-lg font-bold text-rose-800">Process Return</h4>
+                <p class="text-xs text-rose-500">Look up order and select items</p>
+            </div>
+            <button id="closeReturnModal" class="text-slate-400 hover:text-rose-600 transition text-2xl">&times;</button>
+        </div>
+        <div class="flex-1 overflow-y-auto p-6 space-y-6">
+            <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 transition-all focus-within:ring-2 ring-rose-100">
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Find Order</label>
+                <div class="flex gap-2 mb-2">
+                    <select id="searchMode" class="bg-white border border-slate-300 rounded-lg px-2 py-2 text-sm font-bold text-slate-700">
+                        <option value="order">Order ID</option>
+                        <option value="transaction">Transaction Number</option>
+                    </select>
+                </div>
+                <div class="flex gap-2">
+                    <input type="number" id="searchOrderId" class="flex-1 bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-rose-400 transition" placeholder="Order ID">
+                    <button onclick="fetchOrderItems()" class="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-900 transition shadow-lg active:scale-95">Find</button>
+                </div>
+                <p id="orderMsg" class="text-xs mt-2 font-medium hidden"></p>
+            </div>
+            <div id="returnItemsContainer" class="hidden space-y-4 fade-in-up">
+                <h5 class="font-bold text-slate-700">Select Items to Return</h5>
+                <form id="refundForm" class="space-y-3">
+                    <input type="hidden" name="order_id" id="finalOrderId">
+                    <div id="itemsList" class="space-y-3"></div>
+                </form>
+            </div>
+        </div>
+        <div class="p-6 border-t border-slate-100 bg-slate-50">
+            <button type="button" onclick="openSecurityModal()" id="submitRefundBtn" class="w-full bg-rose-600 text-white font-bold py-3 rounded-xl hover:bg-rose-700 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed active:scale-95" disabled>Confirm Refund</button>
+        </div>
+    </div>
 
     <script>
         /* --- JS: ALL SAME AS BEFORE --- */
         let cart = []; let currentProduct = null; let activeDiscount = { type: 'percent', value: 0 }; let activeItemDiscountIndex = null; let modalState = { variations: [], selectedSize: null, selectedColor: null }; const itemsPerPage = 12; let currentPage = 1;
-        const productCards = Array.from(document.querySelectorAll('.group[data-id]')); const searchInput = document.getElementById('productSearch'); const catFilter = document.getElementById('categoryFilter'); const paginationEl = document.getElementById('productPagination');
+        const productCards = Array.from(document.querySelectorAll('.group[data-id]'));
+        const searchInput = document.getElementById('productSearch');
+        const catFilter = document.getElementById('categoryFilter');
+        const paginationEl = document.getElementById('productPagination');
         
-        function renderProducts() { if(!paginationEl) return; const q = searchInput.value.toLowerCase().trim(); const cat = catFilter.value; const filtered = productCards.filter(el => { const name = (el.dataset.name || '').toLowerCase(); const category = el.dataset.category || ''; return name.includes(q) && (!cat || category === cat); }); const totalPages = Math.ceil(filtered.length / itemsPerPage) || 1; if (currentPage > totalPages) currentPage = 1; productCards.forEach(el => { el.style.display = 'none'; el.style.opacity = '0'; el.style.animation = 'none'; }); const pageItems = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage); pageItems.forEach((el, i) => { el.style.display = 'flex'; void el.offsetWidth; el.style.animation = `fadeInUp 0.4s ease-out ${i * 0.05}s forwards`; }); paginationEl.innerHTML = ''; if (totalPages > 1) { for (let i = 1; i <= totalPages; i++) { const b = document.createElement('button'); b.textContent = i; b.className = `w-8 h-8 rounded-lg text-sm font-bold transition-all ${i === currentPage ? 'bg-rose-600 text-white shadow-md scale-110' : 'bg-white text-slate-600 hover:bg-slate-100 border'}`; b.onclick = () => { currentPage = i; renderProducts(); }; paginationEl.appendChild(b); } } }
-        if(searchInput) searchInput.addEventListener('input', () => { currentPage = 1; renderProducts(); }); if(catFilter) catFilter.addEventListener('change', () => { currentPage = 1; renderProducts(); });
+        // PAGINATION: Render page controls after products grid
+        function renderProducts() {
+            if(!paginationEl) return;
+            const q = searchInput.value.toLowerCase().trim();
+            const cat = catFilter.value;
+            const filtered = productCards.filter(el => {
+                const name = (el.dataset.name || '').toLowerCase();
+                const category = el.dataset.category || '';
+                return name.includes(q) && (!cat || category === cat);
+            });
+            const totalPages = Math.ceil(filtered.length / itemsPerPage) || 1;
+            if (currentPage > totalPages) currentPage = 1;
+            productCards.forEach(el => {
+                el.style.display = 'none';
+                el.style.opacity = '0';
+                el.style.animation = 'none';
+            });
+            const pageItems = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+            pageItems.forEach((el, i) => {
+                el.style.display = 'flex';
+                void el.offsetWidth;
+                el.style.animation = `fadeInUp 0.4s ease-out ${i * 0.05}s forwards`;
+            });
+            // Render pagination controls below products
+            paginationEl.innerHTML = '';
+            if (totalPages > 1) {
+                for (let i = 1; i <= totalPages; i++) {
+                    const b = document.createElement('button');
+                    b.textContent = i;
+                    b.className = `w-8 h-8 rounded-lg text-sm font-bold transition-all ${i === currentPage ? 'bg-rose-600 text-white shadow-md scale-110' : 'bg-white text-slate-600 hover:bg-slate-100 border'}`;
+                    b.onclick = () => {
+                        currentPage = i;
+                        renderProducts();
+                        // Scroll to products grid after page change
+                        document.getElementById('productGrid').scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    };
+                    paginationEl.appendChild(b);
+                }
+            }
+        }
+        if(searchInput) searchInput.addEventListener('input', () => { currentPage = 1; renderProducts(); });
+        if(catFilter) catFilter.addEventListener('change', () => { currentPage = 1; renderProducts(); });
 
         function renderCart() { const list = document.getElementById('cartList'); if(!list) return; list.innerHTML = ''; let subtotal = 0; let totalQty = 0; cart.forEach((item, i) => { const origPrice = parseFloat(item.original_price); const discountPct = parseFloat(item.discount_percent || 0); const discountedPrice = origPrice - (origPrice * (discountPct / 100)); item.price = discountedPrice; item.discount_amount = (origPrice * (discountPct / 100)); subtotal += item.price * item.quantity; totalQty += item.quantity; const div = document.createElement('div'); div.className = "bg-white p-3 rounded-xl border border-slate-100 flex justify-between items-center shadow-sm relative overflow-hidden group hover:border-rose-200 transition-colors"; div.style.animation = "fadeIn 0.3s ease-out"; let priceHtml = `<div class="text-rose-600 font-bold mt-1">₱${(item.price*item.quantity).toFixed(2)}</div>`; if(discountPct > 0) { priceHtml = `<div class="mt-1 flex flex-col"><span class="text-[10px] text-slate-400 line-through">₱${(origPrice*item.quantity).toFixed(2)}</span><span class="text-rose-600 font-bold">₱${(item.price*item.quantity).toFixed(2)} <span class="text-[10px] bg-rose-100 text-rose-600 px-1 rounded">-${discountPct}%</span></span></div>`; } div.innerHTML = `<div class="flex-1 min-w-0"><div class="font-bold text-sm truncate text-slate-800 flex items-center gap-2">${item.name} <button onclick="openItemDiscount(${i})" class="text-xs text-slate-300 hover:text-rose-500 transition" title="Item Discount"><i class="fas fa-tag"></i></button></div><div class="text-xs text-slate-500 font-medium mt-0.5"><span class="bg-slate-100 px-1.5 py-0.5 rounded text-[10px]">${item.size||'-'}</span> <span class="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] ml-1">${item.color||'-'}</span></div>${priceHtml}</div><div class="flex flex-col items-end gap-2 z-10"><div class="flex items-center bg-slate-50 border border-slate-200 rounded-lg"><button type="button" onclick="upd(${i},-1)" class="w-7 h-7 flex items-center justify-center text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-l-lg transition">-</button><span class="text-xs font-bold w-6 text-center text-slate-700">${item.quantity}</span><button type="button" onclick="upd(${i},1)" class="w-7 h-7 flex items-center justify-center text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-r-lg transition">+</button></div><button type="button" onclick="rm(${i})" class="text-[10px] text-slate-400 hover:text-rose-500 font-medium transition-colors">Remove</button></div>`; list.appendChild(div); }); if (cart.length === 0) list.innerHTML = '<div class="h-full flex flex-col items-center justify-center text-slate-300 space-y-2 animate-pulse"><i class="fas fa-shopping-basket text-4xl"></i><p class="text-sm font-medium">Cart is empty</p></div>'; document.getElementById('itemCountBadge').textContent = `${totalQty} items`; let globalDiscountAmount = 0; if (activeDiscount.type === 'percent') globalDiscountAmount = subtotal * (activeDiscount.value / 100); else globalDiscountAmount = activeDiscount.value; if (globalDiscountAmount > subtotal) globalDiscountAmount = subtotal; const finalTotal = subtotal - globalDiscountAmount; document.getElementById('cartSubtotal').textContent = '₱' + subtotal.toFixed(2); document.getElementById('cartTotal').textContent = '₱' + finalTotal.toFixed(2); const discRow = document.getElementById('discountRow'); if (globalDiscountAmount > 0) { discRow.classList.remove('hidden'); discRow.style.display = 'flex'; document.getElementById('cartDiscountDisp').textContent = '-₱' + globalDiscountAmount.toFixed(2); } else { discRow.classList.add('hidden'); } document.getElementById('totalField').value = finalTotal.toFixed(2); document.getElementById('discountField').value = globalDiscountAmount.toFixed(2); toggleCashFields(); updateChange(); }
         window.upd = (i, d) => { cart[i].quantity += d; if (cart[i].quantity < 1) cart[i].quantity = 1; renderCart(); }
@@ -367,8 +474,125 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
         const modal = document.getElementById('optionModal'); const modalContent = document.getElementById('optionModalContent');
         window.openProductModal = (card) => { currentProduct = { id: card.dataset.id, name: card.dataset.name, price: parseFloat(card.dataset.price) }; modalState.variations = JSON.parse(card.dataset.variations || '[]'); modalState.selectedSize = null; modalState.selectedColor = null; document.getElementById('modalProductName').textContent = currentProduct.name; renderOptions(); openModalLogic(modal, modalContent); }
         window.closeModal = () => { closeModalLogic(modal, modalContent); }
-        function renderOptions() { const uniqueSizes = [...new Set(modalState.variations.map(v => v.size))]; const uniqueColors = [...new Set(modalState.variations.map(v => v.color))]; const sDiv = document.getElementById('sizeOptions'); const cDiv = document.getElementById('colorOptions'); sDiv.innerHTML = ''; cDiv.innerHTML = ''; if (uniqueSizes.length > 0) { document.getElementById('sizeDiv').style.display = 'block'; uniqueSizes.forEach(size => { const btn = document.createElement('button'); btn.textContent = size; const isAvailable = modalState.variations.some(v => v.size === size && v.qty > 0 && (modalState.selectedColor === null || v.color === modalState.selectedColor)); if (!isAvailable) { btn.className = 'px-4 py-2 border border-slate-100 rounded-lg text-sm text-slate-300 cursor-not-allowed bg-slate-50'; btn.disabled = true; } else if (modalState.selectedSize === size) { btn.className = 'px-4 py-2 border rounded-lg text-sm font-bold bg-rose-600 text-white border-rose-600 shadow-md transform scale-105 transition-all'; } else { btn.className = 'px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium hover:border-rose-400 hover:text-rose-600 transition text-slate-700'; btn.onclick = () => { modalState.selectedSize = (modalState.selectedSize === size) ? null : size; renderOptions(); }; } sDiv.appendChild(btn); }); } else { document.getElementById('sizeDiv').style.display = 'none'; modalState.selectedSize = 'Free Size'; } if (uniqueColors.length > 0) { document.getElementById('colorDiv').style.display = 'block'; uniqueColors.forEach(color => { const btn = document.createElement('button'); btn.textContent = color; const isAvailable = modalState.variations.some(v => v.color === color && v.qty > 0 && (modalState.selectedSize === null || v.size === modalState.selectedSize)); if (!isAvailable) { btn.className = 'px-4 py-2 border border-slate-100 rounded-lg text-sm text-slate-300 cursor-not-allowed bg-slate-50'; btn.disabled = true; } else if (modalState.selectedColor === color) { btn.className = 'px-4 py-2 border rounded-lg text-sm font-bold bg-rose-600 text-white border-rose-600 shadow-md transform scale-105 transition-all'; } else { btn.className = 'px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium hover:border-rose-400 hover:text-rose-600 transition text-slate-700'; btn.onclick = () => { modalState.selectedColor = (modalState.selectedColor === color) ? null : color; renderOptions(); }; } cDiv.appendChild(btn); }); } else { document.getElementById('colorDiv').style.display = 'none'; modalState.selectedColor = 'Standard'; } }
-        document.getElementById('confirmAdd').onclick = () => { const hasSizes = document.getElementById('sizeDiv').style.display !== 'none'; const hasColors = document.getElementById('colorDiv').style.display !== 'none'; if (hasSizes && !modalState.selectedSize) return alert("Please select a size"); if (hasColors && !modalState.selectedColor) return alert("Please select a color"); const size = modalState.selectedSize || 'Free Size'; const color = modalState.selectedColor || 'Standard'; const stockItem = modalState.variations.find(v => v.size === size && v.color === color); if (!stockItem || stockItem.qty <= 0) return alert("Selected combination is out of stock."); const exist = cart.find(i => i.product_id === currentProduct.id && i.size === size && i.color === color); if (exist) { if(exist.quantity + 1 > stockItem.qty) return alert("Cannot add more (Stock limit reached)"); exist.quantity++; } else { cart.push({ product_id: currentProduct.id, name: currentProduct.name, price: currentProduct.price, original_price: currentProduct.price, discount_percent: 0, quantity: 1, size, color }); } renderCart(); closeModal(); }
+        function renderOptions() {
+            const uniqueSizes = [...new Set(modalState.variations.map(v => v.size))];
+            const uniqueColors = [...new Set(modalState.variations.map(v => v.color))];
+            const sDiv = document.getElementById('sizeOptions');
+            const cDiv = document.getElementById('colorOptions');
+            sDiv.innerHTML = '';
+            cDiv.innerHTML = '';
+        
+            // Helper to get remaining stock for a variation (subtract cart quantity)
+            function getRemainingStock(size, color) {
+                const stockObj = modalState.variations.find(v => v.size === size && v.color === color);
+                if (!stockObj) return 0;
+                const inCart = cart.find(i => i.product_id === currentProduct.id && i.size === size && i.color === color);
+                return stockObj.qty - (inCart ? inCart.quantity : 0);
+            }
+        
+            if (uniqueSizes.length > 0) {
+                document.getElementById('sizeDiv').style.display = 'block';
+                uniqueSizes.forEach(size => {
+                    const btn = document.createElement('button');
+                    btn.textContent = size;
+                    // Show remaining stock for this size if color is selected
+                    let remStock = null;
+                    if (modalState.selectedColor !== null) {
+                        remStock = getRemainingStock(size, modalState.selectedColor);
+                    } else {
+                        // If no color selected, show max for all colors of this size
+                        remStock = Math.max(...modalState.variations.filter(v => v.size === size).map(v => getRemainingStock(size, v.color)));
+                    }
+                    btn.title = `Remaining: ${remStock}`;
+                    const isAvailable = modalState.variations.some(v => v.size === size && getRemainingStock(size, v.color) > 0 && (modalState.selectedColor === null || v.color === modalState.selectedColor));
+                    if (!isAvailable) {
+                        btn.className = 'px-4 py-2 border border-slate-100 rounded-lg text-sm text-slate-300 cursor-not-allowed bg-slate-50';
+                        btn.disabled = true;
+                    } else if (modalState.selectedSize === size) {
+                        btn.className = 'px-4 py-2 border rounded-lg text-sm font-bold bg-rose-600 text-white border-rose-600 shadow-md transform scale-105 transition-all';
+                    } else {
+                        btn.className = 'px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium hover:border-rose-400 hover:text-rose-600 transition text-slate-700';
+                        btn.onclick = () => { modalState.selectedSize = (modalState.selectedSize === size) ? null : size; renderOptions(); };
+                    }
+                    btn.innerHTML += ` <span class="text-xs text-slate-400">(${remStock})</span>`;
+                    sDiv.appendChild(btn);
+                });
+            } else {
+                document.getElementById('sizeDiv').style.display = 'none';
+                modalState.selectedSize = 'Free Size';
+            }
+        
+            if (uniqueColors.length > 0) {
+                document.getElementById('colorDiv').style.display = 'block';
+                uniqueColors.forEach(color => {
+                    const btn = document.createElement('button');
+                    btn.textContent = color;
+                    // Show remaining stock for this color if size is selected
+                    let remStock = null;
+                    if (modalState.selectedSize !== null) {
+                        remStock = getRemainingStock(modalState.selectedSize, color);
+                    } else {
+                        // If no size selected, show max for all sizes of this color
+                        remStock = Math.max(...modalState.variations.filter(v => v.color === color).map(v => getRemainingStock(v.size, color)));
+                    }
+                    btn.title = `Remaining: ${remStock}`;
+                    const isAvailable = modalState.variations.some(v => v.color === color && getRemainingStock(v.size, color) > 0 && (modalState.selectedSize === null || v.size === modalState.selectedSize));
+                    if (!isAvailable) {
+                        btn.className = 'px-4 py-2 border border-slate-100 rounded-lg text-sm text-slate-300 cursor-not-allowed bg-slate-50';
+                        btn.disabled = true;
+                    } else if (modalState.selectedColor === color) {
+                        btn.className = 'px-4 py-2 border rounded-lg text-sm font-bold bg-rose-600 text-white border-rose-600 shadow-md transform scale-105 transition-all';
+                    } else {
+                        btn.className = 'px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium hover:border-rose-400 hover:text-rose-600 transition text-slate-700';
+                        btn.onclick = () => { modalState.selectedColor = (modalState.selectedColor === color) ? null : color; renderOptions(); };
+                    }
+                    btn.innerHTML += ` <span class="text-xs text-slate-400">(${remStock})</span>`;
+                    cDiv.appendChild(btn);
+                });
+            } else {
+                document.getElementById('colorDiv').style.display = 'none';
+                modalState.selectedColor = 'Standard';
+            }
+        
+            // Show remaining stock info in modal (below options)
+            let infoDiv = document.getElementById('stockInfoDiv');
+            if (!infoDiv) {
+                infoDiv = document.createElement('div');
+                infoDiv.id = 'stockInfoDiv';
+                infoDiv.className = 'mt-3 text-xs font-bold text-slate-500';
+                sDiv.parentNode.parentNode.insertBefore(infoDiv, sDiv.parentNode.nextSibling);
+            }
+            let stockMsg = '';
+            if (modalState.selectedSize && modalState.selectedColor) {
+                const rem = getRemainingStock(modalState.selectedSize, modalState.selectedColor);
+                stockMsg = `Remaining stock: <span class="text-rose-600">${rem}</span>`;
+            } else {
+                stockMsg = 'Select size and color to see stock';
+            }
+            infoDiv.innerHTML = stockMsg;
+        }
+        
+        document.getElementById('confirmAdd').onclick = () => {
+            const hasSizes = document.getElementById('sizeDiv').style.display !== 'none';
+            const hasColors = document.getElementById('colorDiv').style.display !== 'none';
+            if (hasSizes && !modalState.selectedSize) return alert("Please select a size");
+            if (hasColors && !modalState.selectedColor) return alert("Please select a color");
+            const size = modalState.selectedSize || 'Free Size';
+            const color = modalState.selectedColor || 'Standard';
+            const stockItem = modalState.variations.find(v => v.size === size && v.color === color);
+            if (!stockItem || stockItem.qty <= 0) return alert("Selected combination is out of stock.");
+            const inCart = cart.find(i => i.product_id === currentProduct.id && i.size === size && i.color === color);
+            const remaining = stockItem.qty - (inCart ? inCart.quantity : 0);
+            if (remaining <= 0) return alert("No more stock available for this combination.");
+            if (inCart) {
+                if (inCart.quantity + 1 > stockItem.qty) return alert("Cannot add more (Stock limit reached)");
+                inCart.quantity++;
+            } else {
+                cart.push({ product_id: currentProduct.id, name: currentProduct.name, price: currentProduct.price, original_price: currentProduct.price, discount_percent: 0, quantity: 1, size, color });
+            }
+            renderCart();
+            closeModal();
+        };
 
         const dModal = document.getElementById('discountModal'); const dContent = document.getElementById('discountModalContent');
         window.openGlobalDiscountModal = () => { document.getElementById('discountValue').value = activeDiscount.value > 0 ? activeDiscount.value : ''; toggleDiscountType(activeDiscount.type); openModalLogic(dModal, dContent); }
@@ -392,17 +616,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
         document.getElementById('closeReturnModal').onclick = closeReturn; rBackdrop.onclick = closeReturn;
         
         async function fetchOrderItems() {
-            const oid = document.getElementById('searchOrderId').value; const msg = document.getElementById('orderMsg'); if (!oid) return alert("Enter Order ID"); msg.textContent = "Searching..."; msg.className = "text-xs mt-2 text-slate-500 block animate-pulse";
+            const mode = document.getElementById('searchMode').value;
+            const inputVal = document.getElementById('searchOrderId').value;
+            const msg = document.getElementById('orderMsg');
+            if (!inputVal) return alert(mode === 'order' ? "Enter Order ID" : "Enter Transaction Number");
+            msg.textContent = "Searching...";
+            msg.className = "text-xs mt-2 text-slate-500 block animate-pulse";
+            let oid = inputVal;
             try {
-                const response = await fetch(`?action=get_order_details&oid=${oid}`); const textData = await response.text(); let data; try { data = JSON.parse(textData); } catch (e) { console.error(textData); return alert("Server Error"); }
-                if (data.status === 'error') { msg.textContent = "❌ " + data.message; msg.className = "text-xs mt-2 text-rose-500 font-bold block"; document.getElementById('returnItemsContainer').classList.add('hidden'); return; }
-                msg.textContent = "✅ Found"; msg.className = "text-xs mt-2 text-green-600 font-bold block"; document.getElementById('finalOrderId').value = oid; document.getElementById('returnItemsContainer').classList.remove('hidden'); const list = document.getElementById('itemsList'); list.innerHTML = '';
+                if (mode === 'transaction') {
+                    // Look up Order ID by Transaction Number
+                    const response = await fetch(`?action=get_order_id_by_transaction&tid=${inputVal}`);
+                    const textData = await response.text();
+                    let data;
+                    try { data = JSON.parse(textData); } catch (e) { console.error(textData); return alert("Server Error"); }
+                    if (data.status === 'error') {
+                        msg.textContent = "❌ " + data.message;
+                        msg.className = "text-xs mt-2 text-rose-500 font-bold block";
+                        document.getElementById('returnItemsContainer').classList.add('hidden');
+                        return;
+                    }
+                    oid = data.order_id;
+                }
+                // Now fetch order details as before
+                const response = await fetch(`?action=get_order_details&oid=${oid}`);
+                const textData = await response.text();
+                let data;
+                try { data = JSON.parse(textData); } catch (e) { console.error(textData); return alert("Server Error"); }
+                if (data.status === 'error') {
+                    msg.textContent = "❌ " + data.message;
+                    msg.className = "text-xs mt-2 text-rose-500 font-bold block";
+                    document.getElementById('returnItemsContainer').classList.add('hidden');
+                    return;
+                }
+                msg.textContent = "✅ Found";
+                msg.className = "text-xs mt-2 text-green-600 font-bold block";
+                document.getElementById('finalOrderId').value = oid;
+                document.getElementById('returnItemsContainer').classList.remove('hidden');
+                const list = document.getElementById('itemsList');
+                list.innerHTML = '';
                 data.items.forEach(item => {
-                    const row = document.createElement('div'); row.className = "group flex items-start gap-3 p-3 rounded-xl border border-slate-200 bg-white hover:border-rose-400 cursor-pointer transition shadow-sm";
+                    const row = document.createElement('div');
+                    row.className = "group flex items-start gap-3 p-3 rounded-xl border border-slate-200 bg-white hover:border-rose-400 cursor-pointer transition shadow-sm";
                     row.onclick = (e) => { if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') { const cb = row.querySelector('.item-cb'); cb.checked = !cb.checked; cb.dispatchEvent(new Event('change')); } };
                     row.innerHTML = `<div class="pt-1"><input type="checkbox" class="w-5 h-5 text-rose-600 item-cb focus:ring-rose-500 rounded" data-stock="${item.stock_id}" data-price="${item.price}" data-pid="${item.product_id}" data-qty="${item.qty}"></div><div class="flex-1"><div class="flex justify-between"><h6 class="font-bold text-sm text-slate-800">${item.product_name}</h6><span class="text-xs font-bold bg-slate-100 px-2 py-1 rounded">₱${parseFloat(item.price).toFixed(2)}</span></div><div class="flex gap-2 mt-2"><span class="text-[10px] bg-slate-100 text-slate-600 px-2 py-1 rounded font-bold">${item.size_name}</span><span class="text-[10px] bg-slate-100 text-slate-600 px-2 py-1 rounded font-bold">${item.color_name}</span><span class="text-[10px] bg-slate-100 text-slate-600 px-2 py-1 rounded font-bold">Qty: ${item.qty}</span></div><div class="qty-control hidden mt-3 pt-3 border-t border-dashed border-slate-100 flex flex-wrap items-center gap-2"><div class="flex items-center gap-2"><span class="text-xs font-bold text-rose-600">Return Qty:</span><input type="number" min="1" max="${item.qty}" value="1" class="return-qty w-12 border rounded text-center text-xs font-bold" onclick="event.stopPropagation()"></div><div class="flex items-center gap-2 flex-1"><span class="text-xs font-bold text-slate-500">Condition:</span><select class="return-action w-full border border-slate-300 rounded text-xs py-1" onclick="event.stopPropagation()"><option value="restock">✅ Sellable (Restock)</option><option value="damaged">❌ Damaged (Discard)</option></select></div></div></div>`;
                     list.appendChild(row);
-                }); document.querySelectorAll('.item-cb').forEach(cb => cb.addEventListener('change', validateRefund));
+                });
+                document.querySelectorAll('.item-cb').forEach(cb => cb.addEventListener('change', validateRefund));
             } catch (err) { console.error(err); msg.textContent = "Network Error"; }
         }
         function validateRefund() { let any = false; document.querySelectorAll('.item-cb').forEach(box => { const qtyDiv = box.closest('.group').querySelector('.qty-control'); if (box.checked) { any = true; qtyDiv.classList.remove('hidden'); qtyDiv.classList.add('flex'); } else { qtyDiv.classList.add('hidden'); qtyDiv.classList.remove('flex'); } }); document.getElementById('submitRefundBtn').disabled = !any; }
@@ -433,3 +693,4 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
     </script>
 </body>
 </html>
+
