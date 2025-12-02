@@ -43,6 +43,10 @@ switch ($filter) {
 $query = "
     SELECT
         o.order_id,
+        
+        -- 🟢 Use Transaction ID for Display
+        COALESCE(o.transaction_id, CONCAT('ORD-', o.order_id)) AS transaction_display_id,
+        
         o.total_amount,
         o.cash_given,
         o.changes,
@@ -362,7 +366,7 @@ $chartStmt->close();
                     <table class="w-full text-sm text-left">
                         <thead class="bg-slate-50 text-slate-500 uppercase text-xs tracking-wider font-semibold border-b border-slate-100">
                             <tr>
-                                <th class="px-6 py-4">Order ID</th>
+                                <th class="px-6 py-4">Transaction ID</th> <!-- 🟢 Changed Header -->
                                 <th class="px-6 py-4 w-[35%]">Items</th>
                                 <th class="px-6 py-4">Total</th>
                                 <th class="px-6 py-4">Payment</th>
@@ -378,8 +382,8 @@ $chartStmt->close();
                                     $itemStrings = !empty($row['item_details']) ? explode('///', $row['item_details']) : [];
                                 ?>
                                 <tr class="hover:bg-slate-50 transition-colors group">
-                                    <td class="px-6 py-4 font-bold text-rose-600 align-top">
-                                        #<?= $row['order_id']; ?>
+                                    <td class="px-6 py-4 font-bold text-slate-600 align-top font-mono text-xs tracking-tight">
+                                        <?= htmlspecialchars($row['transaction_display_id']); ?> <!-- 🟢 Use Transaction ID -->
                                     </td>
                                     
                                     <!-- LOGIC FOR ITEMS -->
@@ -520,7 +524,7 @@ $chartStmt->close();
                 borderWidth: 2, 
                 pointBackgroundColor: '#fff', 
                 pointBorderColor: '#e11d48', 
-                pointBorderWidth: 2,
+                pointBorderWidth: 2, 
                 pointRadius: 4, 
                 pointHoverRadius: 6, 
                 fill: true, 

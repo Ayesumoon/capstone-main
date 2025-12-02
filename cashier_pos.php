@@ -31,21 +31,44 @@ function getVariations($conn, $pid) {
 }
 
 /* ========================================================
-   API: VERIFY PASSWORD
+   API: VERIFY ADMIN CREDENTIALS (MANAGER OVERRIDE)
+   Updated to check username/password and ensure Role is Admin
 ======================================================== */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['action'] ?? '') === 'verify_password') {
     while (ob_get_level()) ob_end_clean();
     header('Content-Type: application/json');
     $input = json_decode(file_get_contents('php://input'), true);
     try {
-        if (!$admin_id) throw new Exception("Not authenticated");
+        // We don't check $admin_id here because we are verifying a superior's credentials
+        
+        $username = $input['username'] ?? '';
         $password = $input['password'] ?? '';
-        $stmt = $conn->prepare("SELECT password_hash FROM adminusers WHERE admin_id = ?");
-        $stmt->bind_param("i", $admin_id); $stmt->execute(); $res = $stmt->get_result();
+
+        if(empty($username) || empty($password)) {
+            throw new Exception("Please enter Admin credentials.");
+        }
+
+        // 1. Fetch user by Username
+        $stmt = $conn->prepare("SELECT admin_id, password_hash, role_id FROM adminusers WHERE username = ?");
+        $stmt->bind_param("s", $username); 
+        $stmt->execute(); 
+        $res = $stmt->get_result();
+
         if ($row = $res->fetch_assoc()) {
-            if (password_verify($password, $row['password_hash'])) echo json_encode(['status' => 'success']);
-            else echo json_encode(['status' => 'error', 'message' => 'Incorrect password']);
-        } else throw new Exception("User not found");
+            // 2. Verify Password
+            if (password_verify($password, $row['password_hash'])) {
+                // 3. Verify Role (Must be Admin, role_id = 2)
+                if ($row['role_id'] == 2) {
+                    echo json_encode(['status' => 'success']);
+                } else {
+                    echo json_encode(['status' => 'error', 'message' => 'Authorization Failed: User is not an Admin.']);
+                }
+            } else {
+                echo json_encode(['status' => 'error', 'message' => 'Incorrect Admin password']);
+            }
+        } else {
+            echo json_encode(['status' => 'error', 'message' => 'Admin username not found']);
+        }
     } catch (Exception $e) { echo json_encode(['status' => 'error', 'message' => $e->getMessage()]); }
     exit;
 }
@@ -72,7 +95,30 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_order_details') {
 }
 
 /* ========================================================
-   API: PROCESS REFUND (STRICT POLICY APPLIED)
+   API: GET ORDER ID BY TRANSACTION ID
+======================================================== */
+if (isset($_GET['action']) && $_GET['action'] === 'get_order_id_by_transaction') {
+    while (ob_get_level()) ob_end_clean();
+    header('Content-Type: application/json');
+    try {
+        if (!isset($_GET['tid'])) throw new Exception("Missing Transaction ID");
+        $tid = trim($_GET['tid']);
+        $stmt = $conn->prepare("SELECT order_id FROM orders WHERE transaction_id = ? LIMIT 1");
+        $stmt->bind_param("s", $tid); 
+        $stmt->execute();
+        $res = $stmt->get_result();
+        if ($row = $res->fetch_assoc()) {
+            echo json_encode(['status' => 'success', 'order_id' => $row['order_id']]);
+        } else {
+            throw new Exception("Transaction ID '$tid' not found.");
+        }
+        $stmt->close();
+    } catch (Exception $e) { echo json_encode(['status' => 'error', 'message' => $e->getMessage()]); }
+    exit;
+}
+
+/* ========================================================
+   API: PROCESS REFUND
 ======================================================== */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['action'] ?? '') === 'process_refund') {
     while (ob_get_level()) ob_end_clean();
@@ -88,63 +134,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['action'] ?? '') === 'proces
         $adj_stmt = $conn->prepare("INSERT INTO stock_adjustments (stock_id, quantity, type, reason, adjusted_by) VALUES (?, ?, ?, ?, ?)");
         $stock_upd_stmt = $conn->prepare("UPDATE stock SET current_qty = current_qty + ? WHERE stock_id = ?");
 
-        $total_cash_refund = 0; // Tracks money to give back
-        $message_parts = [];
-
+        $total_cash_refund = 0; 
+        
         foreach ($input['items'] as $item) {
             $product_id = intval($item['product_id']);
             $stock_id   = intval($item['stock_id']);
             $refund_qty = intval($item['refund_qty']);
             $price      = floatval($item['price']);
-            $action     = $item['action']; // 'restock' or 'damaged'
+            $action     = $item['action'];
             
             $sc = $conn->query("SELECT size_id, color_id FROM stock WHERE stock_id = $stock_id")->fetch_assoc();
             $oi = $conn->query("SELECT id FROM order_items WHERE order_id = $oid AND product_id = $product_id AND stock_id = $stock_id LIMIT 1")->fetch_assoc();
             $order_item_id = $oi['id'] ?? null;
 
-            // --- LOGIC SPLIT ---
             if ($action === 'damaged') {
-                // 1. DAMAGED: Refund Money + Discard Item
                 $amount = $refund_qty * $price;
                 $total_cash_refund += $amount;
-
-                // Record Financial Refund
                 $refund_stmt->bind_param("iiiiiddi", $oid, $order_item_id, $product_id, $stock_id, $sc['size_id'], $sc['color_id'], $amount, $admin_id);
                 $refund_stmt->execute();
-
-                // Inventory: Record as Damaged (No Stock Increase)
                 $type = 'damaged'; $reason = "Order #$oid Return (Damaged/Refunded)";
                 $adj_stmt->bind_param("iissi", $stock_id, $refund_qty, $type, $reason, $admin_id);
                 $adj_stmt->execute();
             } 
             elseif ($action === 'restock') {
-                // 2. SELLABLE/WRONG ITEM: No Money Back + Restock Item
-                $amount = 0; // ZERO REFUND
-
-                // Record "Refund" entry but with 0 amount (for audit trail)
+                $amount = 0; 
                 $refund_stmt->bind_param("iiiiiddi", $oid, $order_item_id, $product_id, $stock_id, $sc['size_id'], $sc['color_id'], $amount, $admin_id);
                 $refund_stmt->execute();
-
-                // Inventory: Increase Stock
                 $stock_upd_stmt->bind_param("ii", $refund_qty, $stock_id);
                 $stock_upd_stmt->execute();
-
-                // Inventory: Record as Restock
                 $type = 'return_restock'; $reason = "Order #$oid Return (Sellable/No Refund)";
                 $adj_stmt->bind_param("iissi", $stock_id, $refund_qty, $type, $reason, $admin_id);
                 $adj_stmt->execute();
             }
         }
 
-        // Only update financial records if actual cash was refunded
         if ($total_cash_refund > 0) {
             $conn->query("UPDATE orders SET total_amount = total_amount - $total_cash_refund, order_status_id = 4 WHERE order_id = $oid");
             $neg = -$total_cash_refund;
             $conn->query("INSERT INTO transactions (order_id, payment_method_id, total, order_status_id, date_time) VALUES ($oid, NULL, $neg, 4, NOW())");
             $msg = "Refund Processed: ₱" . number_format($total_cash_refund, 2) . " returned to customer.";
         } else {
-            // If only restock items (no damaged items), just update status without changing totals
-            $conn->query("UPDATE orders SET order_status_id = 4 WHERE order_id = $oid"); // Mark as refunded/returned
+            $conn->query("UPDATE orders SET order_status_id = 4 WHERE order_id = $oid"); 
             $msg = "Items Restocked. No cash refund issued (Sellable Condition).";
         }
         
@@ -187,11 +217,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
 
         $conn->begin_transaction();
         try {
-            $sql = "INSERT INTO orders (admin_id, total_amount, discount_amount, cash_given, changes, order_status_id, created_at, payment_method_id) VALUES (?, ?, ?, ?, ?, 0, NOW(), ?)";
+            $trx_id = "TRX-" . strtoupper(uniqid());
+            $sql = "INSERT INTO orders (admin_id, total_amount, discount_amount, cash_given, changes, order_status_id, created_at, payment_method_id, transaction_id) VALUES (?, ?, ?, ?, ?, 0, NOW(), ?, ?)";
             $stmt = $conn->prepare($sql);
-            $stmt->bind_param("iddddi", $admin_id, $total, $overall_discount_amt, $cash_given, $changes, $payment_method_id);
+            $stmt->bind_param("iddddis", $admin_id, $total, $overall_discount_amt, $cash_given, $changes, $payment_method_id, $trx_id);
             $stmt->execute();
             $order_id = $stmt->insert_id;
+            
+            $pretty_trx = "TRX-" . date("Y") . "-" . str_pad($order_id, 5, "0", STR_PAD_LEFT);
+            $conn->query("UPDATE orders SET transaction_id = '$pretty_trx' WHERE order_id = $order_id");
             $stmt->close();
 
             $itemStmt = $conn->prepare("INSERT INTO order_items (order_id, product_id, color, size, stock_id, qty, price, discount_amount) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
@@ -214,36 +248,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
             $itemStmt->close();
             $conn->query("INSERT INTO transactions (order_id, customer_id, payment_method_id, total, order_status_id, date_time) VALUES ($order_id, NULL, $payment_method_id, $total, 0, NOW())");
             $conn->commit();
-            echo "<script>alert('Transaction successful! Transaction #: $order_id'); window.location.href='receipt.php?order_id=$order_id';</script>";
+            echo "<script>alert('Transaction successful! Transaction #: $pretty_trx'); window.location.href='receipt.php?order_id=$order_id';</script>";
             exit;
         } catch (Exception $e) { $conn->rollback(); echo "<script>alert('Error: " . addslashes($e->getMessage()) . "');</script>"; }
     }
-}
-?>
-<?php
-/* ========================================================
-   API: GET ORDER ID BY TRANSACTION NUMBER
-   ======================================================== */
-if (isset($_GET['action']) && $_GET['action'] === 'get_order_id_by_transaction') {
-    while (ob_get_level()) ob_end_clean();
-    header('Content-Type: application/json');
-    try {
-        if (!isset($_GET['tid'])) throw new Exception("Missing Transaction Number");
-        $tid = intval($_GET['tid']);
-        // Transaction Number is order_id in transactions table
-        $stmt = $conn->prepare("SELECT order_id FROM transactions WHERE order_id = ? LIMIT 1");
-        $stmt->bind_param("i", $tid); $stmt->execute();
-        $res = $stmt->get_result();
-        if ($row = $res->fetch_assoc()) {
-            echo json_encode(['status' => 'success', 'order_id' => $row['order_id']]);
-        } else {
-            throw new Exception("Transaction #$tid not found.");
-        }
-        $stmt->close();
-    } catch (Exception $e) {
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
-    }
-    exit;
 }
 ?>
 <!DOCTYPE html>
@@ -333,12 +341,9 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_order_id_by_transaction')
                 <?php endwhile; ?>
             </div>
             <div id="productPagination" class="flex justify-center gap-2 mt-8 pb-4"></div>
-            <!-- Pagination Controls (Page 1, 2, 3...) will be rendered here by JS -->
         </div>
     </main>
 
-
-    
     <!-- CART SIDEBAR -->
     <aside class="w-[400px] bg-white border-l border-slate-100 flex flex-col shadow-2xl z-40 shrink-0">
         <div class="h-20 glass-header flex items-center px-6 justify-between"><h3 class="font-bold text-lg text-slate-800 flex items-center gap-2"><i class="fas fa-shopping-bag text-rose-500"></i> Current Order</h3><span class="text-xs bg-rose-100 text-rose-600 px-2 py-1 rounded-full font-bold" id="itemCountBadge">0 items</span></div>
@@ -370,8 +375,29 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_order_id_by_transaction')
     <!-- ITEM DISCOUNT MODAL -->
     <div id="itemDiscountModal" class="fixed inset-0 z-50 flex items-center justify-center invisible opacity-0 modal-backdrop"><div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onclick="closeItemDiscountModal()"></div><div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl relative z-10 p-6 transform scale-95 opacity-0 modal-content" id="itemDiscountModalContent"><div class="flex justify-between items-center mb-5"><h4 class="text-lg font-bold text-slate-800">Item Discount</h4><button onclick="closeItemDiscountModal()" class="text-slate-400 hover:text-rose-500 transition text-2xl leading-none">&times;</button></div><p class="text-sm text-slate-500 mb-4">Set percentage discount for <span id="itemDiscountName" class="font-bold text-slate-700"></span></p><div class="space-y-4"><div><label class="text-xs font-bold text-slate-400 uppercase mb-1 block">Discount Percent (%)</label><input type="number" id="itemDiscountPercent" placeholder="0" max="100" class="w-full border border-slate-200 rounded-xl px-4 py-3 font-bold text-lg outline-none focus:ring-2 focus:ring-rose-200 transition-shadow"></div></div><div class="flex gap-3 mt-6"><button onclick="applyItemDiscount(0)" class="px-4 py-3 rounded-xl border border-slate-200 text-slate-500 font-bold hover:bg-slate-50 active:scale-95 transition">Remove</button><button onclick="confirmItemDiscount()" class="flex-1 py-3 rounded-xl bg-rose-600 text-white font-bold hover:bg-rose-700 shadow-lg shadow-rose-200 active:scale-95 transition">Save</button></div></div></div>
     
-    <!-- SECURITY CHECK MODAL -->
-    <div id="securityModal" class="fixed inset-0 z-[60] flex items-center justify-center invisible opacity-0 modal-backdrop"><div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"></div><div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl relative z-10 p-6 transform scale-95 opacity-0 modal-content" id="securityModalContent"><div class="text-center mb-4"><div class="w-12 h-12 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-3 text-xl"><i class="fas fa-lock"></i></div><h4 class="text-lg font-bold text-slate-800">Security Check</h4><p class="text-xs text-slate-500">Please enter your password to authorize this refund.</p></div><input type="password" id="securityPassword" class="w-full border border-slate-200 rounded-xl px-4 py-3 text-center text-lg outline-none focus:ring-2 focus:ring-rose-200 mb-4" placeholder="••••••"><div class="flex gap-3"><button onclick="closeSecurityModal()" class="flex-1 py-3 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50">Cancel</button><button onclick="verifyAndSubmitRefund()" class="flex-1 py-3 rounded-xl bg-rose-600 text-white font-bold hover:bg-rose-700 shadow-lg">Verify</button></div></div></div>
+    <!-- SECURITY CHECK MODAL (UPDATED) -->
+    <div id="securityModal" class="fixed inset-0 z-[60] flex items-center justify-center invisible opacity-0 modal-backdrop">
+        <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"></div>
+        <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl relative z-10 p-6 transform scale-95 opacity-0 modal-content" id="securityModalContent">
+            <div class="text-center mb-4">
+                <div class="w-12 h-12 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-3 text-xl"><i class="fas fa-user-shield"></i></div>
+                <h4 class="text-lg font-bold text-slate-800">Admin Authorization</h4>
+                <p class="text-xs text-slate-500">Manager override required for refund.</p>
+            </div>
+            
+            <!-- 🟢 NEW: Admin Username Field -->
+            <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Admin Username</label>
+            <input type="text" id="securityUsername" class="w-full border border-slate-200 rounded-xl px-4 py-3 text-lg outline-none focus:ring-2 focus:ring-rose-200 mb-3" placeholder="Enter Username">
+            
+            <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Admin Password</label>
+            <input type="password" id="securityPassword" class="w-full border border-slate-200 rounded-xl px-4 py-3 text-lg outline-none focus:ring-2 focus:ring-rose-200 mb-4" placeholder="••••••">
+            
+            <div class="flex gap-3">
+                <button onclick="closeSecurityModal()" class="flex-1 py-3 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50">Cancel</button>
+                <button onclick="verifyAndSubmitRefund()" class="flex-1 py-3 rounded-xl bg-rose-600 text-white font-bold hover:bg-rose-700 shadow-lg">Verify</button>
+            </div>
+        </div>
+    </div>
 
     <!-- RETURN MODAL -->
     <div id="returnModalBackdrop" class="fixed inset-0 z-50 bg-slate-900/30 backdrop-blur-sm invisible opacity-0 transition-all duration-300"></div>
@@ -387,13 +413,13 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_order_id_by_transaction')
             <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 transition-all focus-within:ring-2 ring-rose-100">
                 <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Find Order</label>
                 <div class="flex gap-2 mb-2">
-                    <select id="searchMode" class="bg-white border border-slate-300 rounded-lg px-2 py-2 text-sm font-bold text-slate-700">
+                    <select id="searchMode" class="bg-white border border-slate-300 rounded-lg px-2 py-2 text-sm font-bold text-slate-700 w-full outline-none focus:border-rose-400">
                         <option value="order">Order ID</option>
-                        <option value="transaction">Transaction Number</option>
+                        <option value="transaction">Transaction ID</option>
                     </select>
                 </div>
                 <div class="flex gap-2">
-                    <input type="number" id="searchOrderId" class="flex-1 bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-rose-400 transition" placeholder="Order ID">
+                    <input type="text" id="searchOrderId" class="flex-1 bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-rose-400 transition" placeholder="Enter ID...">
                     <button onclick="fetchOrderItems()" class="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-900 transition shadow-lg active:scale-95">Find</button>
                 </div>
                 <p id="orderMsg" class="text-xs mt-2 font-medium hidden"></p>
@@ -412,14 +438,14 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_order_id_by_transaction')
     </div>
 
     <script>
-        /* --- JS: ALL SAME AS BEFORE --- */
+        /* --- JS LOGIC (SHORTENED FOR BREVITY AS REQUESTED) --- */
+        // ... (Previous logic remains the same) ...
         let cart = []; let currentProduct = null; let activeDiscount = { type: 'percent', value: 0 }; let activeItemDiscountIndex = null; let modalState = { variations: [], selectedSize: null, selectedColor: null }; const itemsPerPage = 12; let currentPage = 1;
         const productCards = Array.from(document.querySelectorAll('.group[data-id]'));
         const searchInput = document.getElementById('productSearch');
         const catFilter = document.getElementById('categoryFilter');
         const paginationEl = document.getElementById('productPagination');
         
-        // PAGINATION: Render page controls after products grid
         function renderProducts() {
             if(!paginationEl) return;
             const q = searchInput.value.toLowerCase().trim();
@@ -431,30 +457,16 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_order_id_by_transaction')
             });
             const totalPages = Math.ceil(filtered.length / itemsPerPage) || 1;
             if (currentPage > totalPages) currentPage = 1;
-            productCards.forEach(el => {
-                el.style.display = 'none';
-                el.style.opacity = '0';
-                el.style.animation = 'none';
-            });
+            productCards.forEach(el => { el.style.display = 'none'; el.style.opacity = '0'; el.style.animation = 'none'; });
             const pageItems = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-            pageItems.forEach((el, i) => {
-                el.style.display = 'flex';
-                void el.offsetWidth;
-                el.style.animation = `fadeInUp 0.4s ease-out ${i * 0.05}s forwards`;
-            });
-            // Render pagination controls below products
+            pageItems.forEach((el, i) => { el.style.display = 'flex'; void el.offsetWidth; el.style.animation = `fadeInUp 0.4s ease-out ${i * 0.05}s forwards`; });
             paginationEl.innerHTML = '';
             if (totalPages > 1) {
                 for (let i = 1; i <= totalPages; i++) {
                     const b = document.createElement('button');
                     b.textContent = i;
                     b.className = `w-8 h-8 rounded-lg text-sm font-bold transition-all ${i === currentPage ? 'bg-rose-600 text-white shadow-md scale-110' : 'bg-white text-slate-600 hover:bg-slate-100 border'}`;
-                    b.onclick = () => {
-                        currentPage = i;
-                        renderProducts();
-                        // Scroll to products grid after page change
-                        document.getElementById('productGrid').scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    };
+                    b.onclick = () => { currentPage = i; renderProducts(); document.getElementById('productGrid').scrollIntoView({ behavior: 'smooth', block: 'start' }); };
                     paginationEl.appendChild(b);
                 }
             }
@@ -481,118 +493,13 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_order_id_by_transaction')
             const cDiv = document.getElementById('colorOptions');
             sDiv.innerHTML = '';
             cDiv.innerHTML = '';
-        
-            // Helper to get remaining stock for a variation (subtract cart quantity)
-            function getRemainingStock(size, color) {
-                const stockObj = modalState.variations.find(v => v.size === size && v.color === color);
-                if (!stockObj) return 0;
-                const inCart = cart.find(i => i.product_id === currentProduct.id && i.size === size && i.color === color);
-                return stockObj.qty - (inCart ? inCart.quantity : 0);
-            }
-        
-            if (uniqueSizes.length > 0) {
-                document.getElementById('sizeDiv').style.display = 'block';
-                uniqueSizes.forEach(size => {
-                    const btn = document.createElement('button');
-                    btn.textContent = size;
-                    // Show remaining stock for this size if color is selected
-                    let remStock = null;
-                    if (modalState.selectedColor !== null) {
-                        remStock = getRemainingStock(size, modalState.selectedColor);
-                    } else {
-                        // If no color selected, show max for all colors of this size
-                        remStock = Math.max(...modalState.variations.filter(v => v.size === size).map(v => getRemainingStock(size, v.color)));
-                    }
-                    btn.title = `Remaining: ${remStock}`;
-                    const isAvailable = modalState.variations.some(v => v.size === size && getRemainingStock(size, v.color) > 0 && (modalState.selectedColor === null || v.color === modalState.selectedColor));
-                    if (!isAvailable) {
-                        btn.className = 'px-4 py-2 border border-slate-100 rounded-lg text-sm text-slate-300 cursor-not-allowed bg-slate-50';
-                        btn.disabled = true;
-                    } else if (modalState.selectedSize === size) {
-                        btn.className = 'px-4 py-2 border rounded-lg text-sm font-bold bg-rose-600 text-white border-rose-600 shadow-md transform scale-105 transition-all';
-                    } else {
-                        btn.className = 'px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium hover:border-rose-400 hover:text-rose-600 transition text-slate-700';
-                        btn.onclick = () => { modalState.selectedSize = (modalState.selectedSize === size) ? null : size; renderOptions(); };
-                    }
-                    btn.innerHTML += ` <span class="text-xs text-slate-400">(${remStock})</span>`;
-                    sDiv.appendChild(btn);
-                });
-            } else {
-                document.getElementById('sizeDiv').style.display = 'none';
-                modalState.selectedSize = 'Free Size';
-            }
-        
-            if (uniqueColors.length > 0) {
-                document.getElementById('colorDiv').style.display = 'block';
-                uniqueColors.forEach(color => {
-                    const btn = document.createElement('button');
-                    btn.textContent = color;
-                    // Show remaining stock for this color if size is selected
-                    let remStock = null;
-                    if (modalState.selectedSize !== null) {
-                        remStock = getRemainingStock(modalState.selectedSize, color);
-                    } else {
-                        // If no size selected, show max for all sizes of this color
-                        remStock = Math.max(...modalState.variations.filter(v => v.color === color).map(v => getRemainingStock(v.size, color)));
-                    }
-                    btn.title = `Remaining: ${remStock}`;
-                    const isAvailable = modalState.variations.some(v => v.color === color && getRemainingStock(v.size, color) > 0 && (modalState.selectedSize === null || v.size === modalState.selectedSize));
-                    if (!isAvailable) {
-                        btn.className = 'px-4 py-2 border border-slate-100 rounded-lg text-sm text-slate-300 cursor-not-allowed bg-slate-50';
-                        btn.disabled = true;
-                    } else if (modalState.selectedColor === color) {
-                        btn.className = 'px-4 py-2 border rounded-lg text-sm font-bold bg-rose-600 text-white border-rose-600 shadow-md transform scale-105 transition-all';
-                    } else {
-                        btn.className = 'px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium hover:border-rose-400 hover:text-rose-600 transition text-slate-700';
-                        btn.onclick = () => { modalState.selectedColor = (modalState.selectedColor === color) ? null : color; renderOptions(); };
-                    }
-                    btn.innerHTML += ` <span class="text-xs text-slate-400">(${remStock})</span>`;
-                    cDiv.appendChild(btn);
-                });
-            } else {
-                document.getElementById('colorDiv').style.display = 'none';
-                modalState.selectedColor = 'Standard';
-            }
-        
-            // Show remaining stock info in modal (below options)
-            let infoDiv = document.getElementById('stockInfoDiv');
-            if (!infoDiv) {
-                infoDiv = document.createElement('div');
-                infoDiv.id = 'stockInfoDiv';
-                infoDiv.className = 'mt-3 text-xs font-bold text-slate-500';
-                sDiv.parentNode.parentNode.insertBefore(infoDiv, sDiv.parentNode.nextSibling);
-            }
-            let stockMsg = '';
-            if (modalState.selectedSize && modalState.selectedColor) {
-                const rem = getRemainingStock(modalState.selectedSize, modalState.selectedColor);
-                stockMsg = `Remaining stock: <span class="text-rose-600">${rem}</span>`;
-            } else {
-                stockMsg = 'Select size and color to see stock';
-            }
-            infoDiv.innerHTML = stockMsg;
+            function getRemainingStock(size, color) { const stockObj = modalState.variations.find(v => v.size === size && v.color === color); if (!stockObj) return 0; const inCart = cart.find(i => i.product_id === currentProduct.id && i.size === size && i.color === color); return stockObj.qty - (inCart ? inCart.quantity : 0); }
+            if (uniqueSizes.length > 0) { document.getElementById('sizeDiv').style.display = 'block'; uniqueSizes.forEach(size => { const btn = document.createElement('button'); btn.textContent = size; let remStock = null; if (modalState.selectedColor !== null) { remStock = getRemainingStock(size, modalState.selectedColor); } else { remStock = Math.max(...modalState.variations.filter(v => v.size === size).map(v => getRemainingStock(size, v.color))); } btn.title = `Remaining: ${remStock}`; const isAvailable = modalState.variations.some(v => v.size === size && getRemainingStock(size, v.color) > 0 && (modalState.selectedColor === null || v.color === modalState.selectedColor)); if (!isAvailable) { btn.className = 'px-4 py-2 border border-slate-100 rounded-lg text-sm text-slate-300 cursor-not-allowed bg-slate-50'; btn.disabled = true; } else if (modalState.selectedSize === size) { btn.className = 'px-4 py-2 border rounded-lg text-sm font-bold bg-rose-600 text-white border-rose-600 shadow-md transform scale-105 transition-all'; } else { btn.className = 'px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium hover:border-rose-400 hover:text-rose-600 transition text-slate-700'; btn.onclick = () => { modalState.selectedSize = (modalState.selectedSize === size) ? null : size; renderOptions(); }; } btn.innerHTML += ` <span class="text-xs text-slate-400">(${remStock})</span>`; sDiv.appendChild(btn); }); } else { document.getElementById('sizeDiv').style.display = 'none'; modalState.selectedSize = 'Free Size'; }
+            if (uniqueColors.length > 0) { document.getElementById('colorDiv').style.display = 'block'; uniqueColors.forEach(color => { const btn = document.createElement('button'); btn.textContent = color; let remStock = null; if (modalState.selectedSize !== null) { remStock = getRemainingStock(modalState.selectedSize, color); } else { remStock = Math.max(...modalState.variations.filter(v => v.color === color).map(v => getRemainingStock(v.size, color))); } btn.title = `Remaining: ${remStock}`; const isAvailable = modalState.variations.some(v => v.color === color && getRemainingStock(v.size, color) > 0 && (modalState.selectedSize === null || v.size === modalState.selectedSize)); if (!isAvailable) { btn.className = 'px-4 py-2 border border-slate-100 rounded-lg text-sm text-slate-300 cursor-not-allowed bg-slate-50'; btn.disabled = true; } else if (modalState.selectedColor === color) { btn.className = 'px-4 py-2 border rounded-lg text-sm font-bold bg-rose-600 text-white border-rose-600 shadow-md transform scale-105 transition-all'; } else { btn.className = 'px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium hover:border-rose-400 hover:text-rose-600 transition text-slate-700'; btn.onclick = () => { modalState.selectedColor = (modalState.selectedColor === color) ? null : color; renderOptions(); }; } btn.innerHTML += ` <span class="text-xs text-slate-400">(${remStock})</span>`; cDiv.appendChild(btn); }); } else { document.getElementById('colorDiv').style.display = 'none'; modalState.selectedColor = 'Standard'; }
+            let infoDiv = document.getElementById('stockInfoDiv'); if (!infoDiv) { infoDiv = document.createElement('div'); infoDiv.id = 'stockInfoDiv'; infoDiv.className = 'mt-3 text-xs font-bold text-slate-500'; sDiv.parentNode.parentNode.insertBefore(infoDiv, sDiv.parentNode.nextSibling); }
+            let stockMsg = ''; if (modalState.selectedSize && modalState.selectedColor) { const rem = getRemainingStock(modalState.selectedSize, modalState.selectedColor); stockMsg = `Remaining stock: <span class="text-rose-600">${rem}</span>`; } else { stockMsg = 'Select size and color to see stock'; } infoDiv.innerHTML = stockMsg;
         }
-        
-        document.getElementById('confirmAdd').onclick = () => {
-            const hasSizes = document.getElementById('sizeDiv').style.display !== 'none';
-            const hasColors = document.getElementById('colorDiv').style.display !== 'none';
-            if (hasSizes && !modalState.selectedSize) return alert("Please select a size");
-            if (hasColors && !modalState.selectedColor) return alert("Please select a color");
-            const size = modalState.selectedSize || 'Free Size';
-            const color = modalState.selectedColor || 'Standard';
-            const stockItem = modalState.variations.find(v => v.size === size && v.color === color);
-            if (!stockItem || stockItem.qty <= 0) return alert("Selected combination is out of stock.");
-            const inCart = cart.find(i => i.product_id === currentProduct.id && i.size === size && i.color === color);
-            const remaining = stockItem.qty - (inCart ? inCart.quantity : 0);
-            if (remaining <= 0) return alert("No more stock available for this combination.");
-            if (inCart) {
-                if (inCart.quantity + 1 > stockItem.qty) return alert("Cannot add more (Stock limit reached)");
-                inCart.quantity++;
-            } else {
-                cart.push({ product_id: currentProduct.id, name: currentProduct.name, price: currentProduct.price, original_price: currentProduct.price, discount_percent: 0, quantity: 1, size, color });
-            }
-            renderCart();
-            closeModal();
-        };
+        document.getElementById('confirmAdd').onclick = () => { const hasSizes = document.getElementById('sizeDiv').style.display !== 'none'; const hasColors = document.getElementById('colorDiv').style.display !== 'none'; if (hasSizes && !modalState.selectedSize) return alert("Please select a size"); if (hasColors && !modalState.selectedColor) return alert("Please select a color"); const size = modalState.selectedSize || 'Free Size'; const color = modalState.selectedColor || 'Standard'; const stockItem = modalState.variations.find(v => v.size === size && v.color === color); if (!stockItem || stockItem.qty <= 0) return alert("Selected combination is out of stock."); const inCart = cart.find(i => i.product_id === currentProduct.id && i.size === size && i.color === color); const remaining = stockItem.qty - (inCart ? inCart.quantity : 0); if (remaining <= 0) return alert("No more stock available for this combination."); if (inCart) { if (inCart.quantity + 1 > stockItem.qty) return alert("Cannot add more (Stock limit reached)"); inCart.quantity++; } else { cart.push({ product_id: currentProduct.id, name: currentProduct.name, price: currentProduct.price, original_price: currentProduct.price, discount_percent: 0, quantity: 1, size, color }); } renderCart(); closeModal(); };
 
         const dModal = document.getElementById('discountModal'); const dContent = document.getElementById('discountModalContent');
         window.openGlobalDiscountModal = () => { document.getElementById('discountValue').value = activeDiscount.value > 0 ? activeDiscount.value : ''; toggleDiscountType(activeDiscount.type); openModalLogic(dModal, dContent); }
@@ -617,19 +524,23 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_order_id_by_transaction')
         
         async function fetchOrderItems() {
             const mode = document.getElementById('searchMode').value;
-            const inputVal = document.getElementById('searchOrderId').value;
+            const inputVal = document.getElementById('searchOrderId').value.trim();
             const msg = document.getElementById('orderMsg');
-            if (!inputVal) return alert(mode === 'order' ? "Enter Order ID" : "Enter Transaction Number");
+            
+            if (!inputVal) return alert(mode === 'order' ? "Enter Order ID" : "Enter Transaction ID");
+            
             msg.textContent = "Searching...";
             msg.className = "text-xs mt-2 text-slate-500 block animate-pulse";
             let oid = inputVal;
+            
             try {
                 if (mode === 'transaction') {
-                    // Look up Order ID by Transaction Number
-                    const response = await fetch(`?action=get_order_id_by_transaction&tid=${inputVal}`);
+                    // Look up Order ID by Transaction ID String (e.g. TRX-...)
+                    const response = await fetch(`?action=get_order_id_by_transaction&tid=${encodeURIComponent(inputVal)}`);
                     const textData = await response.text();
                     let data;
                     try { data = JSON.parse(textData); } catch (e) { console.error(textData); return alert("Server Error"); }
+                    
                     if (data.status === 'error') {
                         msg.textContent = "❌ " + data.message;
                         msg.className = "text-xs mt-2 text-rose-500 font-bold block";
@@ -638,21 +549,25 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_order_id_by_transaction')
                     }
                     oid = data.order_id;
                 }
-                // Now fetch order details as before
+                
+                // Now fetch order details using the resolved (or direct) Order ID
                 const response = await fetch(`?action=get_order_details&oid=${oid}`);
                 const textData = await response.text();
                 let data;
                 try { data = JSON.parse(textData); } catch (e) { console.error(textData); return alert("Server Error"); }
+                
                 if (data.status === 'error') {
                     msg.textContent = "❌ " + data.message;
                     msg.className = "text-xs mt-2 text-rose-500 font-bold block";
                     document.getElementById('returnItemsContainer').classList.add('hidden');
                     return;
                 }
-                msg.textContent = "✅ Found";
+                
+                msg.textContent = "✅ Found Order #" + oid;
                 msg.className = "text-xs mt-2 text-green-600 font-bold block";
                 document.getElementById('finalOrderId').value = oid;
                 document.getElementById('returnItemsContainer').classList.remove('hidden');
+                
                 const list = document.getElementById('itemsList');
                 list.innerHTML = '';
                 data.items.forEach(item => {
@@ -668,14 +583,23 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_order_id_by_transaction')
         function validateRefund() { let any = false; document.querySelectorAll('.item-cb').forEach(box => { const qtyDiv = box.closest('.group').querySelector('.qty-control'); if (box.checked) { any = true; qtyDiv.classList.remove('hidden'); qtyDiv.classList.add('flex'); } else { qtyDiv.classList.add('hidden'); qtyDiv.classList.remove('flex'); } }); document.getElementById('submitRefundBtn').disabled = !any; }
         
         const sModal = document.getElementById('securityModal'); const sContent = document.getElementById('securityModalContent');
-        window.openSecurityModal = () => { document.getElementById('securityPassword').value = ''; openModalLogic(sModal, sContent); }
+        window.openSecurityModal = () => { document.getElementById('securityUsername').value = ''; document.getElementById('securityPassword').value = ''; openModalLogic(sModal, sContent); }
         window.closeSecurityModal = () => { closeModalLogic(sModal, sContent); }
 
         async function verifyAndSubmitRefund() {
-            const pwd = document.getElementById('securityPassword').value; if(!pwd) return alert("Please enter password");
+            const user = document.getElementById('securityUsername').value;
+            const pwd = document.getElementById('securityPassword').value; 
+            
+            if(!user || !pwd) return alert("Please enter Admin credentials");
+            
             try {
-                const res = await fetch('?action=verify_password', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ password: pwd }) });
+                const res = await fetch('?action=verify_password', { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({ username: user, password: pwd }) 
+                });
                 const data = await res.json();
+                
                 if(data.status !== 'success') return alert(data.message);
                 
                 closeSecurityModal();
@@ -693,4 +617,3 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_order_id_by_transaction')
     </script>
 </body>
 </html>
-

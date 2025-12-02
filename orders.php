@@ -76,10 +76,13 @@ switch ($date_filter) {
 }
 
 // 🔹 MAIN QUERY
-// We look at stock_adjustments where the 'reason' matches the Order ID pattern
 $sql = "
     SELECT 
-    o.order_id, 
+    o.order_id,
+    
+    -- 🟢 Use Transaction ID if available, otherwise fallback to Order ID
+    COALESCE(o.transaction_id, CONCAT('ORD-', o.order_id)) AS transaction_display_id, 
+    
     o.total_amount,
     os.order_status_name AS order_status,
     pm.payment_method_name AS payment_method,
@@ -106,7 +109,6 @@ $sql = "
                 '<span class=\"px-1 rounded font-bold ',
                 IF(sa.type = 'return_restock', 'bg-green-100 text-green-800', 'bg-red-100 text-red-800'),
                 '\">x', sa.quantity, '</span>',
-                -- Show price only if damaged (Refunded)
                 IF(sa.type = 'damaged', 
                    CONCAT(' — ₱', FORMAT(sa.quantity * (SELECT price FROM order_items WHERE order_id = o.order_id AND stock_id = sa.stock_id LIMIT 1), 2)),
                    ''
@@ -392,7 +394,7 @@ foreach ($orders as $order) {
             <table class="min-w-full text-left text-sm text-gray-600">
               <thead class="bg-gray-50 text-gray-500 uppercase font-bold text-xs">
                 <tr>
-                  <th class="px-6 py-3 text-left">Order #</th>
+                  <th class="px-6 py-3 text-left">Transaction ID</th> <!-- 🟢 CHANGED Header -->
                   <th class="px-6 py-3 text-left">Date</th>
                   <th class="px-6 py-3 text-left w-1/3">Items & Details</th>
                   <th class="px-6 py-3 text-left">Status</th>
@@ -408,8 +410,8 @@ foreach ($orders as $order) {
                     if ($order['order_status'] === 'Pending') $status_class = "bg-yellow-100 text-yellow-600 border-yellow-200";
                 ?>
                 <tr class="hover:bg-gray-50 transition">
-                  <td class="px-6 py-4 font-mono font-semibold text-gray-500 align-top">
-                    #<?= $order['order_id']; ?>
+                  <td class="px-6 py-4 font-mono font-semibold text-gray-600 align-top tracking-tight text-xs">
+                    <?= htmlspecialchars($order['transaction_display_id']); ?> <!-- 🟢 CHANGED to Display ID -->
                   </td>
                   <td class="px-6 py-4 whitespace-nowrap align-top">
                     <?= date('M d, Y', strtotime($order['created_at'])); ?>

@@ -79,6 +79,7 @@ if (count($whereClauses) > 0) {
 }
 
 // 🔹 Stock Query
+// Note: MAX(si.date_added) retrieves the most recent stock-in date
 $stockQuery = "
     SELECT 
         s.stock_id,
@@ -345,6 +346,8 @@ if ($stmt = $conn->prepare($stockQuery)) {
                             <th class="px-6 py-3">Size</th>
                             <th class="px-6 py-3">Qty</th>
                             <th class="px-6 py-3">Supplier</th>
+                            <!-- 🟢 ADDED COLUMN HEADER -->
+                            <th class="px-6 py-3">Last Added</th>
                             <th class="px-6 py-3 text-center">Action</th>
                         </tr>
                     </thead>
@@ -358,6 +361,12 @@ if ($stmt = $conn->prepare($stockQuery)) {
                             <td class="px-6 py-4"><?= $row['size'] ? e($row['size']) : '<span class="text-gray-400">—</span>' ?></td>
                             <td class="px-6 py-4 font-bold <?= ((int)$row['current_qty'] == 0) ? 'text-red-600' : 'text-green-600' ?>"><?= (int)$row['current_qty'] ?></td>
                             <td class="px-6 py-4 text-xs text-gray-500"><?= e($row['supplier_name'] ?? 'N/A') ?></td>
+                            
+                            <!-- 🟢 ADDED DATE DATA -->
+                            <td class="px-6 py-4 text-xs text-gray-500 whitespace-nowrap">
+                                <?php echo $row['date_added'] ? date('M d, Y', strtotime($row['date_added'])) : '<span class="text-gray-300">-</span>'; ?>
+                            </td>
+
                             <td class="px-6 py-4 text-center">
                                 <button 
                                     @click="
@@ -372,8 +381,6 @@ if ($stmt = $conn->prepare($stockQuery)) {
                                         editData.price = '<?= $row['seller_price'] ?? '' ?>';
                                         
                                         editStockOpen = true; 
-                                        // Edit modal still uses fetchProducts to restrict to correct supplier if needed, 
-                                        // or we can allow it to just load. For now keeping original edit logic.
                                         fetchProducts(editData.supplier_id, 'editProductSelect', editData.product_id);
                                     "
                                     class="text-[var(--rose)] hover:text-white hover:bg-[var(--rose)] p-2 rounded-lg transition" title="Edit">
@@ -382,7 +389,8 @@ if ($stmt = $conn->prepare($stockQuery)) {
                             </td>
                           </tr>
                         <?php endforeach; else: ?>
-                          <tr><td colspan="6" class="text-center py-8 text-gray-500">No stock records found matching filters.</td></tr>
+                          <!-- Updated colspan from 6 to 7 to match new column count -->
+                          <tr><td colspan="7" class="text-center py-8 text-gray-500">No stock records found matching filters.</td></tr>
                         <?php endif; ?>
                     </tbody>
                 </table>
@@ -397,7 +405,7 @@ if ($stmt = $conn->prepare($stockQuery)) {
       <h3 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Stock In (New)</h3>
       <form action="process_stock_in.php" method="POST" class="space-y-4">
         
-        <!-- 🟢 Product Select (Moved Up & Populated with All Products) -->
+        <!-- 🟢 Product Select -->
         <div>
           <label class="block text-sm font-bold text-gray-700 mb-1">Product</label>
           <select id="productSelect" name="product_id" 
@@ -415,7 +423,7 @@ if ($stmt = $conn->prepare($stockQuery)) {
           </select>
         </div>
 
-        <!-- 🟢 Supplier Select (Moved Down & Independent) -->
+        <!-- 🟢 Supplier Select -->
         <div>
           <label class="block text-sm font-bold text-gray-700 mb-1">Supplier</label>
           <select id="supplierSelect" name="supplier_id" 
@@ -471,7 +479,7 @@ if ($stmt = $conn->prepare($stockQuery)) {
     </div>
   </div>
 
-  <!-- Edit Stock Modal (Kept Logic Mostly Same for Editing Existing Entries) -->
+  <!-- Edit Stock Modal -->
   <div x-show="editStockOpen" x-cloak class="fixed inset-0 flex items-center justify-center bg-black/50 z-50 p-4 backdrop-blur-sm animate-fade-in">
     <div @click.away="editStockOpen = false" class="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 transform transition-all">
       <div class="flex justify-between items-center border-b pb-2 mb-4">
@@ -482,8 +490,6 @@ if ($stmt = $conn->prepare($stockQuery)) {
       <form action="process_edit_stock.php" method="POST" class="space-y-4">
         <input type="hidden" name="stock_id" x-model="editData.id">
         
-        <!-- For Edit, we usually keep Supplier -> Product hierarchy to ensure data integrity of existing record, 
-             but fields can be adjustable. -->
         <div>
           <label class="block text-sm font-bold text-gray-700 mb-1">Supplier</label>
           <select id="editSupplierSelect" name="supplier_id" x-model="editData.supplier_id" 
@@ -564,7 +570,6 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('pageshow', () => NProgress.done());
 });
 
-// 🟢 NEW FUNCTION: Handle Product Selection in Stock In
 function onProductChange(selectElement) {
     const selectedOption = selectElement.options[selectElement.selectedIndex];
     
@@ -587,7 +592,6 @@ function onProductChange(selectElement) {
     }
 }
 
-// Keeping this for the Edit Modal
 function fetchProducts(supplierId, targetSelectId, preSelectedId = null) {
     const productSel = document.getElementById(targetSelectId);
     

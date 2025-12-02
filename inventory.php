@@ -27,7 +27,7 @@ $colors = []; $r = $conn->query("SELECT color FROM colors ORDER BY color"); whil
 $sizes = []; $r = $conn->query("SELECT size FROM sizes ORDER BY size"); while($row=$r->fetch_assoc()) $sizes[]=$row;
 
 // 🔹 Filters
-$catFilter = $_GET['category'] ?? 'all';
+$catFilter = $_GET['category'] ?? ''; // Changed default from 'all' to empty string for logic handling
 $colFilter = $_GET['color'] ?? 'all';
 $sizFilter = $_GET['size'] ?? 'all';
 $statusFilter = $_GET['stock_status'] ?? 'all';
@@ -66,7 +66,21 @@ $sql = "
 
 // Apply Filters
 $types = ""; $params = [];
-if($catFilter !== 'all') { $sql .= " AND c.category_name = ?"; $params[] = $catFilter; $types .= "s"; }
+
+// 🟢 MODIFIED: Multi-Select Category Logic
+if(!empty($catFilter) && $catFilter !== 'all') { 
+    $catArray = explode(',', $catFilter); // Convert "Dress,Blouse" to array
+    // Create placeholders (?, ?, ?)
+    $placeholders = implode(',', array_fill(0, count($catArray), '?'));
+    $sql .= " AND c.category_name IN ($placeholders)";
+    
+    // Add params
+    foreach ($catArray as $cat) {
+        $params[] = $cat;
+        $types .= "s";
+    }
+}
+
 if($colFilter !== 'all') { $sql .= " AND co.color = ?"; $params[] = $colFilter; $types .= "s"; }
 if($sizFilter !== 'all') { $sql .= " AND sz.size = ?"; $params[] = $sizFilter; $types .= "s"; }
 if($statusFilter === 'in_stock') { $sql .= " AND st.current_qty > 0"; }
@@ -90,7 +104,7 @@ if(isset($_GET['ajax'])) {
         
         // Status Badge
         if($qty == 0) { $cls="bg-red-100 text-red-700 border-red-200"; $lbl="Out of Stock"; }
-        elseif($qty < 5) { $cls="bg-yellow-100 text-yellow-700 border-yellow-200"; $lbl="Low Stock"; }
+        elseif($qty < 0) { $cls="bg-yellow-100 text-yellow-700 border-yellow-200"; $lbl="Low Stock"; }
         else { $cls="bg-green-100 text-green-700 border-green-200"; $lbl="In Stock"; }
 
         // Formatting
@@ -112,7 +126,6 @@ if(isset($_GET['ajax'])) {
                 - {$i['total_sold']}
             </td>
 
-            <!-- 🟢 NEW COLUMN: Returned (Good) -->
             <td class='px-6 py-4 text-center text-green-600 font-bold'>
                 ".($i['returned_restock'] > 0 ? "+ {$i['returned_restock']}" : "<span class='text-gray-300'>0</span>")."
             </td>
@@ -275,13 +288,55 @@ if(isset($_GET['ajax'])) {
             
             <!-- Filters -->
             <div class="p-6 border-b border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4 bg-gray-50">
-                <div class="flex flex-wrap gap-4 items-center">
-                    <div>
+                <div class="flex flex-wrap gap-4 items-center z-10">
+                    
+                    <!-- 🟢 MODIFIED: Multi-Select Category Checkboxes using Alpine.js -->
+                    <div class="relative" x-data="{
+                        open: false,
+                        selected: [],
+                        toggle(value) {
+                            if (this.selected.includes(value)) {
+                                this.selected = this.selected.filter(i => i !== value);
+                            } else {
+                                this.selected.push(value);
+                            }
+                            // Update hidden input for load() function to read
+                            document.getElementById('cat').value = this.selected.join(',');
+                            load(); // Trigger AJAX
+                        },
+                        displayText() {
+                            if (this.selected.length === 0) return 'All Categories';
+                            if (this.selected.length === 1) return this.selected[0];
+                            return this.selected.length + ' Selected';
+                        }
+                    }" @click.away="open = false">
                         <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Category</label>
-                        <select id="cat" onchange="load()" class="px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)] text-sm min-w-[140px] cursor-pointer bg-white">
-                        <option value="all">All</option><?php foreach ($categories as $c) echo "<option value='{$c['category_name']}'>{$c['category_name']}</option>"; ?>
-                        </select>
+                        
+                        <!-- Hidden Input used by JS load() function -->
+                        <input type="hidden" id="cat" value="">
+
+                        <!-- Dropdown Button -->
+                        <button @click="open = !open" type="button" class="w-full md:w-48 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)] text-sm bg-white text-left flex justify-between items-center">
+                            <span class="truncate" x-text="displayText()"></span>
+                            <i class="fas fa-chevron-down text-gray-400 text-xs"></i>
+                        </button>
+
+                        <!-- Dropdown Content -->
+                        <div x-show="open" class="absolute mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto" style="display: none;">
+                            <div class="p-2 space-y-1">
+                                <?php foreach ($categories as $c): ?>
+                                    <label class="flex items-center space-x-2 px-2 py-1.5 hover:bg-gray-50 rounded cursor-pointer">
+                                        <input type="checkbox" value="<?= htmlspecialchars($c['category_name']) ?>" 
+                                            @change="toggle($el.value)" 
+                                            class="rounded text-[var(--rose)] focus:ring-[var(--rose)] border-gray-300">
+                                        <span class="text-sm text-gray-700"><?= htmlspecialchars($c['category_name']) ?></span>
+                                    </label>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
                     </div>
+                    <!-- 🟢 END MODIFIED -->
+
                     <div>
                         <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Color</label>
                         <select id="col" onchange="load()" class="px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)] text-sm min-w-[120px] cursor-pointer bg-white">
@@ -360,7 +415,7 @@ function load() {
     timeout = setTimeout(() => {
         const params = new URLSearchParams({
             ajax: 1,
-            category: document.getElementById('cat').value,
+            category: document.getElementById('cat').value, // This now reads the hidden input populated by Alpine.js
             color: document.getElementById('col').value,
             size: document.getElementById('siz').value,
             stock_status: document.getElementById('sts').value,

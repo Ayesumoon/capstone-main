@@ -271,7 +271,7 @@ $result = $stmt->get_result();
                                 <th class="px-6 py-4 text-center bg-blue-50 text-blue-700">Stock In</th>
                                 <th class="px-6 py-4 text-center bg-orange-50 text-orange-700">Sold</th>
                                 <th class="px-6 py-4 text-center bg-green-50 text-green-700">Returned</th>
-                                <th class="px-6 py-4 text-center bg-red-50 text-red-700">Damaged/Wrong</th>
+                                <th class="px-6 py-4 text-center bg-red-50 text-red-700">Damaged</th>
                                 <th class="px-6 py-4 text-center bg-gray-200 text-gray-800">Remaining</th>
                                 <th class="px-6 py-4 text-center">Status</th>
                                 <th class="px-6 py-4 text-center">Return History</th>
@@ -375,7 +375,7 @@ $result = $stmt->get_result();
                                             <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200 uppercase tracking-wide">
                                                 <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span> Out of Stock
                                             </span>
-                                        <?php elseif($remaining < 5): ?>
+                                        <?php elseif($remaining < 0): ?>
                                             <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-600 border border-amber-100 uppercase tracking-wide">
                                                 <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Low Stock
                                             </span>

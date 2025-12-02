@@ -15,7 +15,6 @@ if (!$order_id) {
     exit;
 }
 
-
 // 🧾 Fetch shop info
 $shopName = "Seven Dwarfs Boutique";
 
@@ -27,6 +26,7 @@ $cashier = $cashierRes->get_result()->fetch_assoc();
 $cashier_name = $cashier['first_name'] ?? 'Unknown';
 
 // 📦 Fetch order details
+// Note: We fetch * so transaction_id is included
 $orderQuery = $conn->prepare("
     SELECT o.*, pm.payment_method_name
     FROM orders o
@@ -41,6 +41,9 @@ if (!$order) {
     echo "Receipt not found.";
     exit;
 }
+
+// 🟢 Determine Display ID (Transaction ID > Order ID)
+$display_id = !empty($order['transaction_id']) ? $order['transaction_id'] : 'ORD-' . $order['order_id'];
 
 // 🛒 Fetch ordered items
 $itemQuery = $conn->prepare("
@@ -58,7 +61,7 @@ $items = $itemQuery->get_result();
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Receipt #<?= $order_id; ?></title>
+<title>Receipt #<?= htmlspecialchars($display_id); ?></title>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
 body {
@@ -111,7 +114,8 @@ body {
   <hr>
 
   <div class="text-sm">
-    <p><strong>Receipt No:</strong> #<?= $order['order_id']; ?></p>
+    <!-- 🟢 Updated to show Transaction ID -->
+    <p><strong>Receipt No:</strong> <?= htmlspecialchars($display_id); ?></p>
     <p><strong>Date:</strong> <?= date('M d, Y h:i A', strtotime($order['created_at'])); ?></p>
     <p><strong>Cashier:</strong> <?= htmlspecialchars($cashier_name); ?></p>
     <p><strong>Payment:</strong> <?= htmlspecialchars($order['payment_method_name']); ?></p>
@@ -174,14 +178,13 @@ body {
   </table>
 
   <hr>
-  <p class="text-center text-xs text-gray-400 mt-2">This serves as your official receipt.</p>
+  <p class="text-center text-xs text-gray-400 mt-2">This is your payment receipt.</p>
 </div>
 
 <div class="flex justify-center mt-4">
   <button onclick="window.print()" class="bg-[var(--rose)] hover:bg-[var(--rose-hover)] text-white px-4 py-2 rounded-md shadow">
     🖨️ Print Receipt
   </button>
-  <!-- Back to POS link removed -->
 </div>
 
 <script>
@@ -191,4 +194,3 @@ body {
 </script>
 </body>
 </html>
-
