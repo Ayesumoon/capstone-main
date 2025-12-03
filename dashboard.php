@@ -21,27 +21,21 @@ if ($admin_id) {
 }
 
 // === 2. FILTER HANDLING ===
-$filter = $_GET['filter'] ?? 'today';
-$chartGroupBy = ""; 
+$from = $_GET['from'] ?? null;
+$to = $_GET['to'] ?? null;
+$chartGroupBy = "";
+$filter = ''; // Fix: always define $filter
 
-switch ($filter) {
-    case 'week':
-        $dateCondition = "YEARWEEK(created_at, 1) = YEARWEEK(CURDATE(), 1)";
-        $chartGroupBy = "DATE(created_at)";
-        break;
-    case 'month':
-        $dateCondition = "MONTH(created_at) = MONTH(CURDATE()) AND YEAR(created_at) = YEAR(CURDATE())";
-        $chartGroupBy = "DATE(created_at)";
-        break;
-    case 'all':
-        $dateCondition = "1=1"; 
-        $chartGroupBy = "DATE_FORMAT(created_at, '%Y-%m')"; 
-        break;
-    case 'today':
-    default:
-        $dateCondition = "DATE(created_at) = CURDATE()";
-        $chartGroupBy = "HOUR(created_at)";
-        break;
+if ($from && $to) {
+    // Custom date range
+    $dateCondition = "DATE(created_at) BETWEEN '" . $conn->real_escape_string($from) . "' AND '" . $conn->real_escape_string($to) . "'";
+    $chartGroupBy = "DATE(created_at)";
+    $filter = 'custom';
+} else {
+    // Default: today
+    $dateCondition = "DATE(created_at) = CURDATE()";
+    $chartGroupBy = "HOUR(created_at)";
+    $filter = 'today';
 }
 
 $dateConditionWithAlias = str_replace("created_at", "o.created_at", $dateCondition); 
@@ -357,13 +351,14 @@ $totalNotif = $newOrdersNotif + $lowStockNotif;
         <form method="GET" id="filterForm">
             <label class="text-xs font-bold text-gray-500 uppercase tracking-wider">Time Period</label>
             <div class="relative">
-                <select name="filter" onchange="document.getElementById('filterForm').submit()" class="appearance-none border border-gray-300 bg-white pl-3 pr-8 py-2 rounded-lg shadow-sm focus:ring-2 focus:ring-[var(--rose)] focus:outline-none cursor-pointer text-sm">
-                    <option value="today" <?= $filter === 'today' ? 'selected' : '' ?>>Today</option>
-                    <option value="week" <?= $filter === 'week' ? 'selected' : '' ?>>This Week</option>
-                    <option value="month" <?= $filter === 'month' ? 'selected' : '' ?>>This Month</option>
-                    <option value="all" <?= $filter === 'all' ? 'selected' : '' ?>>All Time</option>
-                </select>
-                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500"><i class="fas fa-chevron-down text-xs"></i></div>
+                <div class="flex gap-2 items-center">
+                    <label for="fromDate" class="text-xs font-bold text-gray-500">From</label>
+                    <input type="date" name="from" id="fromDate" value="<?= htmlspecialchars($_GET['from'] ?? '') ?>" class="border border-gray-300 bg-white px-2 py-2 rounded-lg shadow-sm focus:ring-2 focus:ring-[var(--rose)] focus:outline-none text-sm">
+                    <label for="toDate" class="text-xs font-bold text-gray-500">To</label>
+                    <input type="date" name="to" id="toDate" value="<?= htmlspecialchars($_GET['to'] ?? '') ?>" class="border border-gray-300 bg-white px-2 py-2 rounded-lg shadow-sm focus:ring-2 focus:ring-[var(--rose)] focus:outline-none text-sm">
+                    <button type="submit" class="ml-2 px-4 py-2 bg-[var(--rose)] text-white rounded-lg shadow hover:bg-[var(--rose-hover)] transition text-xs font-bold">Filter</button>
+                </div>
+                <!-- Removed old filter dropdown -->
             </div>
         </form>
         <div class="text-right">

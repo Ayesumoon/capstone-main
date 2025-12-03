@@ -75,8 +75,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_role'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_role'])) {
     $role_id = intval($_POST['role_id']);
 
-    if ($role_id == 2) {
-        $_SESSION['message'] = "Admin role cannot be deleted!";
+    // Only allow Admins to delete, and not their own role
+    $current_admin_id = $_SESSION['admin_id'];
+    $admin_check = $conn->prepare("SELECT role_id FROM adminusers WHERE admin_id = ?");
+    $admin_check->bind_param("i", $current_admin_id);
+    $admin_check->execute();
+    $admin_check->bind_result($current_role_id);
+    $admin_check->fetch();
+    $admin_check->close();
+
+    if ($current_role_id != 2) {
+        $_SESSION['message'] = "Only Admin users can delete roles!";
+    } elseif ($role_id == $current_role_id) {
+        $_SESSION['message'] = "You cannot delete your own role while logged in!";
     } else {
         $check = $conn->prepare("SELECT COUNT(*) FROM adminusers WHERE role_id = ?");
         $check->bind_param("i", $role_id);
@@ -365,20 +376,45 @@ $newOrdersNotif = 0; $lowStockNotif = 0; $totalNotif = 0;
                             <?php while ($role = $roles->fetch_assoc()): ?>
                                 <tr class="hover:bg-gray-50 transition duration-150">
                                     <td class="px-6 py-4 font-medium text-gray-800"><?= htmlspecialchars($role['role_name']); ?></td>
-                                    <td class="px-6 py-4 flex justify-center gap-2">
-                                        <!-- Edit -->
-                                        <button onclick="openEditModal(<?= $role['role_id']; ?>, '<?= $role['role_name']; ?>')" 
-                                           class="text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 p-2 rounded-lg transition" title="Edit">
-                                            <i class="fas fa-edit"></i>
-                                        </button>
-
-                                        <?php if ($role['role_id'] != 2): ?>
-                                            <!-- Delete -->
-                                            <button onclick="openDeleteModal(<?= $role['role_id']; ?>)" 
-                                               class="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-2 rounded-lg transition" title="Delete">
-                                                <i class="fas fa-trash"></i>
+                                    <td class="px-6 py-4">
+                                        <div class="flex items-center justify-center gap-2">
+                                            <!-- Edit -->
+                                            <button onclick="openEditModal(<?= $role['role_id']; ?>, '<?= $role['role_name']; ?>')"
+                                               class="flex items-center justify-center text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 p-2 rounded-lg transition" title="Edit">
+                                                <i class="fas fa-edit"></i>
                                             </button>
-                                        <?php endif; ?>
+                                            <?php
+                                                // Only Admins can see the delete button and modal, and cannot delete their own role
+                                                $roleId = isset($role['role_id']) ? $role['role_id'] : null;
+                                                $adminRoleId = isset($admin['role_id']) ? $admin['role_id'] : null;
+                                                $isCurrentAdminRole = ($roleId !== null && $adminRoleId !== null && $roleId == $adminRoleId);
+                                                $isAdmin = ($admin['role_name'] === 'Admin' || $admin['role_name'] === 'Administrator');
+                                            ?>
+                                            <?php if ($isAdmin && $roleId !== null): ?>
+                                                <?php if ($role['role_name'] === 'Admin' || $role['role_name'] === 'Administrator'): ?>
+                                                    <!-- Delete disabled for Admin role -->
+                                                    <button disabled
+                                                       class="flex items-center justify-center text-red-300 bg-red-50 p-2 rounded-lg transition cursor-not-allowed opacity-50"
+                                                       title="Cannot delete the Admin role">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                <?php elseif (!$isCurrentAdminRole): ?>
+                                                    <!-- Delete enabled for Admins except their own role -->
+                                                    <button onclick="openDeleteModal(<?= $roleId; ?>)"
+                                                       class="flex items-center justify-center text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-2 rounded-lg transition" title="Delete">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                <?php else: ?>
+                                                    <!-- Delete disabled for currently logged-in Admin, but modal still present -->
+                                                    <button disabled
+                                                       onclick="openDeleteModal(<?= $roleId; ?>)"
+                                                       class="flex items-center justify-center text-red-300 bg-red-50 p-2 rounded-lg transition cursor-not-allowed opacity-50"
+                                                       title="Cannot delete your own role">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                <?php endif; ?>
+                                            <?php endif; ?>
+                                        </div>
                                     </td>
                                 </tr>
                             <?php endwhile; ?>
@@ -433,6 +469,7 @@ $newOrdersNotif = 0; $lowStockNotif = 0; $totalNotif = 0;
 </div>
 
 <!-- 🗑️ Delete Role Modal -->
+<?php if ($admin['role_name'] === 'Admin' || $admin['role_name'] === 'Administrator'): ?>
 <div id="deleteModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm animate-fade-in">
   <div class="bg-white p-6 rounded-xl shadow-2xl w-96 transform transition-all">
     <h2 class="text-xl font-bold text-gray-800 mb-2">Delete Role</h2>
@@ -446,6 +483,7 @@ $newOrdersNotif = 0; $lowStockNotif = 0; $totalNotif = 0;
     </form>
   </div>
 </div>
+<?php endif; ?>
 
 <!-- Scripts -->
 <script>
