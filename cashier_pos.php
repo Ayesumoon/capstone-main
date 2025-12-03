@@ -32,15 +32,12 @@ function getVariations($conn, $pid) {
 
 /* ========================================================
    API: VERIFY ADMIN CREDENTIALS (MANAGER OVERRIDE)
-   Updated to check username/password and ensure Role is Admin
 ======================================================== */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['action'] ?? '') === 'verify_password') {
     while (ob_get_level()) ob_end_clean();
     header('Content-Type: application/json');
     $input = json_decode(file_get_contents('php://input'), true);
     try {
-        // We don't check $admin_id here because we are verifying a superior's credentials
-        
         $username = $input['username'] ?? '';
         $password = $input['password'] ?? '';
 
@@ -48,16 +45,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['action'] ?? '') === 'verify
             throw new Exception("Please enter Admin credentials.");
         }
 
-        // 1. Fetch user by Username
         $stmt = $conn->prepare("SELECT admin_id, password_hash, role_id FROM adminusers WHERE username = ?");
         $stmt->bind_param("s", $username); 
         $stmt->execute(); 
         $res = $stmt->get_result();
 
         if ($row = $res->fetch_assoc()) {
-            // 2. Verify Password
             if (password_verify($password, $row['password_hash'])) {
-                // 3. Verify Role (Must be Admin, role_id = 2)
                 if ($row['role_id'] == 2) {
                     echo json_encode(['status' => 'success']);
                 } else {
@@ -375,7 +369,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
     <!-- ITEM DISCOUNT MODAL -->
     <div id="itemDiscountModal" class="fixed inset-0 z-50 flex items-center justify-center invisible opacity-0 modal-backdrop"><div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onclick="closeItemDiscountModal()"></div><div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl relative z-10 p-6 transform scale-95 opacity-0 modal-content" id="itemDiscountModalContent"><div class="flex justify-between items-center mb-5"><h4 class="text-lg font-bold text-slate-800">Item Discount</h4><button onclick="closeItemDiscountModal()" class="text-slate-400 hover:text-rose-500 transition text-2xl leading-none">&times;</button></div><p class="text-sm text-slate-500 mb-4">Set percentage discount for <span id="itemDiscountName" class="font-bold text-slate-700"></span></p><div class="space-y-4"><div><label class="text-xs font-bold text-slate-400 uppercase mb-1 block">Discount Percent (%)</label><input type="number" id="itemDiscountPercent" placeholder="0" max="100" class="w-full border border-slate-200 rounded-xl px-4 py-3 font-bold text-lg outline-none focus:ring-2 focus:ring-rose-200 transition-shadow"></div></div><div class="flex gap-3 mt-6"><button onclick="applyItemDiscount(0)" class="px-4 py-3 rounded-xl border border-slate-200 text-slate-500 font-bold hover:bg-slate-50 active:scale-95 transition">Remove</button><button onclick="confirmItemDiscount()" class="flex-1 py-3 rounded-xl bg-rose-600 text-white font-bold hover:bg-rose-700 shadow-lg shadow-rose-200 active:scale-95 transition">Save</button></div></div></div>
     
-    <!-- SECURITY CHECK MODAL (UPDATED) -->
+    <!-- SECURITY CHECK MODAL -->
     <div id="securityModal" class="fixed inset-0 z-[60] flex items-center justify-center invisible opacity-0 modal-backdrop">
         <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"></div>
         <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl relative z-10 p-6 transform scale-95 opacity-0 modal-content" id="securityModalContent">
@@ -385,7 +379,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
                 <p class="text-xs text-slate-500">Manager override required for refund.</p>
             </div>
             
-            <!-- 🟢 NEW: Admin Username Field -->
             <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Admin Username</label>
             <input type="text" id="securityUsername" class="w-full border border-slate-200 rounded-xl px-4 py-3 text-lg outline-none focus:ring-2 focus:ring-rose-200 mb-3" placeholder="Enter Username">
             
@@ -412,14 +405,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
         <div class="flex-1 overflow-y-auto p-6 space-y-6">
             <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 transition-all focus-within:ring-2 ring-rose-100">
                 <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Find Order</label>
-                <div class="flex gap-2 mb-2">
-                    <select id="searchMode" class="bg-white border border-slate-300 rounded-lg px-2 py-2 text-sm font-bold text-slate-700 w-full outline-none focus:border-rose-400">
-                        <option value="order">Order ID</option>
-                        <option value="transaction">Transaction ID</option>
-                    </select>
-                </div>
                 <div class="flex gap-2">
-                    <input type="text" id="searchOrderId" class="flex-1 bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-rose-400 transition" placeholder="Enter ID...">
+                    <input type="text" id="searchOrderId" class="flex-1 bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-rose-400 transition" placeholder="Enter Transaction ID...">
                     <button onclick="fetchOrderItems()" class="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-900 transition shadow-lg active:scale-95">Find</button>
                 </div>
                 <p id="orderMsg" class="text-xs mt-2 font-medium hidden"></p>
@@ -438,8 +425,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
     </div>
 
     <script>
-        /* --- JS LOGIC (SHORTENED FOR BREVITY AS REQUESTED) --- */
-        // ... (Previous logic remains the same) ...
         let cart = []; let currentProduct = null; let activeDiscount = { type: 'percent', value: 0 }; let activeItemDiscountIndex = null; let modalState = { variations: [], selectedSize: null, selectedColor: null }; const itemsPerPage = 12; let currentPage = 1;
         const productCards = Array.from(document.querySelectorAll('.group[data-id]'));
         const searchInput = document.getElementById('productSearch');
@@ -474,8 +459,105 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
         if(searchInput) searchInput.addEventListener('input', () => { currentPage = 1; renderProducts(); });
         if(catFilter) catFilter.addEventListener('change', () => { currentPage = 1; renderProducts(); });
 
-        function renderCart() { const list = document.getElementById('cartList'); if(!list) return; list.innerHTML = ''; let subtotal = 0; let totalQty = 0; cart.forEach((item, i) => { const origPrice = parseFloat(item.original_price); const discountPct = parseFloat(item.discount_percent || 0); const discountedPrice = origPrice - (origPrice * (discountPct / 100)); item.price = discountedPrice; item.discount_amount = (origPrice * (discountPct / 100)); subtotal += item.price * item.quantity; totalQty += item.quantity; const div = document.createElement('div'); div.className = "bg-white p-3 rounded-xl border border-slate-100 flex justify-between items-center shadow-sm relative overflow-hidden group hover:border-rose-200 transition-colors"; div.style.animation = "fadeIn 0.3s ease-out"; let priceHtml = `<div class="text-rose-600 font-bold mt-1">₱${(item.price*item.quantity).toFixed(2)}</div>`; if(discountPct > 0) { priceHtml = `<div class="mt-1 flex flex-col"><span class="text-[10px] text-slate-400 line-through">₱${(origPrice*item.quantity).toFixed(2)}</span><span class="text-rose-600 font-bold">₱${(item.price*item.quantity).toFixed(2)} <span class="text-[10px] bg-rose-100 text-rose-600 px-1 rounded">-${discountPct}%</span></span></div>`; } div.innerHTML = `<div class="flex-1 min-w-0"><div class="font-bold text-sm truncate text-slate-800 flex items-center gap-2">${item.name} <button onclick="openItemDiscount(${i})" class="text-xs text-slate-300 hover:text-rose-500 transition" title="Item Discount"><i class="fas fa-tag"></i></button></div><div class="text-xs text-slate-500 font-medium mt-0.5"><span class="bg-slate-100 px-1.5 py-0.5 rounded text-[10px]">${item.size||'-'}</span> <span class="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] ml-1">${item.color||'-'}</span></div>${priceHtml}</div><div class="flex flex-col items-end gap-2 z-10"><div class="flex items-center bg-slate-50 border border-slate-200 rounded-lg"><button type="button" onclick="upd(${i},-1)" class="w-7 h-7 flex items-center justify-center text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-l-lg transition">-</button><span class="text-xs font-bold w-6 text-center text-slate-700">${item.quantity}</span><button type="button" onclick="upd(${i},1)" class="w-7 h-7 flex items-center justify-center text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-r-lg transition">+</button></div><button type="button" onclick="rm(${i})" class="text-[10px] text-slate-400 hover:text-rose-500 font-medium transition-colors">Remove</button></div>`; list.appendChild(div); }); if (cart.length === 0) list.innerHTML = '<div class="h-full flex flex-col items-center justify-center text-slate-300 space-y-2 animate-pulse"><i class="fas fa-shopping-basket text-4xl"></i><p class="text-sm font-medium">Cart is empty</p></div>'; document.getElementById('itemCountBadge').textContent = `${totalQty} items`; let globalDiscountAmount = 0; if (activeDiscount.type === 'percent') globalDiscountAmount = subtotal * (activeDiscount.value / 100); else globalDiscountAmount = activeDiscount.value; if (globalDiscountAmount > subtotal) globalDiscountAmount = subtotal; const finalTotal = subtotal - globalDiscountAmount; document.getElementById('cartSubtotal').textContent = '₱' + subtotal.toFixed(2); document.getElementById('cartTotal').textContent = '₱' + finalTotal.toFixed(2); const discRow = document.getElementById('discountRow'); if (globalDiscountAmount > 0) { discRow.classList.remove('hidden'); discRow.style.display = 'flex'; document.getElementById('cartDiscountDisp').textContent = '-₱' + globalDiscountAmount.toFixed(2); } else { discRow.classList.add('hidden'); } document.getElementById('totalField').value = finalTotal.toFixed(2); document.getElementById('discountField').value = globalDiscountAmount.toFixed(2); toggleCashFields(); updateChange(); }
-        window.upd = (i, d) => { cart[i].quantity += d; if (cart[i].quantity < 1) cart[i].quantity = 1; renderCart(); }
+        /* --- UPDATED: RENDER CART WITH BIG BUTTON & STOCK DISPLAY --- */
+        function renderCart() {
+            const list = document.getElementById('cartList');
+            if (!list) return;
+            list.innerHTML = '';
+            let subtotal = 0;
+            let totalQty = 0;
+
+            cart.forEach((item, i) => {
+                const origPrice = parseFloat(item.original_price);
+                const discountPct = parseFloat(item.discount_percent || 0);
+                const discountedPrice = origPrice - (origPrice * (discountPct / 100));
+                
+                item.price = discountedPrice;
+                item.discount_amount = (origPrice * (discountPct / 100));
+                
+                subtotal += item.price * item.quantity;
+                totalQty += item.quantity;
+                
+                // Calculate stock remaining in cart context
+                const remaining = item.max_stock - item.quantity;
+
+                const div = document.createElement('div');
+                div.className = "bg-white p-3 rounded-xl border border-slate-100 flex justify-between items-start shadow-sm relative overflow-hidden group hover:border-rose-200 transition-colors";
+                div.style.animation = "fadeIn 0.3s ease-out";
+
+                let priceHtml = `<div class="text-rose-600 font-bold mt-1">₱${(item.price*item.quantity).toFixed(2)}</div>`;
+                if (discountPct > 0) {
+                    priceHtml = `<div class="mt-1 flex flex-col"><span class="text-[10px] text-slate-400 line-through">₱${(origPrice*item.quantity).toFixed(2)}</span><span class="text-rose-600 font-bold">₱${(item.price*item.quantity).toFixed(2)} <span class="text-[10px] bg-rose-100 text-rose-600 px-1 rounded">-${discountPct}%</span></span></div>`;
+                }
+
+                div.innerHTML = `
+                    <div class="flex-1 min-w-0 pr-2">
+                        <div class="font-bold text-sm truncate text-slate-800 mb-1.5">${item.name}</div>
+                        
+                        <!-- BIG DISCOUNT BUTTON -->
+                        <button type="button" onclick="openItemDiscount(${i})" class="w-full mb-2 bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold py-2 px-3 rounded-lg shadow-sm flex items-center justify-center gap-2 transition-all active:scale-95">
+                            <i class="fas fa-tag"></i> ${discountPct > 0 ? 'Edit Discount' : 'Apply Discount'}
+                        </button>
+
+                        <div class="text-xs text-slate-500 font-medium">
+                            <span class="bg-slate-100 px-1.5 py-0.5 rounded text-[10px]">${item.size||'-'}</span> 
+                            <span class="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] ml-1">${item.color||'-'}</span>
+                            <!-- STOCK DISPLAY -->
+                            <span class="text-xs font-bold ${remaining < 5 ? 'text-rose-600' : 'text-slate-400'} ml-1">(${remaining} left)</span>
+                        </div>
+                        ${priceHtml}
+                    </div>
+                    <div class="flex flex-col items-end gap-2 z-10 pt-1">
+                        <div class="flex items-center bg-slate-50 border border-slate-200 rounded-lg">
+                            <button type="button" onclick="upd(${i},-1)" class="w-7 h-7 flex items-center justify-center text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-l-lg transition">-</button>
+                            <span class="text-xs font-bold w-6 text-center text-slate-700">${item.quantity}</span>
+                            <button type="button" onclick="upd(${i},1)" class="w-7 h-7 flex items-center justify-center text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-r-lg transition">+</button>
+                        </div>
+                        <button type="button" onclick="rm(${i})" class="text-[10px] text-slate-400 hover:text-rose-500 font-medium transition-colors">Remove</button>
+                    </div>`;
+                
+                list.appendChild(div);
+            });
+
+            if (cart.length === 0) {
+                list.innerHTML = '<div class="h-full flex flex-col items-center justify-center text-slate-300 space-y-2 animate-pulse"><i class="fas fa-shopping-basket text-4xl"></i><p class="text-sm font-medium">Cart is empty</p></div>';
+            }
+
+            document.getElementById('itemCountBadge').textContent = `${totalQty} items`;
+            let globalDiscountAmount = 0; 
+            if (activeDiscount.type === 'percent') globalDiscountAmount = subtotal * (activeDiscount.value / 100); 
+            else globalDiscountAmount = activeDiscount.value; 
+            
+            if (globalDiscountAmount > subtotal) globalDiscountAmount = subtotal; 
+            const finalTotal = subtotal - globalDiscountAmount; 
+            
+            document.getElementById('cartSubtotal').textContent = '₱' + subtotal.toFixed(2); 
+            document.getElementById('cartTotal').textContent = '₱' + finalTotal.toFixed(2); 
+            
+            const discRow = document.getElementById('discountRow'); 
+            if (globalDiscountAmount > 0) { 
+                discRow.classList.remove('hidden'); 
+                discRow.style.display = 'flex'; 
+                document.getElementById('cartDiscountDisp').textContent = '-₱' + globalDiscountAmount.toFixed(2); 
+            } else { 
+                discRow.classList.add('hidden'); 
+            } 
+            
+            document.getElementById('totalField').value = finalTotal.toFixed(2); 
+            document.getElementById('discountField').value = globalDiscountAmount.toFixed(2); 
+            toggleCashFields(); 
+            updateChange(); 
+        }
+
+        /* --- UPDATED: UPD FUNCTION RESPECTS MAX STOCK --- */
+        window.upd = (i, d) => { 
+            const item = cart[i];
+            if (d > 0 && item.quantity >= item.max_stock) return alert("Max stock reached for this item.");
+            item.quantity += d; 
+            if (item.quantity < 1) item.quantity = 1; 
+            renderCart(); 
+        }
+
         window.rm = (i) => { cart.splice(i, 1); renderCart(); }
         window.prepareCartData = () => { document.getElementById('cartData').value = JSON.stringify(cart); }
         window.updateChange = () => { const t = parseFloat(document.getElementById('totalField').value) || 0; const cInput = document.getElementById('cashGiven'); if(!cInput) return; const c = parseFloat(cInput.value) || 0; const d = c - t; const changeEl = document.getElementById('cartChange'); if(changeEl.style.display !== 'none') changeEl.innerHTML = c > 0 ? (d >= -0.01 ? `<div class="text-green-700 font-bold text-sm bg-green-50 border border-green-100 p-3 rounded-xl flex justify-between items-center shadow-sm"><span>Change</span> <span>₱${d.toFixed(2)}</span></div>` : `<div class="text-rose-700 font-bold text-sm bg-rose-50 border border-rose-100 p-3 rounded-xl flex justify-between items-center shadow-sm"><span>Short</span> <span>₱${Math.abs(d).toFixed(2)}</span></div>`) : ''; }
@@ -499,7 +581,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
             let infoDiv = document.getElementById('stockInfoDiv'); if (!infoDiv) { infoDiv = document.createElement('div'); infoDiv.id = 'stockInfoDiv'; infoDiv.className = 'mt-3 text-xs font-bold text-slate-500'; sDiv.parentNode.parentNode.insertBefore(infoDiv, sDiv.parentNode.nextSibling); }
             let stockMsg = ''; if (modalState.selectedSize && modalState.selectedColor) { const rem = getRemainingStock(modalState.selectedSize, modalState.selectedColor); stockMsg = `Remaining stock: <span class="text-rose-600">${rem}</span>`; } else { stockMsg = 'Select size and color to see stock'; } infoDiv.innerHTML = stockMsg;
         }
-        document.getElementById('confirmAdd').onclick = () => { const hasSizes = document.getElementById('sizeDiv').style.display !== 'none'; const hasColors = document.getElementById('colorDiv').style.display !== 'none'; if (hasSizes && !modalState.selectedSize) return alert("Please select a size"); if (hasColors && !modalState.selectedColor) return alert("Please select a color"); const size = modalState.selectedSize || 'Free Size'; const color = modalState.selectedColor || 'Standard'; const stockItem = modalState.variations.find(v => v.size === size && v.color === color); if (!stockItem || stockItem.qty <= 0) return alert("Selected combination is out of stock."); const inCart = cart.find(i => i.product_id === currentProduct.id && i.size === size && i.color === color); const remaining = stockItem.qty - (inCart ? inCart.quantity : 0); if (remaining <= 0) return alert("No more stock available for this combination."); if (inCart) { if (inCart.quantity + 1 > stockItem.qty) return alert("Cannot add more (Stock limit reached)"); inCart.quantity++; } else { cart.push({ product_id: currentProduct.id, name: currentProduct.name, price: currentProduct.price, original_price: currentProduct.price, discount_percent: 0, quantity: 1, size, color }); } renderCart(); closeModal(); };
+
+        /* --- UPDATED: SAVE MAX STOCK WHEN ADDING --- */
+        document.getElementById('confirmAdd').onclick = () => { 
+            const hasSizes = document.getElementById('sizeDiv').style.display !== 'none'; 
+            const hasColors = document.getElementById('colorDiv').style.display !== 'none'; 
+            if (hasSizes && !modalState.selectedSize) return alert("Please select a size"); 
+            if (hasColors && !modalState.selectedColor) return alert("Please select a color"); 
+            
+            const size = modalState.selectedSize || 'Free Size'; 
+            const color = modalState.selectedColor || 'Standard'; 
+            
+            const stockItem = modalState.variations.find(v => v.size === size && v.color === color); 
+            if (!stockItem || stockItem.qty <= 0) return alert("Selected combination is out of stock."); 
+            
+            const inCart = cart.find(i => i.product_id === currentProduct.id && i.size === size && i.color === color); 
+            const remaining = stockItem.qty - (inCart ? inCart.quantity : 0); 
+            if (remaining <= 0) return alert("No more stock available for this combination."); 
+            
+            if (inCart) { 
+                if (inCart.quantity + 1 > stockItem.qty) return alert("Cannot add more (Stock limit reached)"); 
+                inCart.quantity++; 
+                // inCart.max_stock is already set
+            } else { 
+                cart.push({ 
+                    product_id: currentProduct.id, 
+                    name: currentProduct.name, 
+                    price: currentProduct.price, 
+                    original_price: currentProduct.price, 
+                    discount_percent: 0, 
+                    quantity: 1, 
+                    size, 
+                    color,
+                    max_stock: stockItem.qty // Save max stock here
+                }); 
+            } 
+            renderCart(); 
+            closeModal(); 
+        };
 
         const dModal = document.getElementById('discountModal'); const dContent = document.getElementById('discountModalContent');
         window.openGlobalDiscountModal = () => { document.getElementById('discountValue').value = activeDiscount.value > 0 ? activeDiscount.value : ''; toggleDiscountType(activeDiscount.type); openModalLogic(dModal, dContent); }
@@ -523,11 +642,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
         document.getElementById('closeReturnModal').onclick = closeReturn; rBackdrop.onclick = closeReturn;
         
         async function fetchOrderItems() {
-            const mode = document.getElementById('searchMode').value;
+            // UPDATED: 'mode' is hardcoded now since dropdown is removed
+            const mode = 'transaction'; 
             const inputVal = document.getElementById('searchOrderId').value.trim();
             const msg = document.getElementById('orderMsg');
             
-            if (!inputVal) return alert(mode === 'order' ? "Enter Order ID" : "Enter Transaction ID");
+            if (!inputVal) return alert("Enter Transaction ID");
             
             msg.textContent = "Searching...";
             msg.className = "text-xs mt-2 text-slate-500 block animate-pulse";
@@ -535,7 +655,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
             
             try {
                 if (mode === 'transaction') {
-                    // Look up Order ID by Transaction ID String (e.g. TRX-...)
                     const response = await fetch(`?action=get_order_id_by_transaction&tid=${encodeURIComponent(inputVal)}`);
                     const textData = await response.text();
                     let data;
@@ -550,7 +669,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
                     oid = data.order_id;
                 }
                 
-                // Now fetch order details using the resolved (or direct) Order ID
                 const response = await fetch(`?action=get_order_details&oid=${oid}`);
                 const textData = await response.text();
                 let data;
