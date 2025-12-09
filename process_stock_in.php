@@ -10,39 +10,43 @@ if (!isset($_SESSION['admin_id'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // 1. Get Data
     $product_id  = intval($_POST['product_id']);
-    $color_id    = intval($_POST['color_id']);
-    $size_id     = intval($_POST['size_id']);
     $quantity    = intval($_POST['quantity']);
     $supplier_id = intval($_POST['supplier_id']);
+
+    // 🟢 Handle Optional Color/Size (Convert empty to NULL, otherwise Integer)
+    $color_id = !empty($_POST['color_id']) ? intval($_POST['color_id']) : null;
+    $size_id  = !empty($_POST['size_id']) ? intval($_POST['size_id']) : null;
     
-    // 🟢Get the prices from the form
-    // We use floatval because prices have decimals
+    // Get Prices
     $supplier_price = isset($_POST['supplier_price']) ? floatval($_POST['supplier_price']) : 0.00;
     $selling_price  = isset($_POST['price']) ? floatval($_POST['price']) : 0.00;
 
-    // Validate inputs
-    if ($product_id <= 0 || $color_id <= 0 || $size_id <= 0 || $quantity <= 0 || $supplier_id <= 0) {
-        die("Invalid input.");
+    // 🟢 Validate inputs (Removed checks for color_id and size_id)
+    if ($product_id <= 0 || $quantity <= 0 || $supplier_id <= 0) {
+        die("Invalid input. Product, Quantity, and Supplier are required.");
     }
 
-   
+    // 2️⃣ Update Product Prices (If changed)
     if ($product_id > 0) {
         $updatePrices = $conn->prepare("
             UPDATE products 
             SET supplier_price = ?, price_id = ?, supplier_id = ? 
             WHERE product_id = ?
         ");
-        // "d" stands for decimal/double, "i" for integer
         $updatePrices->bind_param("ddii", $supplier_price, $selling_price, $supplier_id, $product_id);
         $updatePrices->execute();
         $updatePrices->close();
     }
 
-    // 2️⃣ Check if stock entry exists for this product + color + size
+    // 3️⃣ Check if stock entry exists
+    // 🟢 USE `<=>` (NULL-SAFE EQUALITY)
+    // Standard SQL '=' returns null if comparing to null. '<=>' returns true if both are null.
     $checkStock = $conn->prepare("
         SELECT stock_id, current_qty 
         FROM stock 
-        WHERE product_id = ? AND color_id = ? AND size_id = ?
+        WHERE product_id = ? 
+        AND color_id <=> ? 
+        AND size_id <=> ?
         LIMIT 1
     ");
     $checkStock->bind_param("iii", $product_id, $color_id, $size_id);
@@ -50,20 +54,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $result = $checkStock->get_result();
 
     if ($row = $result->fetch_assoc()) {
-        // 3️⃣ Update existing stock quantity
+        // 4️⃣ Update existing stock quantity
         $stock_id = $row['stock_id'];
         $new_qty = $row['current_qty'] + $quantity;
 
-        $updateStock = $conn->prepare("
-            UPDATE stock 
-            SET current_qty = ? 
-            WHERE stock_id = ?
-        ");
+        $updateStock = $conn->prepare("UPDATE stock SET current_qty = ? WHERE stock_id = ?");
         $updateStock->bind_param("ii", $new_qty, $stock_id);
         $updateStock->execute();
         $updateStock->close();
     } else {
-        // 4️⃣ Insert a new stock record for this variant
+        // 5️⃣ Insert a new stock record (Passing NULL if allowed)
         $insertStock = $conn->prepare("
             INSERT INTO stock (product_id, color_id, size_id, current_qty) 
             VALUES (?, ?, ?, ?)
@@ -75,16 +75,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     $checkStock->close();
 
-    // 5️⃣ Record the stock-in transaction
+    // 6️⃣ Record the stock-in transaction
     $insertStockIn = $conn->prepare("
-        INSERT INTO stock_in (stock_id, supplier_id, quantity, date_added) 
-        VALUES (?, ?, ?, NOW())
+        INSERT INTO stock_in (stock_id, supplier_id, quantity, date_added, purchase_price) 
+        VALUES (?, ?, ?, NOW(), ?)
     ");
-    $insertStockIn->bind_param("iii", $stock_id, $supplier_id, $quantity);
+    // Added purchase_price to stock_in history for reporting accuracy
+    $insertStockIn->bind_param("iiid", $stock_id, $supplier_id, $quantity, $supplier_price);
     $insertStockIn->execute();
     $insertStockIn->close();
 
-    // 6️⃣ Optional: Update total product-level stock tracking
+    // 7️⃣ Update total product-level stock tracking (Product table sum)
     $updateProductStock = $conn->prepare("
         UPDATE products 
         SET stocks = COALESCE(stocks, 0) + ? 
@@ -94,7 +95,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $updateProductStock->execute();
     $updateProductStock->close();
 
-    // 7️⃣ Redirect back with success
+    // 8️⃣ Log Action
+    $admin_id = $_SESSION['admin_id'];
+    $admin_username = $_SESSION['username'] ?? 'Admin'; // Assuming session has username
+    $action = "Added Stock (Qty: $quantity) for Product ID: $product_id";
+    
+    $logStmt = $conn->prepare("INSERT INTO system_logs (user_id, username, role_id, action) VALUES (?, ?, 2, ?)");
+    $logStmt->bind_param("iss", $admin_id, $admin_username, $action);
+    $logStmt->execute();
+    $logStmt->close();
+
+    // 9️⃣ Redirect back
     header("Location: stock_management.php?success=1");
     exit;
 } else {

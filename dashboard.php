@@ -23,8 +23,15 @@ if ($admin_id) {
 // === 2. FILTER HANDLING ===
 $from = $_GET['from'] ?? null;
 $to = $_GET['to'] ?? null;
+
+// 🟢 UX IMPROVEMENT: If 'From' is selected but 'To' is empty, default 'To' to Today.
+// This ensures the automatic filter works immediately after selecting just the first date.
+if ($from && empty($to)) {
+    $to = date('Y-m-d');
+}
+
 $chartGroupBy = "";
-$filter = ''; // Fix: always define $filter
+$filter = '';
 
 if ($from && $to) {
     // Custom date range
@@ -103,6 +110,12 @@ if ($filter == 'today') {
 } elseif ($filter == 'all') {
     if (empty($rawChartData)) { $chartLabels[] = "No Data"; $chartValues[] = 0; }
     else { foreach ($rawChartData as $ym => $count) { $chartLabels[] = date("M Y", strtotime($ym . "-01")); $chartValues[] = $count; } }
+} else {
+    // Custom Range Chart Handling
+    foreach ($rawChartData as $date => $count) {
+        $chartLabels[] = date("M j", strtotime($date));
+        $chartValues[] = $count;
+    }
 }
 
 // 7. Chart 2 Data
@@ -151,35 +164,17 @@ $totalNotif = $newOrdersNotif + $lowStockNotif;
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-    /* 1. View Transitions API (For smooth page morphing) */
-    @view-transition {
-        navigation: auto;
-    }
-
-    /* 2. Fade In Animation (Fallback & Initial Load) */
-    @keyframes fadeInSlide {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    .animate-fade-in {
-        animation: fadeInSlide 0.4s ease-out;
-    }
-
-    /* 3. NProgress Customization */
+    @view-transition { navigation: auto; }
+    @keyframes fadeInSlide { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .animate-fade-in { animation: fadeInSlide 0.4s ease-out; }
     #nprogress .bar { background: var(--rose) !important; height: 3px !important; }
     #nprogress .peg { box-shadow: 0 0 10px var(--rose), 0 0 5px var(--rose) !important; }
     #nprogress .spinner-icon { border-top-color: var(--rose) !important; border-left-color: var(--rose) !important; }
   </style>
 </head>
 
-<!-- Added 'animate-fade-in' class to body -->
 <body class="text-sm animate-fade-in">
 
-<!-- 
-    Updated x-data:
-    1. Checks localStorage for 'sidebarOpen'. 
-    2. Uses x-init to save changes to localStorage.
--->
 <div class="flex min-h-screen" 
      x-data="{ 
         sidebarOpen: localStorage.getItem('sidebarOpen') === 'false' ? false : true, 
@@ -193,14 +188,14 @@ $totalNotif = $newOrdersNotif + $lowStockNotif;
     class="bg-white shadow-md fixed top-0 left-0 h-screen z-30 transition-all duration-300 ease-in-out no-scrollbar overflow-y-auto overflow-x-hidden"
     :class="sidebarOpen ? 'w-64' : 'w-20'"
   >
-    <!-- Logo Section -->
+    <!-- Logo -->
     <div class="p-5 border-b flex items-center h-20 transition-all duration-300" :class="sidebarOpen ? 'space-x-3' : 'justify-center pl-0'">
         <img src="logo2.png" alt="Logo" class="rounded-full w-10 h-10 flex-shrink-0" />
         <h2 class="text-lg font-bold text-[var(--rose)] whitespace-nowrap overflow-hidden transition-all duration-300" 
             x-show="sidebarOpen" x-transition.opacity>SevenDwarfs</h2>
     </div>
 
-    <!-- Admin Profile Section -->
+    <!-- Admin Profile -->
     <div class="p-5 border-b flex items-center h-24 transition-all duration-300" :class="sidebarOpen ? 'space-x-3' : 'justify-center pl-0'">
       <img src="newID.jpg" alt="Admin" class="rounded-full w-10 h-10 flex-shrink-0" />
       <div x-show="sidebarOpen" x-transition.opacity class="whitespace-nowrap overflow-hidden">
@@ -225,7 +220,6 @@ $totalNotif = $newOrdersNotif + $lowStockNotif;
           </div>
           <i x-show="sidebarOpen" class="fas fa-chevron-down transition-transform duration-200" :class="{ 'rotate-180': userMenu }"></i>
         </button>
-        <!-- Submenu -->
         <ul x-show="userMenu" class="text-sm text-gray-700 space-y-1 mt-1 bg-gray-50 rounded-md overflow-hidden transition-all" :class="sidebarOpen ? 'pl-8' : 'pl-0 text-center'">
           <li>
             <a href="manage_users.php" class="block py-2 hover:text-[var(--rose)] flex items-center" :class="sidebarOpen ? '' : 'justify-center'" title="Users">
@@ -302,18 +296,15 @@ $totalNotif = $newOrdersNotif + $lowStockNotif;
     </nav>
   </aside>
 
-<!-- Main Content -->
-  <!-- Dynamic Margin: ml-64 when open, ml-20 when closed -->
+  <!-- Main Content -->
   <main class="flex-1 flex flex-col pt-20 bg-gray-50 transition-all duration-300 ease-in-out" 
         :class="sidebarOpen ? 'ml-64' : 'ml-20'">
     
     <!-- Header -->
-    <!-- Dynamic Left Position: left-64 or left-20 -->
     <header class="bg-[var(--rose)] text-white p-4 flex justify-between items-center shadow-md rounded-bl-2xl fixed top-0 right-0 z-20 transition-all duration-300 ease-in-out"
             :class="sidebarOpen ? 'left-64' : 'left-20'">
       
       <div class="flex items-center gap-4">
-          <!-- Toggle Button -->
           <button @click="sidebarOpen = !sidebarOpen" class="text-white hover:bg-white/20 p-2 rounded-full transition focus:outline-none">
              <i class="fas fa-bars text-xl"></i>
           </button>
@@ -329,7 +320,6 @@ $totalNotif = $newOrdersNotif + $lowStockNotif;
               <span class="absolute -top-1.5 -right-1.5 bg-red-600 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 shadow"><?= $totalNotif ?></span>
             <?php endif; ?>
           </button>
-          <!-- Dropdown -->
           <div x-show="open" class="absolute right-0 mt-3 w-72 bg-white rounded-xl shadow-lg ring-1 ring-gray-100 overflow-hidden z-50 text-gray-700" style="display: none;">
              <div class="p-3 border-b border-gray-100 font-semibold text-sm">Notifications</div>
              <ul class="max-h-64 overflow-y-auto">
@@ -346,21 +336,37 @@ $totalNotif = $newOrdersNotif + $lowStockNotif;
       </div>
     </header>
 
-    <!-- Filter Bar -->
+    <!-- 🟢 AUTOMATIC FILTER SECTION -->
     <section class="px-6 mt-6 flex flex-col sm:flex-row justify-between items-end gap-4">
-        <form method="GET" id="filterForm">
-            <label class="text-xs font-bold text-gray-500 uppercase tracking-wider">Time Period</label>
-            <div class="relative">
-                <div class="flex gap-2 items-center">
-                    <label for="fromDate" class="text-xs font-bold text-gray-500">From</label>
-                    <input type="date" name="from" id="fromDate" value="<?= htmlspecialchars($_GET['from'] ?? '') ?>" class="border border-gray-300 bg-white px-2 py-2 rounded-lg shadow-sm focus:ring-2 focus:ring-[var(--rose)] focus:outline-none text-sm">
-                    <label for="toDate" class="text-xs font-bold text-gray-500">To</label>
-                    <input type="date" name="to" id="toDate" value="<?= htmlspecialchars($_GET['to'] ?? '') ?>" class="border border-gray-300 bg-white px-2 py-2 rounded-lg shadow-sm focus:ring-2 focus:ring-[var(--rose)] focus:outline-none text-sm">
-                    <button type="submit" class="ml-2 px-4 py-2 bg-[var(--rose)] text-white rounded-lg shadow hover:bg-[var(--rose-hover)] transition text-xs font-bold">Filter</button>
-                </div>
-                <!-- Removed old filter dropdown -->
+        <form method="GET" id="filterForm" class="flex flex-wrap items-end gap-2">
+            <div class="flex flex-col gap-1">
+                <label for="fromDate" class="text-xs font-bold text-gray-500 uppercase tracking-wider">From</label>
+                <!-- Added onchange -->
+                <input type="date" name="from" id="fromDate" 
+                       value="<?= htmlspecialchars($from ?? '') ?>" 
+                       onchange="this.form.submit()"
+                       class="border border-gray-300 bg-white px-3 py-2 rounded-lg shadow-sm focus:ring-2 focus:ring-[var(--rose)] focus:outline-none text-sm cursor-pointer hover:bg-gray-50 transition">
             </div>
+
+            <div class="flex flex-col gap-1">
+                <label for="toDate" class="text-xs font-bold text-gray-500 uppercase tracking-wider">To</label>
+                <!-- Added onchange -->
+                <input type="date" name="to" id="toDate" 
+                       value="<?= htmlspecialchars($to ?? '') ?>" 
+                       onchange="this.form.submit()"
+                       class="border border-gray-300 bg-white px-3 py-2 rounded-lg shadow-sm focus:ring-2 focus:ring-[var(--rose)] focus:outline-none text-sm cursor-pointer hover:bg-gray-50 transition">
+            </div>
+
+            <!-- Added Reset Button when filter is active -->
+            <?php if($filter === 'custom'): ?>
+                <div class="h-9 flex items-end">
+                    <a href="dashboard.php" class="px-4 py-2 bg-gray-200 text-gray-600 rounded-lg shadow hover:bg-gray-300 transition text-xs font-bold flex items-center gap-1">
+                        <i class="fas fa-times"></i> Reset
+                    </a>
+                </div>
+            <?php endif; ?>
         </form>
+
         <div class="text-right">
              <span class="text-xs text-gray-500 block">Date: <?= date('M j, Y') ?></span>
              <?php if($mostSalesCount > 0): ?>

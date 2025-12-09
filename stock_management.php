@@ -447,20 +447,23 @@ if ($stmt = $conn->prepare($stockQuery)) {
             </div>
         </div>
 
+        <!-- 🟢 UPDATED: Color & Size are now optional -->
         <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-bold text-gray-700 mb-1">Color</label>
-              <select name="color_id" class="border border-gray-300 w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)]" required>
-                <option value="">Select</option>
+              <label class="block text-sm font-bold text-gray-700 mb-1">Color (Optional)</label>
+              <!-- Removed required attribute -->
+              <select name="color_id" class="border border-gray-300 w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)]">
+                <option value="">None (Optional)</option>
                 <?php foreach ($color_list as $c): ?>
                     <option value="<?= $c['color_id'] ?>"><?= htmlspecialchars($c['color']) ?></option>
                 <?php endforeach; ?>
               </select>
             </div>
             <div>
-              <label class="block text-sm font-bold text-gray-700 mb-1">Size</label>
-              <select name="size_id" class="border border-gray-300 w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)]" required>
-                <option value="">Select</option>
+              <label class="block text-sm font-bold text-gray-700 mb-1">Size (Optional)</label>
+              <!-- Removed required attribute -->
+              <select name="size_id" class="border border-gray-300 w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)]">
+                <option value="">None (Optional)</option>
                 <?php foreach ($size_list as $s): ?>
                     <option value="<?= $s['size_id'] ?>"><?= htmlspecialchars($s['size']) ?></option>
                 <?php endforeach; ?>
@@ -524,7 +527,7 @@ if ($stmt = $conn->prepare($stockQuery)) {
             <div>
               <label class="block text-sm font-bold text-gray-700 mb-1">Color</label>
               <select name="color_id" x-model="editData.color_id" class="border border-gray-300 w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)]">
-                  <option value="">None</option>
+                  <option value="">None (Optional)</option>
                   <?php foreach ($color_list as $c): ?>
                       <option value="<?= $c['color_id'] ?>"><?= e($c['color']) ?></option>
                   <?php endforeach; ?>
@@ -533,7 +536,7 @@ if ($stmt = $conn->prepare($stockQuery)) {
             <div>
               <label class="block text-sm font-bold text-gray-700 mb-1">Size</label>
               <select name="size_id" x-model="editData.size_id" class="border border-gray-300 w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--rose)]">
-                  <option value="">None</option>
+                  <option value="">None (Optional)</option>
                   <?php foreach ($size_list as $s): ?>
                       <option value="<?= $s['size_id'] ?>"><?= e($s['size']) ?></option>
                   <?php endforeach; ?>
